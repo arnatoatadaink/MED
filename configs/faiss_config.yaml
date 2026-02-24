@@ -1,0 +1,31 @@
+base_dir: "data/faiss_indices"
+
+indices:
+  code:
+    dim: 768
+    initial_type: "Flat"
+    metric: "inner_product"
+    nprobe: 32
+    scale_rules:
+      - threshold: 100000
+        migrate_to: "IVF1024,Flat"
+      - threshold: 1000000
+        migrate_to: "IVF4096,PQ48"
+
+  academic:
+    dim: 768
+    initial_type: "Flat"
+    metric: "inner_product"
+    nprobe: 32
+    scale_rules:
+      - threshold: 100000
+        migrate_to: "HNSW32"
+
+  general:
+    dim: 768
+    initial_type: "Flat"
+    metric: "inner_product"
+    nprobe: 32
+    scale_rules:
+      - threshold: 100000
+        migrate_to: "IVF1024,Flat"

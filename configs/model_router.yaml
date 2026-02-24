@@ -1,0 +1,10 @@
+thresholds:
+  simple:
+    min_faiss_score: 0.85
+    min_results: 3
+  moderate:
+    min_faiss_score: 0.60
+
+cost_weights:
+  prefer_student: 0.7
+  prefer_teacher: 0.3

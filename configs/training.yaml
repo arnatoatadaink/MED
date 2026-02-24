@@ -1,0 +1,68 @@
+default:
+  algorithm: "grpo"
+  algorithm_kwargs:
+    group_size: 8
+    kl_coeff: 0.001
+    clip_ratio: 0.2
+    temperature: 1.0
+
+  adapter: "tinylora"
+  adapter_kwargs:
+    frozen_rank: 2
+    projection_dim: 4
+    tie_factor: 7
+    target_modules:
+      - "q_proj"
+      - "k_proj"
+      - "v_proj"
+      - "o_proj"
+      - "up_proj"
+      - "down_proj"
+      - "gate_proj"
+
+  reward: "composite"
+  reward_kwargs:
+    weights:
+      correctness: 0.35
+      retrieval_quality: 0.20
+      exec_success: 0.20
+      efficiency: 0.10
+      memory_utilization: 0.15
+
+  training:
+    epochs: 3
+    batch_size: 64
+    learning_rate: 1.0e-4
+    max_generation_length: 4096
+    seeds:
+      - 42
+      - 123
+      - 456
+
+  student_model:
+    name: "Qwen/Qwen2.5-7B-Instruct"
+    inference_engine: "vllm"
+
+  output_dir: "data/adapters"
+  logs_dir: "data/training_logs"
+  wandb_project: "rag-faiss-llm"
+
+alternatives:
+  ppo_lora:
+    algorithm: "ppo"
+    adapter: "lora"
+    adapter_kwargs:
+      rank: 8
+    reward: "composite"
+
+  dpo_loraxs:
+    algorithm: "dpo"
+    adapter: "lora_xs"
+    reward: "teacher_eval"
+
+  sft_warmup:
+    algorithm: "sft"
+    adapter: "lora"
+    adapter_kwargs:
+      rank: 4
+    reward: null

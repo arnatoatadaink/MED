@@ -1,0 +1,27 @@
+providers:
+  anthropic:
+    default_model: "claude-sonnet-4-20250514"
+    haiku_model: "claude-haiku-4-5-20251001"
+
+  openai:
+    default_model: "gpt-4o"
+    mini_model: "gpt-4o-mini"
+
+  ollama:
+    base_url: "http://localhost:11434"
+    default_model: "llama3.1:8b"
+
+task_routing:
+  query_parsing: "haiku"
+  query_rewrite: "haiku"
+  hyde: "haiku"
+  verification: "sonnet"
+  response_generation: "sonnet"
+  code_generation: "sonnet"
+  error_analysis: "sonnet"
+  feedback_analysis: "haiku"
+
+budget:
+  daily_limit_usd: 10.0
+  alert_threshold: 0.8
+  fallback_to_local: true

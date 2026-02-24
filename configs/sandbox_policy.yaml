@@ -1,0 +1,22 @@
+max_containers: 5
+timeout_seconds: 30
+
+resource_limits:
+  memory: "256m"
+  cpu: "0.5"
+  pids: 100
+
+network:
+  enabled: false
+  allowed_domains: []
+
+filesystem:
+  read_only_root: true
+  writable_tmp: true
+  max_file_size_mb: 10
+
+blocked:
+  syscalls:
+    - mount
+    - ptrace
+    - reboot
