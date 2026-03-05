@@ -1,0 +1,31 @@
+max_results_per_source: 5
+timeout_seconds: 30
+verify_results: true
+chunk_size: 512
+chunk_overlap: 50
+
+sources:
+  github:
+    enabled: true
+    max_results: 5
+    search_code: true
+    search_repos: true
+
+  stackoverflow:
+    enabled: true
+    max_results: 5
+    min_score: 5
+    accepted_only: false
+
+  tavily:
+    enabled: true
+    max_results: 5
+    search_depth: "advanced"
+
+  arxiv:
+    enabled: true
+    max_results: 3
+    categories:
+      - "cs.AI"
+      - "cs.LG"
+      - "cs.CL"
