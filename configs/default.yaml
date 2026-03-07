@@ -11,3 +11,10 @@ embedding:
   dim: 768
   batch_size: 64
   device: "cpu"
+
+gui:
+  host: "0.0.0.0"
+  port: 7860
+  share: false
+  debug: false
+  orchestrator_url: "http://localhost:8000"
