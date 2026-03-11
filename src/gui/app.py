@@ -16,8 +16,6 @@
 from __future__ import annotations
 
 import argparse
-import sys
-from pathlib import Path
 
 import gradio as gr
 
@@ -167,7 +165,6 @@ def launch(
     port: int = 7860,
     share: bool = False,
     debug: bool = False,
-    reload: bool = False,
 ) -> None:
     """Gradio アプリを起動する。"""
     app = build_app()

@@ -7,31 +7,18 @@ training.pipeline が未実装またはAPIオフライン時はモックUIを表
 from __future__ import annotations
 
 import random
-import time
-from typing import Optional
 
 import gradio as gr
 import httpx
+import pandas as pd
 
-_ORCHESTRATOR_URL = "http://localhost:8000"
-
-
-# ────────────────────────────────────────────────────────────────
-# ヘルパー
-# ────────────────────────────────────────────────────────────────
-
-def _is_api_alive() -> bool:
-    try:
-        r = httpx.get(f"{_ORCHESTRATOR_URL}/health", timeout=1.0)
-        return r.status_code == 200
-    except Exception:
-        return False
+from src.gui.utils import ORCHESTRATOR_URL, is_api_alive
 
 
 def _get_training_status() -> dict:
-    if _is_api_alive():
+    if is_api_alive():
         try:
-            r = httpx.get(f"{_ORCHESTRATOR_URL}/training/status", timeout=5.0)
+            r = httpx.get(f"{ORCHESTRATOR_URL}/training/status", timeout=5.0)
             if r.status_code == 200:
                 return r.json()
         except Exception:
@@ -49,10 +36,10 @@ def _get_training_status() -> dict:
 
 
 def _start_training(algorithm: str, adapter: str, reward: str, steps: int) -> dict:
-    if _is_api_alive():
+    if is_api_alive():
         try:
             r = httpx.post(
-                f"{_ORCHESTRATOR_URL}/training/start",
+                f"{ORCHESTRATOR_URL}/training/start",
                 json={
                     "algorithm": algorithm,
                     "adapter": adapter,
@@ -71,9 +58,9 @@ def _start_training(algorithm: str, adapter: str, reward: str, steps: int) -> di
 
 
 def _stop_training() -> dict:
-    if _is_api_alive():
+    if is_api_alive():
         try:
-            r = httpx.post(f"{_ORCHESTRATOR_URL}/training/stop", timeout=5.0)
+            r = httpx.post(f"{ORCHESTRATOR_URL}/training/stop", timeout=5.0)
             return r.json()
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -204,7 +191,6 @@ def build_tab() -> None:
                 )
 
                 # モックのグラフデータ生成
-                import pandas as pd
                 n = max(step, 10) if connected else 50
                 steps = list(range(0, n, max(1, n // 50)))
                 reward_data = pd.DataFrame({
