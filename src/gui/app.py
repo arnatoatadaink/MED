@@ -28,27 +28,28 @@ from src.gui.components.status_bar import get_status_markdown
 # ────────────────────────────────────────────────────────────────
 
 _CUSTOM_CSS = """
-/* ヘッダーバー */
+/* ヘッダーバー — 色はすべて CSS 変数経由でテーマ切り替えに追従 */
 .med-header {
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    background: var(--med-header-bg,
+        linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%));
     padding: 16px 24px;
     border-radius: 8px;
     margin-bottom: 8px;
 }
 .med-header h1 {
-    color: #e94560;
+    color: var(--button-primary-background-fill, #e94560);
     margin: 0;
     font-size: 1.6rem;
 }
 .med-header p {
-    color: #a0a8b8;
+    color: var(--block-label-text-color, #a0a8b8);
     margin: 4px 0 0 0;
     font-size: 0.9rem;
 }
 /* ステータスバー */
 .status-bar {
-    background: #1e1e2e;
-    border: 1px solid #2d2d4e;
+    background: var(--block-background-fill, #1e1e2e);
+    border: 1px solid var(--block-border-color, #2d2d4e);
     border-radius: 6px;
     padding: 6px 14px;
     font-size: 0.85rem;
@@ -98,7 +99,8 @@ _THEME_INIT_JS = """() => {
             "--button-primary-background-fill-hover":    "#c73652",
             "--button-primary-text-color":               "#ffffff",
             "--body-text-color":                         "#e0e0f0",
-            "--block-title-text-color":                  "#c0c8d8"
+            "--block-title-text-color":                  "#c0c8d8",
+            "--med-header-bg":                           "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)"
         },
         "Soft Light": {
             "--body-background-fill":                    "#f9fafb",
@@ -110,7 +112,8 @@ _THEME_INIT_JS = """() => {
             "--button-primary-background-fill-hover":    "#e11d48",
             "--button-primary-text-color":               "#ffffff",
             "--body-text-color":                         "#374151",
-            "--block-title-text-color":                  "#1f2937"
+            "--block-title-text-color":                  "#1f2937",
+            "--med-header-bg":                           "linear-gradient(135deg, #dbeafe 0%, #e0e7ff 50%, #ede9fe 100%)"
         },
         "Ocean Dark": {
             "--body-background-fill":                    "#0c1929",
@@ -122,7 +125,8 @@ _THEME_INIT_JS = """() => {
             "--button-primary-background-fill-hover":    "#0284c7",
             "--button-primary-text-color":               "#ffffff",
             "--body-text-color":                         "#e0f2fe",
-            "--block-title-text-color":                  "#bae6fd"
+            "--block-title-text-color":                  "#bae6fd",
+            "--med-header-bg":                           "linear-gradient(135deg, #132235 0%, #0c2040 50%, #091525 100%)"
         },
         "Monochrome": {
             "--body-background-fill":                    "#111111",
@@ -134,7 +138,8 @@ _THEME_INIT_JS = """() => {
             "--button-primary-background-fill-hover":    "#cccccc",
             "--button-primary-text-color":               "#111111",
             "--body-text-color":                         "#e0e0e0",
-            "--block-title-text-color":                  "#cccccc"
+            "--block-title-text-color":                  "#cccccc",
+            "--med-header-bg":                           "linear-gradient(135deg, #1e1e1e 0%, #161616 50%, #0a0a0a 100%)"
         },
         "Forest": {
             "--body-background-fill":                    "#0d1a0d",
@@ -146,7 +151,8 @@ _THEME_INIT_JS = """() => {
             "--button-primary-background-fill-hover":    "#388e3c",
             "--button-primary-text-color":               "#ffffff",
             "--body-text-color":                         "#c8e6c9",
-            "--block-title-text-color":                  "#a5d6a7"
+            "--block-title-text-color":                  "#a5d6a7",
+            "--med-header-bg":                           "linear-gradient(135deg, #162616 0%, #0f2020 50%, #0a1a10 100%)"
         }
     };
 
@@ -266,7 +272,8 @@ def build_app() -> gr.Blocks:
 
         # ── フッター ────────────────────────────────────────────
         gr.Markdown(
-            "<div style='text-align:center; color:#555; margin-top:16px; font-size:0.8rem;'>"
+            "<div style='text-align:center; color:var(--block-label-text-color, #555);"
+            " margin-top:16px; font-size:0.8rem;'>"
             "MED v0.4.0 — RAG × FAISS × LLM × Memory Environment Distillation"
             "</div>"
         )
