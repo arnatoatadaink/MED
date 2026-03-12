@@ -13,6 +13,9 @@ from typing import Generator
 import gradio as gr
 import httpx
 
+# Gradio 6.0 で show_copy_button が削除され buttons=["copy"] に変更された
+_GRADIO_MAJOR = int(gr.__version__.split(".")[0])
+
 from src.gui.utils import ORCHESTRATOR_URL, is_api_alive
 
 # ────────────────────────────────────────────────────────────────
@@ -118,12 +121,22 @@ def build_tab() -> None:
     """Gradio Blocks コンテキスト内でチャットタブを描画する。"""
     with gr.Row():
         with gr.Column(scale=3):
-            chatbot = gr.Chatbot(
-                label="チャット",
-                height=480,
-                show_copy_button=True,
-                bubble_full_width=False,
-            )
+            # Gradio 5.x: show_copy_button (deprecated but works)
+            # Gradio 6.x: show_copy_button 削除 → buttons=["copy"] に変更
+            if _GRADIO_MAJOR >= 6:
+                chatbot = gr.Chatbot(
+                    label="チャット",
+                    height=480,
+                    buttons=["copy"],
+                    bubble_full_width=False,
+                )
+            else:
+                chatbot = gr.Chatbot(
+                    label="チャット",
+                    height=480,
+                    show_copy_button=True,
+                    bubble_full_width=False,
+                )
             with gr.Row():
                 msg_box = gr.Textbox(
                     placeholder="クエリを入力してください… (Shift+Enter で改行)",
