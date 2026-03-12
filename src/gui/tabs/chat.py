@@ -143,11 +143,11 @@ def build_tab() -> None:
             # Gradio 6.x: buttons=["copy"]、bubble_full_width は削除(代替なし)
             #             type="messages" で辞書形式履歴を使用
             if _GRADIO_MAJOR >= 6:
+                # Gradio 6.x: messages形式(辞書)のみサポート、type引数は廃止
                 chatbot = gr.Chatbot(
                     label="チャット",
                     height=480,
                     buttons=["copy"],
-                    type="messages",
                 )
             else:
                 chatbot = gr.Chatbot(
