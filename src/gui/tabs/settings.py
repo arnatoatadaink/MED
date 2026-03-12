@@ -87,7 +87,9 @@ def build_tab() -> None:
                 with gr.Row():
                     current = _get_env(env_key)
                     display = _mask(current) if current else "_(未設定)_"
-                    gr.Markdown(f"**{label}**  現在値: `{display}`", scale=2)
+                    # gr.Markdown は scale 引数を持たないため Column でラップしてレイアウト制御
+                    with gr.Column(scale=2):
+                        gr.Markdown(f"**{label}**  現在値: `{display}`")
                     new_key = gr.Textbox(
                         placeholder=f"{env_key} を入力…",
                         type="password",
@@ -95,7 +97,8 @@ def build_tab() -> None:
                         scale=3,
                     )
                     apply_btn = gr.Button("適用", scale=1)
-                    result_md = gr.Markdown(scale=2)
+                    with gr.Column(scale=2):
+                        result_md = gr.Markdown()
 
                     def _apply(value, _env=env_key):
                         if value.strip():
