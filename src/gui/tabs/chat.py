@@ -3,6 +3,11 @@
 Teacher/Student モデルへのクエリと RAG 結果を表示する。
 FastAPI オーケストレーターが起動中の場合はHTTP経由で通信し、
 未起動時はモックレスポンスを返す。
+
+Gradio バージョン差異:
+  5.x: タプル形式履歴 [(user, bot), ...]、show_copy_button、bubble_full_width
+  6.x: 辞書形式履歴 [{"role":..., "content":...}, ...]、buttons=["copy"]
+       bubble_full_width 削除(代替なし)
 """
 
 from __future__ import annotations
@@ -13,7 +18,7 @@ from typing import Generator
 import gradio as gr
 import httpx
 
-# Gradio 6.0 で show_copy_button が削除され buttons=["copy"] に変更された
+# Gradio 6.0 で show_copy_button/bubble_full_width 削除、履歴フォーマット変更
 _GRADIO_MAJOR = int(gr.__version__.split(".")[0])
 
 from src.gui.utils import ORCHESTRATOR_URL, is_api_alive
@@ -76,18 +81,25 @@ def _format_sources(sources: list) -> str:
 
 def respond(
     message: str,
-    history: list[list[str | None]],
+    history: list,
     mode: str,
     use_memory: bool,
     use_rag: bool,
-) -> Generator[tuple[list[list[str | None]], str, str], None, None]:
+) -> Generator[tuple[list, str, str], None, None]:
     """Gradio チャット用ストリーミング風ジェネレータ。"""
     if not message.strip():
         yield history, "", "_入力が空です_"
         return
 
     # 即座に「思考中…」を表示
-    thinking_history = history + [(message, "⏳ 処理中…")]
+    # Gradio 6.x: 辞書形式  /  5.x: タプル形式
+    if _GRADIO_MAJOR >= 6:
+        thinking_history = history + [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": "⏳ 処理中…"},
+        ]
+    else:
+        thinking_history = history + [(message, "⏳ 処理中…")]
     yield thinking_history, "", ""
 
     try:
@@ -109,7 +121,13 @@ def respond(
     latency = result.get("latency_ms", 0)
     meta = f"モデル: `{model_used}` | レイテンシ: {latency}ms"
 
-    new_history = history + [(message, answer)]
+    if _GRADIO_MAJOR >= 6:
+        new_history = history + [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": answer},
+        ]
+    else:
+        new_history = history + [(message, answer)]
     yield new_history, meta, sources_md
 
 
@@ -121,14 +139,15 @@ def build_tab() -> None:
     """Gradio Blocks コンテキスト内でチャットタブを描画する。"""
     with gr.Row():
         with gr.Column(scale=3):
-            # Gradio 5.x: show_copy_button (deprecated but works)
-            # Gradio 6.x: show_copy_button 削除 → buttons=["copy"] に変更
+            # Gradio 5.x: show_copy_button + bubble_full_width (deprecated but works)
+            # Gradio 6.x: buttons=["copy"]、bubble_full_width は削除(代替なし)
+            #             type="messages" で辞書形式履歴を使用
             if _GRADIO_MAJOR >= 6:
                 chatbot = gr.Chatbot(
                     label="チャット",
                     height=480,
                     buttons=["copy"],
-                    bubble_full_width=False,
+                    type="messages",
                 )
             else:
                 chatbot = gr.Chatbot(
