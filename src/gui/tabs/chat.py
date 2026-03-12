@@ -18,10 +18,7 @@ from typing import Generator
 import gradio as gr
 import httpx
 
-# Gradio 6.0 で show_copy_button/bubble_full_width 削除、履歴フォーマット変更
-_GRADIO_MAJOR = int(gr.__version__.split(".")[0])
-
-from src.gui.utils import ORCHESTRATOR_URL, is_api_alive
+from src.gui.utils import GRADIO_MAJOR, ORCHESTRATOR_URL, is_api_alive
 
 # ────────────────────────────────────────────────────────────────
 # API クライアントヘルパー
@@ -93,7 +90,7 @@ def respond(
 
     # 即座に「思考中…」を表示
     # Gradio 6.x: 辞書形式  /  5.x: タプル形式
-    if _GRADIO_MAJOR >= 6:
+    if GRADIO_MAJOR >= 6:
         thinking_history = history + [
             {"role": "user", "content": message},
             {"role": "assistant", "content": "⏳ 処理中…"},
@@ -121,7 +118,7 @@ def respond(
     latency = result.get("latency_ms", 0)
     meta = f"モデル: `{model_used}` | レイテンシ: {latency}ms"
 
-    if _GRADIO_MAJOR >= 6:
+    if GRADIO_MAJOR >= 6:
         new_history = history + [
             {"role": "user", "content": message},
             {"role": "assistant", "content": answer},
@@ -142,7 +139,7 @@ def build_tab() -> None:
             # Gradio 5.x: show_copy_button + bubble_full_width (deprecated but works)
             # Gradio 6.x: buttons=["copy"]、bubble_full_width は削除(代替なし)
             #             type="messages" で辞書形式履歴を使用
-            if _GRADIO_MAJOR >= 6:
+            if GRADIO_MAJOR >= 6:
                 # Gradio 6.x: messages形式(辞書)のみサポート、type引数は廃止
                 chatbot = gr.Chatbot(
                     label="チャット",
