@@ -70,10 +70,97 @@ def _write_config_yaml(name: str, content: str) -> str:
 # タブ UI 構築
 # ────────────────────────────────────────────────────────────────
 
+_THEME_NAMES = ["MED Dark", "Soft Light", "Ocean Dark", "Monochrome", "Forest"]
+
+
 def build_tab() -> None:
     """Gradio Blocks コンテキスト内で設定タブを描画する。"""
 
     with gr.Tabs():
+
+        # ── テーマ ──────────────────────────────────────────────
+        with gr.TabItem("🎨 テーマ"):
+            gr.Markdown(
+                "### テーマ設定\n"
+                "テーマはブラウザの `localStorage` に保存されます（再読み込み後も維持）。\n"
+                "ページ初回ロード時に一瞬デフォルトの MED Dark が表示されることがあります。"
+            )
+
+            theme_dd = gr.Dropdown(
+                choices=_THEME_NAMES,
+                value="MED Dark",
+                label="テーマ選択",
+                interactive=True,
+            )
+
+            system_chk = gr.Checkbox(
+                value=False,
+                label="OSのテーマ設定に従う（prefers-color-scheme）",
+                info="チェックするとOS/ブラウザのダーク/ライト設定を自動検出します",
+            )
+
+            # ブラウザ検出情報 — JavaScript でリアルタイム更新
+            gr.HTML("""
+<div id="med-syspref-box" style="
+    padding: 10px 14px; border-radius: 6px;
+    border: 1px solid var(--block-border-color, #444);
+    font-size: 0.88rem; margin: 4px 0 8px;">
+  <strong>ブラウザ検出カラーモード:</strong>
+  <span id="med-syspref-label" style="margin-left: 8px; font-weight: 600;">—</span>
+  <span style="color: var(--block-label-text-color, #888); font-size: 0.82rem; margin-left: 12px;">
+    (OS / ブラウザ設定から <code>prefers-color-scheme</code> を読み取り)
+  </span>
+</div>
+<script>
+(function () {
+    function update() {
+        var el = document.getElementById("med-syspref-label");
+        if (!el) return false;
+        var dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        el.textContent = dark ? "🌙 ダーク" : "☀️ ライト";
+        window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function (e) {
+            el.textContent = e.matches ? "🌙 ダーク" : "☀️ ライト";
+        });
+        return true;
+    }
+    /* Gradio は非同期でレンダリングするため、要素が現れるまでポーリング */
+    var poll = setInterval(function () { if (update()) clearInterval(poll); }, 150);
+})();
+</script>
+""")
+
+            gr.Markdown("""
+**ブラウザのシステム設定について:**
+- OS の外観設定（Windows: テーマ色 / macOS: 外観モード / Linux: GTK テーマ）を `prefers-color-scheme` CSS メディアクエリで読み取ります
+- Gradio はサーバーサイドで動くため、Python がブラウザ設定を直接取得することは**できません**
+- 代わりにクライアントサイド JavaScript で検出し、CSS カスタムプロパティをリアルタイムに切り替えます
+- ダーク → **MED Dark** / ライト → **Soft Light** に自動マッピング
+- OS 設定が変わると（例: macOS の自動モード）リアルタイムで追従します
+""")
+
+            # テーマ選択 → JS でテーマ適用 (サーバー往復なし)
+            theme_dd.change(
+                fn=None,
+                inputs=[theme_dd],
+                js="(t) => { window.MED_applyTheme && window.MED_applyTheme(t); }",
+            )
+
+            # システムテーマ ON/OFF
+            system_chk.change(
+                fn=None,
+                inputs=[system_chk],
+                js="""(use) => {
+    if (use) {
+        window.MED_applySystemTheme && window.MED_applySystemTheme();
+    } else {
+        try {
+            var saved = localStorage.getItem("med-theme") || "MED Dark";
+            window.MED_applyTheme && window.MED_applyTheme(saved);
+            localStorage.setItem("med-use-system", "false");
+        } catch(e) {}
+    }
+}""",
+            )
 
         # ── APIキー ─────────────────────────────────────────────
         with gr.TabItem("APIキー"):

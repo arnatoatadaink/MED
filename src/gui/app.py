@@ -79,6 +79,124 @@ _THEME = gr.themes.Soft(
     button_primary_text_color="#ffffff",
 )
 
+# ────────────────────────────────────────────────────────────────
+# クライアントサイド テーマ切り替え JavaScript
+# ────────────────────────────────────────────────────────────────
+# CSS カスタムプロパティを documentElement にインラインで上書きすることで
+# Gradio のテーマ変数を JS 実行時に置き換える。
+# localStorage にテーマ名 / システム追従フラグを保存して再読み込み後も維持。
+
+_THEME_INIT_JS = """() => {
+    const THEMES = {
+        "MED Dark": {
+            "--body-background-fill":                    "#0d0d1a",
+            "--block-background-fill":                   "#1a1a2e",
+            "--block-border-color":                      "#2d2d4e",
+            "--block-label-text-color":                  "#a0a8b8",
+            "--input-background-fill":                   "#12122a",
+            "--button-primary-background-fill":          "#e94560",
+            "--button-primary-background-fill-hover":    "#c73652",
+            "--button-primary-text-color":               "#ffffff",
+            "--body-text-color":                         "#e0e0f0",
+            "--block-title-text-color":                  "#c0c8d8"
+        },
+        "Soft Light": {
+            "--body-background-fill":                    "#f9fafb",
+            "--block-background-fill":                   "#ffffff",
+            "--block-border-color":                      "#e5e7eb",
+            "--block-label-text-color":                  "#6b7280",
+            "--input-background-fill":                   "#f3f4f6",
+            "--button-primary-background-fill":          "#f43f5e",
+            "--button-primary-background-fill-hover":    "#e11d48",
+            "--button-primary-text-color":               "#ffffff",
+            "--body-text-color":                         "#374151",
+            "--block-title-text-color":                  "#1f2937"
+        },
+        "Ocean Dark": {
+            "--body-background-fill":                    "#0c1929",
+            "--block-background-fill":                   "#132235",
+            "--block-border-color":                      "#1e3a5f",
+            "--block-label-text-color":                  "#7ec8e3",
+            "--input-background-fill":                   "#0a1520",
+            "--button-primary-background-fill":          "#0ea5e9",
+            "--button-primary-background-fill-hover":    "#0284c7",
+            "--button-primary-text-color":               "#ffffff",
+            "--body-text-color":                         "#e0f2fe",
+            "--block-title-text-color":                  "#bae6fd"
+        },
+        "Monochrome": {
+            "--body-background-fill":                    "#111111",
+            "--block-background-fill":                   "#1e1e1e",
+            "--block-border-color":                      "#333333",
+            "--block-label-text-color":                  "#888888",
+            "--input-background-fill":                   "#161616",
+            "--button-primary-background-fill":          "#e0e0e0",
+            "--button-primary-background-fill-hover":    "#cccccc",
+            "--button-primary-text-color":               "#111111",
+            "--body-text-color":                         "#e0e0e0",
+            "--block-title-text-color":                  "#cccccc"
+        },
+        "Forest": {
+            "--body-background-fill":                    "#0d1a0d",
+            "--block-background-fill":                   "#162616",
+            "--block-border-color":                      "#254525",
+            "--block-label-text-color":                  "#7db87d",
+            "--input-background-fill":                   "#0f1f0f",
+            "--button-primary-background-fill":          "#4caf50",
+            "--button-primary-background-fill-hover":    "#388e3c",
+            "--button-primary-text-color":               "#ffffff",
+            "--body-text-color":                         "#c8e6c9",
+            "--block-title-text-color":                  "#a5d6a7"
+        }
+    };
+
+    /* CSS カスタムプロパティを documentElement のインラインスタイルに
+       直接上書きする（シートより優先度が高い）。 */
+    function applyTheme(name) {
+        const vars = THEMES[name];
+        if (!vars) return;
+        const root = document.documentElement;
+        /* 旧テーマ変数を一旦すべて除去してから新テーマを適用 */
+        Object.keys(THEMES["MED Dark"]).forEach(k => root.style.removeProperty(k));
+        Object.entries(vars).forEach(([k, v]) => root.style.setProperty(k, v));
+        try {
+            localStorage.setItem("med-theme", name);
+            localStorage.setItem("med-use-system", "false");
+        } catch(e) {}
+        window.__MED_CURRENT_THEME__ = name;
+    }
+
+    /* OS の prefers-color-scheme を読み取り対応テーマを適用 */
+    function applySystemTheme() {
+        const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        applyTheme(dark ? "MED Dark" : "Soft Light");
+        try { localStorage.setItem("med-use-system", "true"); } catch(e) {}
+    }
+
+    /* グローバルに公開 — settings.py の JS イベントから呼び出す */
+    window.MED_THEMES        = THEMES;
+    window.MED_applyTheme    = applyTheme;
+    window.MED_applySystemTheme = applySystemTheme;
+
+    /* OS テーマ変更をリアルタイム追従 */
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+        try {
+            if (localStorage.getItem("med-use-system") === "true") applySystemTheme();
+        } catch(e) {}
+    });
+
+    /* ページ読み込み時に保存済みテーマを復元 */
+    try {
+        if (localStorage.getItem("med-use-system") === "true") {
+            applySystemTheme();
+        } else {
+            applyTheme(localStorage.getItem("med-theme") || "MED Dark");
+        }
+    } catch(e) {
+        applyTheme("MED Dark");
+    }
+}"""
+
 
 # ────────────────────────────────────────────────────────────────
 # アプリ構築
@@ -152,6 +270,9 @@ def build_app() -> gr.Blocks:
             "MED v0.4.0 — RAG × FAISS × LLM × Memory Environment Distillation"
             "</div>"
         )
+
+        # ── テーマ初期化 JS (ページ読み込み時に localStorage から復元) ──
+        app.load(fn=None, js=_THEME_INIT_JS)
 
     return app
 
