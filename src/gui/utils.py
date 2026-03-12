@@ -6,9 +6,13 @@
 from __future__ import annotations
 
 import httpx
+import gradio as gr
 
 # オーケストレーター接続先 (configs/default.yaml の gui.orchestrator_url と合わせる)
 ORCHESTRATOR_URL = "http://localhost:8000"
+
+# Gradio メジャーバージョン (バージョン別 API 分岐に使用)
+GRADIO_MAJOR = int(gr.__version__.split(".")[0])
 
 
 def is_api_alive() -> bool:

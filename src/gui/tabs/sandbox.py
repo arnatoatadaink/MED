@@ -11,7 +11,7 @@ import time
 import gradio as gr
 import httpx
 
-from src.gui.utils import ORCHESTRATOR_URL, is_api_alive
+from src.gui.utils import GRADIO_MAJOR, ORCHESTRATOR_URL, is_api_alive
 
 _EXAMPLE_PYTHON = """\
 # FAISSインデックス動作確認の例
@@ -160,17 +160,21 @@ def build_tab() -> None:
         with gr.Column(scale=1):
             gr.Markdown("### 実行結果")
             exec_meta = gr.Markdown("_実行後に表示_")
+            # Gradio 6.x: show_copy_button 削除 → buttons=["copy"]
+            _copy_kwargs: dict = (
+                {"buttons": ["copy"]} if GRADIO_MAJOR >= 6 else {"show_copy_button": True}
+            )
             stdout_box = gr.Textbox(
                 label="標準出力 (stdout)",
                 lines=10,
                 interactive=False,
-                show_copy_button=True,
+                **_copy_kwargs,
             )
             stderr_box = gr.Textbox(
                 label="標準エラー (stderr)",
                 lines=5,
                 interactive=False,
-                show_copy_button=True,
+                **_copy_kwargs,
             )
 
             gr.Markdown("### セキュリティポリシー")
@@ -187,7 +191,8 @@ def build_tab() -> None:
         if example_name and example_name in _EXAMPLES:
             lang, code = _EXAMPLES[example_name]
             return code, lang
-        return gr.update(), gr.update()
+        # gr.update() は Gradio 6.x で deprecated → gr.skip() を使用
+        return gr.skip(), gr.skip()
 
     example_selector.change(
         fn=_load_example,
