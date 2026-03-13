@@ -52,5 +52,4 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 # デフォルトはユニットテスト（Dockerソケット不要）
-CMD ["pytest", "tests/unit/", "-v", "--tb=short", "--no-header", \
-     "-p", "no:warnings"]
+CMD pytest tests/unit/ -v --tb=short --no-header -p no:warnings

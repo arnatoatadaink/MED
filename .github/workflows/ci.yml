@@ -30,7 +30,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install ruff
-        run: pip install ruff>=0.3.0
+        run: pip install "ruff>=0.3.0"
 
       - name: Run ruff
         run: ruff check src/ tests/
@@ -126,14 +126,16 @@ jobs:
               -m docker \
               -p no:warnings
 
-      # テスト結果 XML をコンテナからホストに取り出す
+      # テスト結果 XML をコンテナからホストに取り出す (docker cp で権限問題を回避)
       - name: Extract coverage report
         if: always()
         run: |
-          docker run --rm \
-            -v ${{ github.workspace }}/reports:/reports \
-            ${{ env.IMAGE_NAME }}:latest \
-            sh -c "pytest tests/unit/ --cov=src --cov-report=xml:/reports/coverage.xml -q 2>/dev/null || true"
+          mkdir -p reports
+          CID=$(docker create ${{ env.IMAGE_NAME }}:latest \
+            pytest tests/unit/ --cov=src --cov-report=xml -q)
+          docker start -a "$CID" || true
+          docker cp "$CID:/app/coverage.xml" reports/coverage.xml 2>/dev/null || true
+          docker rm "$CID" || true
 
       - name: Upload Docker test coverage
         uses: actions/upload-artifact@v4

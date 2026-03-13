@@ -22,9 +22,8 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
-from src.sandbox.security import SecurityPolicy, _DEFAULT_POLICY
+from src.sandbox.security import _DEFAULT_POLICY, SecurityPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +61,7 @@ class CodeExecutor:
 
     def __init__(
         self,
-        policy: Optional[SecurityPolicy] = None,
+        policy: SecurityPolicy | None = None,
         use_docker: bool = True,
         docker_image: str = "python:3.11-slim",
     ) -> None:
@@ -89,7 +88,7 @@ class CodeExecutor:
         self,
         code: str,
         language: str = "python",
-        timeout: Optional[int] = None,
+        timeout: int | None = None,
     ) -> ExecutionResult:
         """コードを実行する。
 
@@ -131,7 +130,6 @@ class CodeExecutor:
         """Docker コンテナでコードを実行する。"""
         try:
             import docker
-            from docker.errors import ContainerError, ImageNotFound
         except ImportError:
             logger.warning("docker package not available; falling back to subprocess")
             return await self._execute_subprocess(code, language, timeout)
@@ -168,7 +166,7 @@ class CodeExecutor:
                 language=language,
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             elapsed = (time.monotonic() - start) * 1000
             return ExecutionResult(
                 stdout="",
@@ -228,7 +226,7 @@ class CodeExecutor:
                     execution_time_ms=elapsed,
                     language=language,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
                 elapsed = (time.monotonic() - start) * 1000
                 return ExecutionResult(

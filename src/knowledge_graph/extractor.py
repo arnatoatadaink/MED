@@ -23,10 +23,13 @@ import json
 import logging
 import re
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING
 
 from src.llm.gateway import LLMGateway
 from src.memory.schema import Document
+
+if TYPE_CHECKING:
+    from src.knowledge_graph.store import KnowledgeGraphStore
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +77,7 @@ class EntityExtractor:
     def __init__(
         self,
         gateway: LLMGateway,
-        provider: Optional[str] = None,
+        provider: str | None = None,
         max_text_length: int = 1000,
     ) -> None:
         self._gateway = gateway
@@ -129,7 +132,7 @@ class EntityExtractor:
     async def extract_and_register(
         self,
         doc: Document,
-        kg: "KnowledgeGraphStore",
+        kg: KnowledgeGraphStore,
     ) -> ExtractedKG:
         """抽出結果を KG に登録する。
 
@@ -140,7 +143,6 @@ class EntityExtractor:
         Returns:
             ExtractedKG（登録済み）。
         """
-        from src.knowledge_graph.store import KnowledgeGraphStore
 
         extracted = await self.extract(doc)
         if not extracted.success:
