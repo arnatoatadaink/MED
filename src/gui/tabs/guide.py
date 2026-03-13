@@ -2,6 +2,8 @@
 
 セットアップ状態をリアルタイム検出し、手順と機能説明を提供する。
 各セクションはラジオボタンで切り替え可能。
+
+案C: MEDアシスタント — MkDocs ドキュメントを FAISS 検索して回答する Q&A チャットBot。
 """
 
 from __future__ import annotations
@@ -10,7 +12,7 @@ import os
 
 import gradio as gr
 
-from src.gui.utils import ORCHESTRATOR_URL, is_api_alive
+from src.gui.utils import GRADIO_MAJOR, ORCHESTRATOR_URL, is_api_alive
 
 # ────────────────────────────────────────────────────────────────
 # セットアップ状態チェック
@@ -657,3 +659,157 @@ def build_tab() -> None:
         inputs=[section_radio],
         outputs=[content_md],
     )
+
+    gr.Markdown("---")
+
+    # ── MEDアシスタント（案C）──────────────────────────────────────
+    _build_assistant_section()
+
+
+# ────────────────────────────────────────────────────────────────
+# MEDアシスタント（案C） — ドキュメント Q&A チャットBot
+# ────────────────────────────────────────────────────────────────
+
+# サンプル質問リスト
+_SAMPLE_QUESTIONS = [
+    "FAISSメモリの使い方を教えてください",
+    "プロバイダーの設定方法は？",
+    "Phase 2 メモリ成熟とは何ですか？",
+    "TinyLoRA と GRPO の仕組みを説明してください",
+    "サンドボックスのセキュリティポリシーは？",
+    "Knowledge Graph はどう機能しますか？",
+]
+
+
+def _init_engine_status() -> str:
+    """エンジン初期化状態のメッセージを返す。"""
+    try:
+        from src.gui.docs_chat import get_engine
+        engine = get_engine()
+        engine.initialize()
+        n = len(engine._chunks)
+        backend = "FAISS ベクトル検索" if isinstance(
+            engine._searcher,
+            type(engine._searcher),  # duck typing
+        ) else "キーワード検索"
+        # より具体的な判定
+        try:
+            import faiss  # noqa: F401
+            from sentence_transformers import SentenceTransformer  # noqa: F401
+            backend = "FAISS ベクトル検索"
+        except ImportError:
+            backend = "キーワード検索"
+        return (
+            f"✅ ドキュメント **{n} チャンク** 読み込み済み — "
+            f"検索方式: **{backend}**"
+        )
+    except Exception as e:
+        return f"⚠️ エンジン初期化エラー: {e}"
+
+
+def _respond(message: str, history: list) -> tuple[list, str]:
+    """ユーザーのメッセージを受け取り、更新された履歴と空の入力を返す。"""
+    if not message.strip():
+        return history, ""
+    try:
+        from src.gui.docs_chat import get_engine
+        engine = get_engine()
+        engine.initialize()
+        answer = engine.answer(message)
+    except Exception as e:
+        answer = f"❌ エラーが発生しました: {e}"
+
+    if GRADIO_MAJOR >= 5:
+        new_history = list(history) + [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": answer},
+        ]
+    else:
+        new_history = list(history) + [(message, answer)]
+
+    return new_history, ""
+
+
+def _set_sample(sample: str) -> str:
+    """サンプル質問ボタンが押されたときにテキストボックスに反映する。"""
+    return sample
+
+
+def _build_assistant_section() -> None:
+    """MEDアシスタント UI を構築する。"""
+
+    with gr.Accordion("🤖 MEDアシスタント — ドキュメント Q&A", open=False):
+
+        gr.Markdown(
+            "**MED のドキュメント**（セットアップ・機能・アーキテクチャ等）に関する"
+            "質問に回答します。\n\n"
+            "オーケストレーター起動中は LLM による回答、"
+            "未起動時は関連ドキュメントのチャンクをそのまま表示します。"
+        )
+
+        # エンジン状態表示
+        engine_status = gr.Markdown("⏳ エンジン初期化中...")
+
+        # チャット履歴
+        if GRADIO_MAJOR >= 5:
+            chatbot = gr.Chatbot(
+                label="MEDアシスタント",
+                type="messages",
+                height=420,
+                show_copy_button=True,
+                bubble_full_width=False,
+                avatar_images=(None, "🤖"),
+            )
+        else:
+            chatbot = gr.Chatbot(
+                label="MEDアシスタント",
+                type="messages",
+                height=420,
+                show_copy_button=True,
+                avatar_images=(None, "🤖"),
+            )
+
+        # 入力行
+        with gr.Row():
+            msg_input = gr.Textbox(
+                placeholder="MEDについて質問してください... (例: FAISSの使い方は？)",
+                show_label=False,
+                scale=5,
+                lines=1,
+            )
+            send_btn = gr.Button("送信", variant="primary", scale=1, min_width=80)
+            clear_btn = gr.Button("クリア", variant="secondary", scale=1, min_width=70)
+
+        # サンプル質問ボタン
+        with gr.Accordion("💡 サンプル質問", open=False):
+            with gr.Row(wrap=True):
+                sample_btns = [
+                    gr.Button(q, size="sm", variant="secondary")
+                    for q in _SAMPLE_QUESTIONS
+                ]
+
+        # イベント接続
+        send_btn.click(
+            fn=_respond,
+            inputs=[msg_input, chatbot],
+            outputs=[chatbot, msg_input],
+        )
+        msg_input.submit(
+            fn=_respond,
+            inputs=[msg_input, chatbot],
+            outputs=[chatbot, msg_input],
+        )
+        clear_btn.click(fn=lambda: ([], ""), outputs=[chatbot, msg_input])
+
+        for btn in sample_btns:
+            btn.click(fn=_set_sample, inputs=[btn], outputs=[msg_input])
+
+        # Accordion が開かれたときにエンジンを初期化（load イベントで代用）
+        # Gradio では Accordion の open イベントが無いため、
+        # ページロード時に非同期で初期化する
+        chatbot.change(fn=None, outputs=[])  # dummy to ensure component is registered
+
+    # ページロード時にエンジン初期化ステータスを更新
+    # （build_tab が Blocks.load より後に呼ばれるので直接ロードできないため、
+    #   Accordion open ではなくここで初期化コールを仕込む）
+    engine_status.value = _init_engine_status()
