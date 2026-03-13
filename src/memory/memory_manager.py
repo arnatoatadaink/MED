@@ -27,7 +27,7 @@ from src.common.config import FAISSConfig, MetadataConfig, get_settings
 from src.memory.embedder import Embedder
 from src.memory.faiss_index import FAISSIndexManager
 from src.memory.metadata_store import MetadataStore
-from src.memory.schema import Document, Domain, SearchResult, UsefulnessScore
+from src.memory.schema import Document, Domain, SearchResult, SourceMeta, SourceType, UsefulnessScore
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +114,44 @@ class MemoryManager:
 
         logger.debug("Added doc=%s domain=%s", doc.id, domain)
         return doc.id
+
+    async def add_from_text(
+        self,
+        content: str,
+        domain: str = "general",
+        source_type: str = "manual",
+        source_url: Optional[str] = None,
+        teacher_id: Optional[str] = None,
+        teacher_provider: Optional[str] = None,
+        **kwargs,
+    ) -> str:
+        """テキストから直接ドキュメントを追加するコンビニエンスメソッド。
+
+        ``teacher_id`` を指定すると、``SourceMeta.extra`` に Teacher 素性を記録する。
+
+        Args:
+            content:          ドキュメントテキスト。
+            domain:           ドメイン (``"code"`` / ``"academic"`` / ``"general"``)。
+            source_type:      取得元種別文字列 (``SourceType`` の値)。
+            source_url:       元 URL。
+            teacher_id:       Teacher モデル識別子。例: ``"claude-opus-4-6"``。
+            teacher_provider: Teacher プロバイダ。省略時は ``teacher_id`` から自動推定。
+            **kwargs:         ``Document`` 追加フィールド (difficulty, confidence, …)。
+
+        Returns:
+            保存された doc.id。
+        """
+        try:
+            st = SourceType(source_type)
+        except ValueError:
+            st = SourceType.MANUAL
+
+        source = SourceMeta(source_type=st, url=source_url)
+        if teacher_id:
+            source.set_teacher(teacher_id, provider=teacher_provider)
+
+        doc = Document(content=content, domain=domain, source=source, **kwargs)
+        return await self.add(doc)
 
     async def add_batch(self, docs: list[Document]) -> list[str]:
         """複数ドキュメントを一括追加する。

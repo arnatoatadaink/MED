@@ -64,6 +64,7 @@ class SeedBuilder:
         gateway: LLMGateway インスタンス。
         memory_manager: MemoryManager インスタンス（生成物を追加）。
         provider: 優先プロバイダ（省略時はデフォルト）。
+        teacher_id: Teacher モデル識別子（素性追跡用）。省略時は gateway のデフォルトモデル。
     """
 
     def __init__(
@@ -71,10 +72,12 @@ class SeedBuilder:
         gateway: LLMGateway,
         memory_manager: MemoryManager,
         provider: Optional[str] = None,
+        teacher_id: Optional[str] = None,
     ) -> None:
         self._gateway = gateway
         self._mm = memory_manager
         self._provider = provider
+        self._teacher_id = teacher_id or "unknown"
 
     async def build(
         self,
@@ -162,7 +165,7 @@ class SeedBuilder:
                     source_type=SourceType.TEACHER,
                     title=f"Seed: {topic} ({difficulty.value})",
                     tags=["seed", domain, difficulty.value],
-                ),
+                ).set_teacher(self._teacher_id, provider=self._provider),
             )
             return await self._mm.add(doc)
 
