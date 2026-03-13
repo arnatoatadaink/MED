@@ -435,6 +435,105 @@ Student モデル（Qwen-7B）に「**メモリの使い方**」を GRPO + TinyL
 チャットタブで Student モードを選択すると自動的に最新アダプタが使用されます。
 """,
 
+    "🔬 Phase 2: メモリ成熟": """\
+## Phase 2: メモリ成熟 (Week 4-5)
+
+Teacher が FAISS メモリを「成熟」させるフェーズです。
+品質の低いドキュメントを審査・タグ付け・削除し、Student の学習品質を高めます。
+
+---
+
+### Phase 2 品質目標
+
+| 目標 | 値 | 確認場所 |
+|------|-----|---------|
+| ドキュメント数 | ≥ 10,000 docs | FAISSメモリ → 成熟管理 → 品質レポート |
+| 平均信頼度 | ≥ 0.7 | 同上 |
+| 実行成功率 | ≥ 80% | 同上 |
+
+---
+
+### Teacher 信頼度評価（追加実装済み）
+
+Teacher モデルごとの信頼度を SQLite で管理し、
+検索スコアに自動反映させるシステムです。
+
+```
+Teacher が回答生成
+    ↓
+FeedbackCollector がフィードバックを蓄積
+    ↓
+TeacherFeedbackPipeline.flush() で TeacherRegistry を更新
+    ↓
+EWMA（指数加重移動平均）で trust_score を更新
+    ↓
+CompositeScorer が trust_score を composite_score に乗算
+    ↓
+信頼度の低い Teacher のドキュメントは検索で後退
+```
+
+**Trust Score の更新アルゴリズム:**
+- フィードバック ≤ 10 件: Welford 法（真の平均）
+- フィードバック > 10 件: EWMA（α = 0.05 の固定学習率）
+- trust_score 最小値: 0.05（完全に排除はしない）
+
+---
+
+### MemoryReviewer — Teacher 品質審査
+
+`🧠 FAISSメモリ → 🔬 成熟管理 → 一括審査` から実行できます。
+
+**審査フロー:**
+1. `MetadataStore.get_unreviewed()` で未審査ドキュメントを取得
+2. Teacher LLM に品質評価を依頼（JSON形式で返答）
+3. `quality_score` / `confidence` / `approved` / `reason` を抽出
+4. `MetadataStore.update_quality()` で DB を更新
+5. `review_status` を `approved` / `rejected` に変更
+
+**承認閾値:** `quality_score ≥ 0.6` → approved
+
+---
+
+### DifficultyTagger — 難易度タグ付け
+
+`scripts/mature_memory.py` から実行:
+```bash
+python scripts/mature_memory.py --limit 100 --tag-difficulty
+```
+
+難易度 (beginner / intermediate / advanced / expert) は
+Student の学習カリキュラム順序決定に使われます:
+- `beginner` → `intermediate` → `advanced` → `expert` の順に提示
+
+---
+
+### CrossEncoder — Phase 2 再ランキング
+
+基本の FAISS 検索（IndexFlatIP / コサイン類似度）に加えて、
+Cross-Encoder による意味的再ランキングを提供します。
+
+| 方式 | 速度 | 精度 |
+|------|------|------|
+| FAISS (Bi-encoder) | 高速 (O(1)) | 近似 |
+| Cross-Encoder (Phase 2) | 低速 (O(N)) | 高精度 |
+
+Phase 2 以降は上位 K 件を FAISS で取得した後、Cross-Encoder で再ランキングします。
+
+---
+
+### Teacher 信頼度を確認するには
+
+**GUI から:**
+1. `🧠 FAISSメモリ` タブを開く
+2. `🔬 成熟管理 (Phase 2)` サブタブを選択
+3. `Teacher 信頼度` タブで各モデルの trust_score を確認
+
+**スクリプトから:**
+```bash
+python scripts/mature_memory.py --show-teachers
+```
+""",
+
     "🏗️ アーキテクチャ概要": """\
 ## アーキテクチャ概要
 
