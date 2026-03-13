@@ -1,6 +1,8 @@
 """src/memory/scoring/composite_scorer.py — 複合スコアラー
 
 FreshnessScorer と UsefulnessScorer を統合し、Document の composite_score を計算・更新する。
+TeacherRegistry の trust_score を乗算することで、信頼度の低い Teacher のデータを
+検索結果で自動的に後退させる。
 
 使い方:
     from src.memory.scoring.composite_scorer import CompositeScorer
@@ -8,8 +10,12 @@ FreshnessScorer と UsefulnessScorer を統合し、Document の composite_score
     scorer = CompositeScorer()
     score = scorer.compute_for_document(doc, now=datetime.utcnow())
 
-    # MetadataStore 経由で一括更新
-    await scorer.update_store(store, doc_ids)
+    # TeacherRegistry の trust_score を乗算する場合
+    score = scorer.compute_for_document(doc, trust_score=0.3)
+
+    # MetadataStore 経由で一括更新（trust_map を渡すと Teacher 信頼度を反映）
+    trust_map = {"claude-opus-4-6": 1.0, "bad-model": 0.1}
+    await scorer.update_store(store, doc_ids, trust_map=trust_map)
 """
 
 from __future__ import annotations
@@ -28,28 +34,57 @@ logger = logging.getLogger(__name__)
 class CompositeScorer:
     """FreshnessScorer + UsefulnessScorer を統合した複合スコアラー。
 
+    Teacher の trust_score を乗算することで、信頼度の低い Teacher のデータを
+    検索結果で自動的に後退させる（trust_score=1.0 なら影響なし）。
+
     Args:
         freshness_half_life: ドメイン別半減期（日数）マッピング。
         usefulness_weights: 有用性の重みパラメータ。
+        teacher_trust_weight: trust_score の影響度 (0.0〜1.0)。
+            0.0 = trust を完全無視、1.0 = trust を直接乗算。
+            デフォルト 1.0（trust_score そのままを乗算）。
     """
 
     def __init__(
         self,
         freshness_half_life: Optional[dict[str, float]] = None,
         usefulness_weights: Optional[UsefulnessWeights] = None,
+        teacher_trust_weight: float = 1.0,
     ) -> None:
         self.freshness = FreshnessScorer(half_life_days=freshness_half_life)
         self.usefulness = UsefulnessScorer(weights=usefulness_weights)
+        self._trust_weight = float(min(1.0, max(0.0, teacher_trust_weight)))
+
+    def _apply_trust(self, base_score: float, trust_score: float) -> float:
+        """trust_score をベーススコアに適用する。
+
+        multiplier = (1 - trust_weight) + trust_weight * trust_score
+        trust_weight=1.0 のとき: multiplier = trust_score （直接乗算）
+        trust_weight=0.0 のとき: multiplier = 1.0 （trust 無視）
+
+        これにより trust_score が 0.05 (_MIN_TRUST) でも
+        teacher_trust_weight=1.0 ならスコアは 5% まで抑制される。
+        """
+        multiplier = (1.0 - self._trust_weight) + self._trust_weight * trust_score
+        return float(min(1.0, max(0.0, base_score * multiplier)))
 
     def compute_for_document(
         self,
         doc: Document,
         now: Optional[datetime] = None,
+        trust_score: float = 1.0,
     ) -> float:
         """Document オブジェクトから複合スコアを計算する。
 
+        Args:
+            doc: 対象ドキュメント。
+            now: 現在日時（テスト用）。
+            trust_score: Teacher の信頼スコア (0.0〜1.0)。
+                TeacherRegistry から取得した値を渡す。
+                デフォルト 1.0（Teacher 不明時は信頼）。
+
         Returns:
-            0.0〜1.0 の複合スコア。
+            0.0〜1.0 の複合スコア（trust_score を反映）。
         """
         if now is None:
             now = datetime.now(timezone.utc)
@@ -59,7 +94,7 @@ class CompositeScorer:
 
         freshness_score = self.freshness.score(domain, retrieved_at=retrieved_at, now=now)
 
-        score = self.usefulness.compute(
+        base_score = self.usefulness.compute(
             retrieval_count=doc.usefulness.retrieval_count,
             selection_count=doc.usefulness.selection_count,
             positive_feedback=doc.usefulness.positive_feedback,
@@ -69,12 +104,22 @@ class CompositeScorer:
             freshness=freshness_score,
             domain=domain,
         )
-        return score
+        return self._apply_trust(base_score, trust_score)
 
-    def compute_from_row(self, row: dict, now: Optional[datetime] = None) -> float:
+    def compute_from_row(
+        self,
+        row: dict,
+        now: Optional[datetime] = None,
+        trust_score: float = 1.0,
+    ) -> float:
         """SQLite の行辞書から複合スコアを計算する。
 
         MetadataStore の行データを直接受け取り、スコアを計算する。
+
+        Args:
+            row: MetadataStore の行辞書。
+            now: 現在日時（テスト用）。
+            trust_score: Teacher の信頼スコア (0.0〜1.0)。
         """
         if now is None:
             now = datetime.now(timezone.utc)
@@ -96,13 +141,15 @@ class CompositeScorer:
         data["freshness"] = freshness_score
         data["domain"] = domain
 
-        return self.usefulness.compute_from_dict(data)
+        base_score = self.usefulness.compute_from_dict(data)
+        return self._apply_trust(base_score, trust_score)
 
     async def update_store(
         self,
         store,  # MetadataStore (avoid circular import with type hint)
         doc_ids: Optional[list[str]] = None,
         now: Optional[datetime] = None,
+        trust_map: Optional[dict[str, float]] = None,
     ) -> int:
         """MetadataStore 内のドキュメントの composite_score を更新する。
 
@@ -110,6 +157,9 @@ class CompositeScorer:
             store: MetadataStore インスタンス。
             doc_ids: 更新対象 ID リスト。None の場合は全件更新。
             now: 現在日時（テスト用）。
+            trust_map: {teacher_id: trust_score} の辞書。
+                TeacherRegistry.list_all() の結果から構築して渡す。
+                None の場合は trust_score=1.0 として扱う（信頼度反映なし）。
 
         Returns:
             更新件数。
@@ -130,9 +180,26 @@ class CompositeScorer:
 
         updated = 0
         for doc in docs:
-            score = self.compute_for_document(doc, now=now)
+            # teacher_id があれば trust_map から trust_score を引く
+            trust: float = 1.0
+            if trust_map and doc.source.teacher_id:
+                trust = trust_map.get(doc.source.teacher_id, 1.0)
+            score = self.compute_for_document(doc, now=now, trust_score=trust)
             await store.update_quality(doc.id, composite_score=score)
             updated += 1
 
-        logger.info("Updated composite_score for %d documents", updated)
+        logger.info("Updated composite_score for %d documents (trust_map=%s)",
+                    updated, "provided" if trust_map else "none")
         return updated
+
+    @staticmethod
+    def build_trust_map(profiles) -> dict[str, float]:
+        """TeacherProfile のリストから trust_map を構築する。
+
+        Args:
+            profiles: TeacherRegistry.list_all() が返す TeacherProfile のリスト。
+
+        Returns:
+            {teacher_id: trust_score} の辞書。
+        """
+        return {p.teacher_id: p.trust_score for p in profiles}
