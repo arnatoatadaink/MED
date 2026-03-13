@@ -16,3 +16,4 @@ dist/
 wandb/
 *.so
 *.dylib
+docs/build/
