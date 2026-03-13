@@ -74,7 +74,10 @@ CREATE TABLE IF NOT EXISTS documents (
 
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    reviewed_at TEXT
+    reviewed_at TEXT,
+
+    -- Teacher 素性（Step 3）
+    teacher_id TEXT DEFAULT NULL
 );
 """
 
@@ -85,7 +88,13 @@ _CREATE_INDICES_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_documents_confidence ON documents(confidence);",
     "CREATE INDEX IF NOT EXISTS idx_documents_composite ON documents(composite_score);",
     "CREATE INDEX IF NOT EXISTS idx_documents_parent_id ON documents(parent_id);",
+    "CREATE INDEX IF NOT EXISTS idx_documents_teacher_id ON documents(teacher_id);",
 ]
+
+# 既存 DB へのマイグレーション（列が存在しない場合のみ実行）
+_MIGRATION_ADD_TEACHER_ID = (
+    "ALTER TABLE documents ADD COLUMN teacher_id TEXT DEFAULT NULL;"
+)
 
 
 def _doc_to_row(doc: Document) -> dict[str, Any]:
@@ -124,7 +133,39 @@ def _doc_to_row(doc: Document) -> dict[str, Any]:
         "created_at": doc.created_at.isoformat(),
         "updated_at": doc.updated_at.isoformat(),
         "reviewed_at": doc.reviewed_at.isoformat() if doc.reviewed_at else None,
+        # Teacher 素性 — source.extra から取り出して専用列に保存
+        "teacher_id": doc.source.teacher_id,
     }
+
+
+def _build_source_meta(d: dict) -> SourceMeta:
+    """行データから SourceMeta を復元する。
+
+    teacher_id 専用列の値を extra dict にも注入することで、
+    SourceMeta.teacher_id プロパティが正しく機能する。
+    """
+    from src.memory.schema import _TEACHER_ID_KEY
+
+    extra: dict = json.loads(d["source_extra"]) if d["source_extra"] else {}
+
+    # 専用列の teacher_id を extra に同期（専用列が権威ソース）
+    db_teacher_id: Optional[str] = d.get("teacher_id")
+    if db_teacher_id:
+        extra[_TEACHER_ID_KEY] = db_teacher_id
+    elif _TEACHER_ID_KEY in extra:
+        # extra だけに入っている旧データも受け入れる
+        pass
+
+    return SourceMeta(
+        source_type=SourceType(d["source_type"]),
+        url=d["source_url"],
+        title=d["source_title"],
+        author=d["source_author"],
+        language=d["source_language"],
+        tags=json.loads(d["source_tags"]) if d["source_tags"] else [],
+        retrieved_at=datetime.fromisoformat(d["source_retrieved_at"]),
+        extra=extra,
+    )
 
 
 def _row_to_doc(row: aiosqlite.Row) -> Document:
@@ -138,16 +179,7 @@ def _row_to_doc(row: aiosqlite.Row) -> Document:
         parent_id=d["parent_id"],
         domain=Domain(d["domain"]),
         embedding=None,  # メタデータストアは embedding を保持しない
-        source=SourceMeta(
-            source_type=SourceType(d["source_type"]),
-            url=d["source_url"],
-            title=d["source_title"],
-            author=d["source_author"],
-            language=d["source_language"],
-            tags=json.loads(d["source_tags"]) if d["source_tags"] else [],
-            retrieved_at=datetime.fromisoformat(d["source_retrieved_at"]),
-            extra=json.loads(d["source_extra"]) if d["source_extra"] else {},
-        ),
+        source=_build_source_meta(d),
         usefulness=UsefulnessScore(
             retrieval_count=d["retrieval_count"],
             selection_count=d["selection_count"],
@@ -206,8 +238,18 @@ class MetadataStore:
         await self._db.execute(_CREATE_TABLE_SQL)
         for idx_sql in _CREATE_INDICES_SQL:
             await self._db.execute(idx_sql)
+        await self._migrate()
         await self._db.commit()
         logger.info("MetadataStore initialized: %s", self._db_path)
+
+    async def _migrate(self) -> None:
+        """既存 DB スキーマへの後方互換マイグレーションを実行する。"""
+        # teacher_id 列が存在しなければ追加する
+        cursor = await self._db.execute("PRAGMA table_info(documents)")
+        columns = {row[1] for row in await cursor.fetchall()}
+        if "teacher_id" not in columns:
+            await self._db.execute(_MIGRATION_ADD_TEACHER_ID)
+            logger.info("MetadataStore: migrated — added teacher_id column")
 
     async def close(self) -> None:
         """DB 接続を閉じる。"""
@@ -306,6 +348,128 @@ class MetadataStore:
             (domain, limit, offset),
         )
         return [_row_to_doc(row) for row in await cursor.fetchall()]
+
+    async def list_by_teacher(
+        self,
+        teacher_id: str,
+        domain: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[Document]:
+        """特定 Teacher が生成したドキュメントを取得する。
+
+        Args:
+            teacher_id: Teacher モデル識別子。
+            domain:     ドメインで絞り込む場合に指定。
+            limit:      最大取得件数。
+            offset:     オフセット（ページング用）。
+
+        Returns:
+            Document リスト（作成日時降順）。
+        """
+        if domain:
+            cursor = await self._db.execute(
+                "SELECT * FROM documents WHERE teacher_id = ? AND domain = ? "
+                "ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (teacher_id, domain, limit, offset),
+            )
+        else:
+            cursor = await self._db.execute(
+                "SELECT * FROM documents WHERE teacher_id = ? "
+                "ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (teacher_id, limit, offset),
+            )
+        return [_row_to_doc(row) for row in await cursor.fetchall()]
+
+    async def count_by_teacher(
+        self,
+        teacher_id: str,
+        domain: Optional[str] = None,
+    ) -> int:
+        """特定 Teacher のドキュメント数を返す。"""
+        if domain:
+            cursor = await self._db.execute(
+                "SELECT COUNT(*) FROM documents WHERE teacher_id = ? AND domain = ?",
+                (teacher_id, domain),
+            )
+        else:
+            cursor = await self._db.execute(
+                "SELECT COUNT(*) FROM documents WHERE teacher_id = ?",
+                (teacher_id,),
+            )
+        row = await cursor.fetchone()
+        return row[0]
+
+    async def exclude_teacher(
+        self,
+        exclude_teacher_ids: list[str],
+        domain: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[Document]:
+        """指定した Teacher のドキュメントを除外して取得する。
+
+        信頼度の低い Teacher のデータを排除した検索に使う。
+
+        Args:
+            exclude_teacher_ids: 除外する teacher_id のリスト。
+            domain:              ドメイン絞り込み（任意）。
+            limit:               最大取得件数。
+            offset:              オフセット。
+
+        Returns:
+            Document リスト（composite_score 降順）。
+        """
+        if not exclude_teacher_ids:
+            return await self.list_by_domain(domain or "general", limit=limit, offset=offset)
+
+        placeholders = ", ".join("?" for _ in exclude_teacher_ids)
+        params: list[Any] = list(exclude_teacher_ids)
+
+        if domain:
+            where = f"(teacher_id IS NULL OR teacher_id NOT IN ({placeholders})) AND domain = ?"
+            params.append(domain)
+        else:
+            where = f"(teacher_id IS NULL OR teacher_id NOT IN ({placeholders}))"
+
+        params += [limit, offset]
+        cursor = await self._db.execute(
+            f"SELECT * FROM documents WHERE {where} "
+            f"ORDER BY composite_score DESC LIMIT ? OFFSET ?",
+            params,
+        )
+        return [_row_to_doc(row) for row in await cursor.fetchall()]
+
+    async def delete_by_teacher(
+        self,
+        teacher_id: str,
+        domain: Optional[str] = None,
+    ) -> int:
+        """特定 Teacher のドキュメントを一括削除する。
+
+        信頼度が極めて低い Teacher のデータを完全排除する場合に使用。
+        FAISS 側の削除は呼び出し元 (MemoryManager) が担う。
+
+        Returns:
+            削除件数。
+        """
+        if domain:
+            cursor = await self._db.execute(
+                "DELETE FROM documents WHERE teacher_id = ? AND domain = ?",
+                (teacher_id, domain),
+            )
+        else:
+            cursor = await self._db.execute(
+                "DELETE FROM documents WHERE teacher_id = ?",
+                (teacher_id,),
+            )
+        await self._db.commit()
+        deleted = cursor.rowcount
+        logger.info(
+            "MetadataStore.delete_by_teacher: teacher=%s domain=%s deleted=%d",
+            teacher_id, domain, deleted,
+        )
+        return deleted
 
     async def get_unreviewed(
         self,
