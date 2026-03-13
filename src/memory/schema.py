@@ -79,8 +79,56 @@ class ReviewStatus(str, Enum):
 # ============================================================================
 
 
+# ============================================================================
+# Teacher 素性ユーティリティ
+# ============================================================================
+
+# ── Teacher 素性キー（extra dict の規約） ──────────────────────────────────
+# SourceMeta.extra に格納するキー名を定数で統一する。
+# 将来 TeacherRegistry（Step 2）が参照するキーと対応する。
+_TEACHER_ID_KEY = "teacher_id"        # 例: "claude-opus-4-6", "gpt-4o", "human"
+_TEACHER_PROVIDER_KEY = "teacher_provider"  # 例: "anthropic", "openai", "ollama"
+_TEACHER_MODEL_KEY = "teacher_model"   # provider と同一でも可; gateway が使う model 文字列
+
+# モデル名プレフィックス → プロバイダのマッピング
+_MODEL_PROVIDER_MAP: dict[str, str] = {
+    "claude": "anthropic",
+    "gpt": "openai",
+    "o1": "openai",
+    "o3": "openai",
+    "o4": "openai",
+    "gemini": "google",
+    "llama": "ollama",
+    "qwen": "ollama",
+    "mistral": "ollama",
+}
+
+
+def _infer_provider(teacher_id: str) -> Optional[str]:
+    """teacher_id のプレフィックスからプロバイダ名を推定する。
+
+    例: ``"claude-opus-4-6"`` → ``"anthropic"``
+    """
+    lower = teacher_id.lower()
+    for prefix, provider in _MODEL_PROVIDER_MAP.items():
+        if lower.startswith(prefix):
+            return provider
+    return None
+
+
 class SourceMeta(BaseModel):
-    """ドキュメントの取得元情報。"""
+    """ドキュメントの取得元情報。
+
+    Teacher 素性は ``extra`` dict に格納する（スキーマ変更なし）。
+    規約化されたキーは ``_TEACHER_*_KEY`` 定数を使い、
+    ``set_teacher`` / ``get_teacher_id`` ヘルパーで読み書きする。
+
+    例::
+
+        meta = SourceMeta(source_type=SourceType.TEACHER)
+        meta.set_teacher("claude-opus-4-6", provider="anthropic")
+        print(meta.teacher_id)  # "claude-opus-4-6"
+    """
 
     source_type: SourceType = SourceType.MANUAL
     url: Optional[str] = None
@@ -90,6 +138,47 @@ class SourceMeta(BaseModel):
     tags: list[str] = Field(default_factory=list)
     retrieved_at: datetime = Field(default_factory=datetime.utcnow)
     extra: dict[str, Any] = Field(default_factory=dict)
+
+    # ── Teacher 素性ヘルパー ────────────────────────────────────────────────
+
+    def set_teacher(
+        self,
+        teacher_id: str,
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+    ) -> "SourceMeta":
+        """Teacher 素性を extra dict に書き込む（メソッドチェーン可）。
+
+        Args:
+            teacher_id: モデル識別子。例: ``"claude-opus-4-6"``。
+            provider:   プロバイダ名。例: ``"anthropic"``。省略時は teacher_id から推定。
+            model:      gateway が使う model 文字列（teacher_id と異なる場合のみ指定）。
+        """
+        self.extra[_TEACHER_ID_KEY] = teacher_id
+        resolved_provider = provider or _infer_provider(teacher_id)
+        if resolved_provider:
+            self.extra[_TEACHER_PROVIDER_KEY] = resolved_provider
+        if model and model != teacher_id:
+            self.extra[_TEACHER_MODEL_KEY] = model
+        return self
+
+    @property
+    def teacher_id(self) -> Optional[str]:
+        """Teacher モデル識別子。未設定なら ``None``。"""
+        return self.extra.get(_TEACHER_ID_KEY)
+
+    @property
+    def teacher_provider(self) -> Optional[str]:
+        """Teacher プロバイダ名。未設定なら ``None``。"""
+        return self.extra.get(_TEACHER_PROVIDER_KEY)
+
+    @property
+    def is_teacher_generated(self) -> bool:
+        """Teacher が生成したドキュメントか（source_type または extra で判定）。"""
+        return (
+            self.source_type in (SourceType.TEACHER, SourceType.SEED)
+            or _TEACHER_ID_KEY in self.extra
+        )
 
 
 # ============================================================================

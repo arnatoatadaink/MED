@@ -181,15 +181,25 @@ class MEDPipeline:
             output_tokens=gen_response.output_tokens,
         )
 
-    async def add_document(self, content: str, domain: str = "general") -> str:
-        """単一ドキュメントをメモリに追加する（ユーティリティメソッド）。"""
-        from src.memory.schema import Document, SourceMeta, SourceType
-        doc = Document(
+    async def add_document(
+        self,
+        content: str,
+        domain: str = "general",
+        teacher_id: Optional[str] = None,
+    ) -> str:
+        """単一ドキュメントをメモリに追加する（ユーティリティメソッド）。
+
+        Args:
+            content:    ドキュメントテキスト。
+            domain:     ドメイン分類。
+            teacher_id: Teacher モデル識別子（素性追跡用）。
+        """
+        return await self._mm.add_from_text(
             content=content,
             domain=domain,
-            source=SourceMeta(source_type=SourceType.MANUAL),
+            source_type="manual",
+            teacher_id=teacher_id,
         )
-        return await self._mm.add(doc)
 
     async def _fetch_and_store_external(self, query: str, domain: str) -> int:
         """外部 RAG 検索 → 裏どり → FAISS 保存。"""
