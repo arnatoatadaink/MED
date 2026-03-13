@@ -18,11 +18,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 from src.llm.gateway import LLMGateway
 from src.memory.memory_manager import MemoryManager
-from src.memory.schema import Document, DifficultyLevel, ReviewStatus, SourceMeta, SourceType
+from src.memory.schema import DifficultyLevel, Document, ReviewStatus, SourceMeta, SourceType
 
 logger = logging.getLogger(__name__)
 
@@ -71,8 +70,8 @@ class SeedBuilder:
         self,
         gateway: LLMGateway,
         memory_manager: MemoryManager,
-        provider: Optional[str] = None,
-        teacher_id: Optional[str] = None,
+        provider: str | None = None,
+        teacher_id: str | None = None,
     ) -> None:
         self._gateway = gateway
         self._mm = memory_manager
@@ -84,7 +83,7 @@ class SeedBuilder:
         topic: str,
         domain: str = "general",
         n_samples: int = 10,
-        difficulty_distribution: Optional[dict[str, int]] = None,
+        difficulty_distribution: dict[str, int] | None = None,
         seed_type: str = "document",
     ) -> SeedResult:
         """指定トピックのシードドキュメントを生成・保存する。
@@ -116,7 +115,7 @@ class SeedBuilder:
         import asyncio
         semaphore = asyncio.Semaphore(3)  # 同時 3 件まで
 
-        async def _generate_one(task_args) -> Optional[str]:
+        async def _generate_one(task_args) -> str | None:
             topic_, domain_, diff_, stype = task_args
             async with semaphore:
                 return await self._generate_doc(topic_, domain_, diff_, stype)
@@ -145,7 +144,7 @@ class SeedBuilder:
         domain: str,
         difficulty: DifficultyLevel,
         seed_type: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """1 件のシードドキュメントを生成して保存する。"""
         try:
             if seed_type == "qa":

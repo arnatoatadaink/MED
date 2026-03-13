@@ -22,7 +22,6 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 from numpy.typing import NDArray
@@ -36,7 +35,7 @@ class DedupResult:
 
     is_duplicate: bool
     duplicate_type: str = ""       # "exact" | "near" | ""
-    duplicate_doc_id: Optional[str] = None
+    duplicate_doc_id: str | None = None
     similarity: float = 0.0        # 近似重複の場合の類似度
 
     @property
@@ -72,9 +71,9 @@ class Deduplicator:
     def check(
         self,
         content_hash: str,
-        query_vector: Optional[NDArray[np.float32]] = None,
-        existing_hashes: Optional[dict[str, str]] = None,
-        existing_vectors: Optional[list[tuple[str, NDArray[np.float32]]]] = None,
+        query_vector: NDArray[np.float32] | None = None,
+        existing_hashes: dict[str, str] | None = None,
+        existing_vectors: list[tuple[str, NDArray[np.float32]]] | None = None,
     ) -> DedupResult:
         """重複チェックを行う。
 
@@ -149,7 +148,7 @@ class Deduplicator:
     def filter_batch(
         self,
         content_hashes: list[tuple[str, str]],  # [(content_hash, doc_candidate_id), ...]
-        existing_hashes: Optional[dict[str, str]] = None,
+        existing_hashes: dict[str, str] | None = None,
     ) -> tuple[list[str], list[str]]:
         """バッチ重複フィルタリング（ハッシュのみ）。
 

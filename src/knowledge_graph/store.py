@@ -25,7 +25,7 @@ import logging
 import pickle
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -86,8 +86,8 @@ class KnowledgeGraphStore:
         self,
         name: str,
         entity_type: str = "concept",
-        doc_id: Optional[str] = None,
-        properties: Optional[dict] = None,
+        doc_id: str | None = None,
+        properties: dict | None = None,
     ) -> None:
         """Entity をグラフに追加する。
 
@@ -109,7 +109,7 @@ class KnowledgeGraphStore:
             )
         logger.debug("Entity added/updated: %s (%s)", name, entity_type)
 
-    def get_entity(self, name: str) -> Optional[Entity]:
+    def get_entity(self, name: str) -> Entity | None:
         """Entity を取得する。存在しない場合は None。"""
         if not self._graph.has_node(name):
             return None
@@ -153,7 +153,7 @@ class KnowledgeGraphStore:
         target: str,
         relation_type: str = "related_to",
         weight: float = 1.0,
-        properties: Optional[dict] = None,
+        properties: dict | None = None,
     ) -> None:
         """Relation（エッジ）を追加する。
 
@@ -173,7 +173,7 @@ class KnowledgeGraphStore:
         )
         logger.debug("Relation added: %s -[%s]-> %s", source, relation_type, target)
 
-    def get_relations(self, source: str, target: Optional[str] = None) -> list[Relation]:
+    def get_relations(self, source: str, target: str | None = None) -> list[Relation]:
         """source からの Relation リストを返す。target 指定で絞り込み可能。"""
         if not self._graph.has_node(source):
             return []
@@ -211,7 +211,7 @@ class KnowledgeGraphStore:
         self,
         entity_name: str,
         max_depth: int = 1,
-        relation_types: Optional[list[str]] = None,
+        relation_types: list[str] | None = None,
     ) -> KGQueryResult:
         """指定 Entity の近傍ノードを返す。
 
@@ -333,7 +333,7 @@ class KnowledgeGraphStore:
         logger.info("KG saved to %s (%d entities, %d relations)", path, self.entity_count, self.relation_count)
 
     @classmethod
-    def load(cls, path: str | Path) -> "KnowledgeGraphStore":
+    def load(cls, path: str | Path) -> KnowledgeGraphStore:
         """pickle から復元する。"""
         path = Path(path)
         with open(path, "rb") as f:

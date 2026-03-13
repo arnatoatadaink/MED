@@ -9,7 +9,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-
 # 危険なパターン（Python）
 _DANGEROUS_PATTERNS = [
     r"\bos\.system\b",

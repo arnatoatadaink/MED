@@ -7,8 +7,6 @@ training.pipeline が未実装またはAPIオフライン時はモックUIを表
 from __future__ import annotations
 
 import random
-import time
-from typing import Optional
 
 import gradio as gr
 import httpx

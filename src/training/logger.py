@@ -18,7 +18,7 @@ import logging
 import time
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from src.training.base import TrainingStep
 
@@ -93,7 +93,7 @@ class TrainingLogger:
             except Exception:
                 log.debug("W&B log failed at step %d", step.step)
 
-    def log_metrics(self, metrics: dict[str, Any], step: Optional[int] = None) -> None:
+    def log_metrics(self, metrics: dict[str, Any], step: int | None = None) -> None:
         """任意のメトリクスを記録する（評価時など）。"""
         step_label = f"step={step}" if step is not None else "eval"
         log.info("[%s] %s metrics: %s", self._run_name, step_label, metrics)
@@ -111,7 +111,7 @@ class TrainingLogger:
         return list(self._steps)
 
     @property
-    def latest_step(self) -> Optional[TrainingStep]:
+    def latest_step(self) -> TrainingStep | None:
         return self._steps[-1] if self._steps else None
 
     def summary(self) -> dict[str, Any]:
@@ -141,7 +141,7 @@ class TrainingLogger:
         log.info("TrainingLogger saved %d steps to %s", len(self._steps), p)
 
     @classmethod
-    def load(cls, path: str, run_name: Optional[str] = None) -> "TrainingLogger":
+    def load(cls, path: str, run_name: str | None = None) -> TrainingLogger:
         """JSONL ファイルからログを復元する。"""
         p = Path(path)
         logger = cls(run_name=run_name or p.stem, use_wandb=False)

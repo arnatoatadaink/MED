@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from src.llm.code_generator import CodeGenerator
 from src.llm.gateway import LLMGateway, LLMMessage, LLMResponse
 from src.llm.response_generator import ResponseGenerator
-from src.llm.code_generator import CodeGenerator
 from src.memory.schema import Document, SearchResult, SourceMeta, SourceType
-
 
 # ──────────────────────────────────────────────
 # モック Gateway

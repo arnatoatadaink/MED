@@ -16,7 +16,6 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -88,10 +87,10 @@ class RetrieverRouter:
 
     def _register_defaults(self) -> None:
         """デフォルトのレトリーバーを登録する。"""
+        from src.rag.retrievers.arxiv import ArXivRetriever
         from src.rag.retrievers.github import GitHubRetriever
         from src.rag.retrievers.stackoverflow import StackOverflowRetriever
         from src.rag.retrievers.tavily import TavilyRetriever
-        from src.rag.retrievers.arxiv import ArXivRetriever
 
         for retriever in [
             GitHubRetriever(),
@@ -112,8 +111,8 @@ class RetrieverRouter:
     async def search(
         self,
         query: str,
-        max_results: Optional[int] = None,
-        sources: Optional[list[str]] = None,
+        max_results: int | None = None,
+        sources: list[str] | None = None,
     ) -> list[RawResult]:
         """全利用可能ソースを並列検索し、結果をまとめて返す。
 
@@ -142,7 +141,7 @@ class RetrieverRouter:
                     retriever.search(query, max_results=per_source),
                     timeout=self._timeout,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("Retriever %s timed out", retriever.source_name)
                 return []
             except Exception:

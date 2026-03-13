@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from src.rag.retriever import BaseRetriever, RawResult, RetrieverRouter
 from src.rag.chunker import Chunker
+from src.rag.retriever import BaseRetriever, RawResult, RetrieverRouter
 from src.rag.verifier import ResultVerifier
-
 
 # ──────────────────────────────────────────────
 # モックレトリーバー

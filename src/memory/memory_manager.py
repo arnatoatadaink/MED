@@ -18,16 +18,17 @@ FAISSIndexManager と MetadataStore を統合し、ドキュメントの追加�
 from __future__ import annotations
 
 import logging
-from pathlib import Path
-from typing import Optional
-
-import numpy as np
 
 from src.common.config import FAISSConfig, MetadataConfig, get_settings
 from src.memory.embedder import Embedder
 from src.memory.faiss_index import FAISSIndexManager
 from src.memory.metadata_store import MetadataStore
-from src.memory.schema import Document, Domain, SearchResult, SourceMeta, SourceType, UsefulnessScore
+from src.memory.schema import (
+    Document,
+    SearchResult,
+    SourceMeta,
+    SourceType,
+)
 from src.memory.teacher_registry import TeacherRegistry
 
 logger = logging.getLogger(__name__)
@@ -51,19 +52,19 @@ class MemoryManager:
 
     def __init__(
         self,
-        embedder: Optional[Embedder] = None,
-        faiss: Optional[FAISSIndexManager] = None,
-        store: Optional[MetadataStore] = None,
+        embedder: Embedder | None = None,
+        faiss: FAISSIndexManager | None = None,
+        store: MetadataStore | None = None,
         *,
-        faiss_config: Optional[FAISSConfig] = None,
-        metadata_config: Optional[MetadataConfig] = None,
-        teacher_registry: Optional[TeacherRegistry] = None,
+        faiss_config: FAISSConfig | None = None,
+        metadata_config: MetadataConfig | None = None,
+        teacher_registry: TeacherRegistry | None = None,
     ) -> None:
         settings = get_settings()
         self.embedder = embedder or Embedder()
         self.faiss = faiss or FAISSIndexManager(faiss_config or settings.faiss)
         self.store = store or MetadataStore(metadata_config or settings.metadata)
-        self.teacher_registry: Optional[TeacherRegistry] = teacher_registry
+        self.teacher_registry: TeacherRegistry | None = teacher_registry
         self._initialized = False
 
     # ------------------------------------------------------------------
@@ -132,9 +133,9 @@ class MemoryManager:
         content: str,
         domain: str = "general",
         source_type: str = "manual",
-        source_url: Optional[str] = None,
-        teacher_id: Optional[str] = None,
-        teacher_provider: Optional[str] = None,
+        source_url: str | None = None,
+        teacher_id: str | None = None,
+        teacher_provider: str | None = None,
         **kwargs,
     ) -> str:
         """テキストから直接ドキュメントを追加するコンビニエンスメソッド。
@@ -237,7 +238,7 @@ class MemoryManager:
     async def search(
         self,
         query: str,
-        domain: Optional[str] = None,
+        domain: str | None = None,
         k: int = 5,
         min_score: float = -1.0,
     ) -> list[SearchResult]:
@@ -319,7 +320,7 @@ class MemoryManager:
     # 取得・統計
     # ------------------------------------------------------------------
 
-    async def get(self, doc_id: str) -> Optional[Document]:
+    async def get(self, doc_id: str) -> Document | None:
         """ドキュメントを ID で取得する。"""
         self._ensure_initialized()
         return await self.store.get(doc_id)

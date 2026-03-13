@@ -25,7 +25,7 @@ try:
 except ImportError:
     torch = None  # type: ignore[assignment]
 
-from src.training.base import ParameterAdapter, TrainingAlgorithm, TrainingBatch, TrainingConfig
+from src.training.base import ParameterAdapter, TrainingAlgorithm, TrainingBatch
 from src.training.registry import TrainingRegistry
 
 logger = logging.getLogger(__name__)

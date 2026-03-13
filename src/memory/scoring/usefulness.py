@@ -25,7 +25,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -59,7 +58,7 @@ class UsefulnessScorer:
         weights: 各指標の重み。省略時はデフォルト値を使用。
     """
 
-    def __init__(self, weights: Optional[UsefulnessWeights] = None) -> None:
+    def __init__(self, weights: UsefulnessWeights | None = None) -> None:
         self._weights = weights or UsefulnessWeights()
 
     def compute(

@@ -19,7 +19,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import aiosqlite
 
@@ -149,7 +149,7 @@ def _build_source_meta(d: dict) -> SourceMeta:
     extra: dict = json.loads(d["source_extra"]) if d["source_extra"] else {}
 
     # 専用列の teacher_id を extra に同期（専用列が権威ソース）
-    db_teacher_id: Optional[str] = d.get("teacher_id")
+    db_teacher_id: str | None = d.get("teacher_id")
     if db_teacher_id:
         extra[_TEACHER_ID_KEY] = db_teacher_id
     elif _TEACHER_ID_KEY in extra:
@@ -218,12 +218,12 @@ class MetadataStore:
 
     def __init__(
         self,
-        config: Optional[MetadataConfig] = None,
-        db_path: Optional[str] = None,
+        config: MetadataConfig | None = None,
+        db_path: str | None = None,
     ) -> None:
         cfg = config or get_settings().metadata
         self._db_path = db_path or str(cfg.db_path)
-        self._db: Optional[aiosqlite.Connection] = None
+        self._db: aiosqlite.Connection | None = None
 
     async def initialize(self) -> None:
         """DB 接続を開き、テーブルを作成する。"""
@@ -287,7 +287,7 @@ class MetadataStore:
             await self._db.execute(sql, row)
         await self._db.commit()
 
-    async def get(self, doc_id: str) -> Optional[Document]:
+    async def get(self, doc_id: str) -> Document | None:
         """ID で Document を取得する。"""
         cursor = await self._db.execute(
             "SELECT * FROM documents WHERE id = ?", (doc_id,)
@@ -352,7 +352,7 @@ class MetadataStore:
     async def list_by_teacher(
         self,
         teacher_id: str,
-        domain: Optional[str] = None,
+        domain: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[Document]:
@@ -384,7 +384,7 @@ class MetadataStore:
     async def count_by_teacher(
         self,
         teacher_id: str,
-        domain: Optional[str] = None,
+        domain: str | None = None,
     ) -> int:
         """特定 Teacher のドキュメント数を返す。"""
         if domain:
@@ -403,7 +403,7 @@ class MetadataStore:
     async def exclude_teacher(
         self,
         exclude_teacher_ids: list[str],
-        domain: Optional[str] = None,
+        domain: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[Document]:
@@ -443,7 +443,7 @@ class MetadataStore:
     async def delete_by_teacher(
         self,
         teacher_id: str,
-        domain: Optional[str] = None,
+        domain: str | None = None,
     ) -> int:
         """特定 Teacher のドキュメントを一括削除する。
 
@@ -473,7 +473,7 @@ class MetadataStore:
 
     async def get_unreviewed(
         self,
-        domain: Optional[str] = None,
+        domain: str | None = None,
         limit: int = 100,
     ) -> list[Document]:
         """未レビューの Document を取得する (maturation/reviewer 用)。"""
@@ -535,11 +535,11 @@ class MetadataStore:
     async def update_quality(
         self,
         doc_id: str,
-        teacher_quality: Optional[float] = None,
-        difficulty: Optional[str] = None,
-        review_status: Optional[str] = None,
-        confidence: Optional[float] = None,
-        composite_score: Optional[float] = None,
+        teacher_quality: float | None = None,
+        difficulty: str | None = None,
+        review_status: str | None = None,
+        confidence: float | None = None,
+        composite_score: float | None = None,
     ) -> None:
         """品質関連フィールドを更新する (maturation 用)。"""
         updates: list[str] = []
@@ -577,7 +577,7 @@ class MetadataStore:
 
     # ── 統計 ────────────────────────────────────────────────────────────
 
-    async def count(self, domain: Optional[str] = None) -> int:
+    async def count(self, domain: str | None = None) -> int:
         """Document 数を返す。"""
         if domain:
             cursor = await self._db.execute(
@@ -588,7 +588,7 @@ class MetadataStore:
         row = await cursor.fetchone()
         return row[0]
 
-    async def avg_confidence(self, domain: Optional[str] = None) -> float:
+    async def avg_confidence(self, domain: str | None = None) -> float:
         """平均信頼度を返す。"""
         if domain:
             cursor = await self._db.execute(

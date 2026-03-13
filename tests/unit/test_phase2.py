@@ -9,17 +9,16 @@
 
 from __future__ import annotations
 
-import pytest
 import aiosqlite
+import pytest
 
 from src.llm.gateway import LLMGateway, LLMResponse
-from src.memory.schema import Document, SearchResult, SourceMeta, SourceType
-from src.memory.learning.cross_encoder import CrossEncoder
+from src.mcp_tools.bi_aggregation_tool import AggResult, BIAggregationTool
 from src.mcp_tools.sql_query_tool import SQLQueryTool, SQLResult
-from src.mcp_tools.bi_aggregation_tool import BIAggregationTool, AggResult
-from src.retrieval.query_classifier import QueryClassifier, QueryType
+from src.memory.learning.cross_encoder import CrossEncoder
+from src.memory.schema import Document, SearchResult, SourceMeta, SourceType
 from src.retrieval.fusion_reranker import FusionReranker, FusionResult
-
+from src.retrieval.query_classifier import QueryClassifier, QueryType
 
 # ──────────────────────────────────────────────
 # モック
@@ -228,7 +227,8 @@ class TestCrossEncoder:
 class TestSQLQueryTool:
     @pytest.mark.asyncio
     async def test_execute_raw_select(self) -> None:
-        import tempfile, os
+        import os
+        import tempfile
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
         try:
@@ -269,7 +269,8 @@ class TestSQLQueryTool:
 
     @pytest.mark.asyncio
     async def test_query_uses_llm_for_sql(self) -> None:
-        import tempfile, os
+        import os
+        import tempfile
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
         try:
@@ -285,7 +286,8 @@ class TestSQLQueryTool:
 
     @pytest.mark.asyncio
     async def test_query_strips_code_block(self) -> None:
-        import tempfile, os
+        import os
+        import tempfile
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
         try:

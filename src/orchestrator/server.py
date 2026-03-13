@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
-from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -27,7 +26,7 @@ from src.orchestrator.pipeline import MEDPipeline, QueryResponse
 logger = logging.getLogger(__name__)
 
 # ── パイプラインシングルトン ──────────────────
-_pipeline: Optional[MEDPipeline] = None
+_pipeline: MEDPipeline | None = None
 
 
 @asynccontextmanager
@@ -56,7 +55,7 @@ app = FastAPI(
 
 class QueryRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=2000)
-    domain: Optional[str] = None
+    domain: str | None = None
     k: int = Field(default=5, ge=1, le=20)
     run_code: bool = False
 
@@ -69,8 +68,8 @@ class QueryResponseModel(BaseModel):
     context_doc_count: int
     input_tokens: int
     output_tokens: int
-    sandbox_success: Optional[bool] = None
-    sandbox_stdout: Optional[str] = None
+    sandbox_success: bool | None = None
+    sandbox_stdout: str | None = None
 
 
 class AddDocumentRequest(BaseModel):

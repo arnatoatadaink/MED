@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import json
+
 import pytest
 
 from src.common.config import MetadataConfig
 from src.llm.gateway import LLMGateway, LLMResponse
+from src.memory.maturation.difficulty_tagger import DifficultyTagger
+from src.memory.maturation.reviewer import MemoryReviewer, ReviewResult
+from src.memory.maturation.seed_builder import SeedBuilder, SeedResult
 from src.memory.metadata_store import MetadataStore
 from src.memory.schema import (
     DifficultyLevel,
@@ -15,10 +19,6 @@ from src.memory.schema import (
     SourceMeta,
     SourceType,
 )
-from src.memory.maturation.difficulty_tagger import DifficultyTagger
-from src.memory.maturation.reviewer import MemoryReviewer, ReviewResult
-from src.memory.maturation.seed_builder import SeedBuilder, SeedResult
-
 
 # ──────────────────────────────────────────────
 # モック

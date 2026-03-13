@@ -13,13 +13,10 @@ from __future__ import annotations
 import asyncio
 import io
 import logging
-import time
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 import pytest
-
 
 # ===========================================================================
 # Logger
@@ -37,6 +34,7 @@ class TestSetupLogging:
 
     def test_setup_json(self):
         import json as _json
+
         from src.common.logger import setup_logging
         stream = io.StringIO()
         setup_logging(level="DEBUG", json_format=True, stream=stream)
@@ -80,12 +78,14 @@ class TestQueryRequest:
 
     def test_invalid_empty_query(self):
         from pydantic import ValidationError
+
         from src.common.models import QueryRequest
         with pytest.raises(ValidationError):
             QueryRequest(query="")
 
     def test_max_tokens_bounds(self):
         from pydantic import ValidationError
+
         from src.common.models import QueryRequest
         with pytest.raises(ValidationError):
             QueryRequest(query="hi", max_tokens=0)
@@ -126,6 +126,7 @@ class TestSandboxRequest:
 
     def test_invalid_empty_code(self):
         from pydantic import ValidationError
+
         from src.common.models import SandboxRequest
         with pytest.raises(ValidationError):
             SandboxRequest(code="")

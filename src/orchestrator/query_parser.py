@@ -25,7 +25,6 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Optional
 
 from src.llm.gateway import LLMGateway
 
@@ -116,7 +115,7 @@ class QueryParser:
     def __init__(
         self,
         gateway: LLMGateway,
-        provider: Optional[str] = None,
+        provider: str | None = None,
         use_fallback: bool = True,
     ) -> None:
         self._gateway = gateway

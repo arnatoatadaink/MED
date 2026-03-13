@@ -21,8 +21,7 @@ TeacherRegistry の trust_score を乗算することで、信頼度の低い Te
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from src.memory.schema import Document
 from src.memory.scoring.freshness import FreshnessScorer
@@ -47,8 +46,8 @@ class CompositeScorer:
 
     def __init__(
         self,
-        freshness_half_life: Optional[dict[str, float]] = None,
-        usefulness_weights: Optional[UsefulnessWeights] = None,
+        freshness_half_life: dict[str, float] | None = None,
+        usefulness_weights: UsefulnessWeights | None = None,
         teacher_trust_weight: float = 1.0,
     ) -> None:
         self.freshness = FreshnessScorer(half_life_days=freshness_half_life)
@@ -71,7 +70,7 @@ class CompositeScorer:
     def compute_for_document(
         self,
         doc: Document,
-        now: Optional[datetime] = None,
+        now: datetime | None = None,
         trust_score: float = 1.0,
     ) -> float:
         """Document オブジェクトから複合スコアを計算する。
@@ -87,7 +86,7 @@ class CompositeScorer:
             0.0〜1.0 の複合スコア（trust_score を反映）。
         """
         if now is None:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
         domain = doc.domain if isinstance(doc.domain, str) else doc.domain.value
         retrieved_at = doc.source.retrieved_at if doc.source else None
@@ -109,7 +108,7 @@ class CompositeScorer:
     def compute_from_row(
         self,
         row: dict,
-        now: Optional[datetime] = None,
+        now: datetime | None = None,
         trust_score: float = 1.0,
     ) -> float:
         """SQLite の行辞書から複合スコアを計算する。
@@ -122,13 +121,13 @@ class CompositeScorer:
             trust_score: Teacher の信頼スコア (0.0〜1.0)。
         """
         if now is None:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
         domain = row.get("domain", "general")
 
         # フレッシュネス計算
         retrieved_at_str = row.get("source_retrieved_at")
-        retrieved_at: Optional[datetime] = None
+        retrieved_at: datetime | None = None
         if retrieved_at_str:
             try:
                 retrieved_at = datetime.fromisoformat(retrieved_at_str)
@@ -147,9 +146,9 @@ class CompositeScorer:
     async def update_store(
         self,
         store,  # MetadataStore (avoid circular import with type hint)
-        doc_ids: Optional[list[str]] = None,
-        now: Optional[datetime] = None,
-        trust_map: Optional[dict[str, float]] = None,
+        doc_ids: list[str] | None = None,
+        now: datetime | None = None,
+        trust_map: dict[str, float] | None = None,
     ) -> int:
         """MetadataStore 内のドキュメントの composite_score を更新する。
 
@@ -165,7 +164,7 @@ class CompositeScorer:
             更新件数。
         """
         if now is None:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
         if doc_ids is None:
             # 全ドメインを取得（ドメイン一覧を動的取得）

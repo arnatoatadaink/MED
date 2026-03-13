@@ -19,8 +19,6 @@ import pytest
 
 from src.sandbox.executor import CodeExecutor
 from src.sandbox.manager import SandboxManager
-from src.sandbox.security import SecurityPolicy
-
 
 pytestmark = pytest.mark.docker
 

@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 import statistics
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 from src.llm.gateway import LLMGateway
 
@@ -56,7 +56,7 @@ class EvalSample:
     """評価サンプル。"""
 
     query: str
-    expected_answer: Optional[str] = None
+    expected_answer: str | None = None
     domain: str = "general"
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -75,9 +75,9 @@ class StudentEvaluator:
     def __init__(
         self,
         gateway: LLMGateway,
-        memory_manager: Optional[Any] = None,
-        reward_fn: Optional[Any] = None,
-        provider: Optional[str] = None,
+        memory_manager: Any | None = None,
+        reward_fn: Any | None = None,
+        provider: str | None = None,
         eval_concurrency: int = 4,
     ) -> None:
         self._gateway = gateway
@@ -89,7 +89,7 @@ class StudentEvaluator:
     async def evaluate(
         self,
         samples: list[EvalSample],
-        student_model: Optional[Any] = None,
+        student_model: Any | None = None,
     ) -> EvalMetrics:
         """テストサンプルセットで Student を評価する。
 
@@ -114,7 +114,7 @@ class StudentEvaluator:
     async def _evaluate_sample(
         self,
         sample: EvalSample,
-        student_model: Optional[Any],
+        student_model: Any | None,
     ) -> dict[str, Any]:
         """1 サンプルを評価する。"""
         # 回答生成

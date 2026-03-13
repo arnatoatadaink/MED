@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional
 
 from src.common.config import Settings
 from src.llm.gateway import BaseLLMProvider, LLMMessage, LLMResponse
@@ -37,7 +36,7 @@ class VLLMStudentProvider(BaseLLMProvider):
         self,
         messages: list[LLMMessage],
         *,
-        model: Optional[str] = None,
+        model: str | None = None,
         max_tokens: int = 2048,
         temperature: float = 0.7,
     ) -> LLMResponse:

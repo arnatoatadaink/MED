@@ -15,7 +15,6 @@ torch-dependent テストは HAS_TORCH フラグで制御する。
 
 from __future__ import annotations
 
-import json
 import tempfile
 from pathlib import Path
 
@@ -32,48 +31,44 @@ except ImportError:
 
 requires_torch = pytest.mark.skipif(not HAS_TORCH, reason="torch not installed")
 
+import src.training.adapters.full_ft  # noqa: F401
+import src.training.adapters.lora  # noqa: F401
+import src.training.adapters.lora_xs  # noqa: F401
+import src.training.adapters.tinylora  # noqa: F401
+import src.training.algorithms.dpo  # noqa: F401
+
+# Import to trigger registry registration
+import src.training.algorithms.grpo  # noqa: F401
+import src.training.algorithms.ppo  # noqa: F401
+import src.training.algorithms.reinforce  # noqa: F401
+import src.training.algorithms.sft  # noqa: F401
+import src.training.rewards.code_exec  # noqa: F401
+import src.training.rewards.composite  # noqa: F401
+import src.training.rewards.hybrid  # noqa: F401
+import src.training.rewards.teacher_eval  # noqa: F401
+from src.training.adapters.full_ft import FullFTAdapter
+from src.training.adapters.lora import LoRAAdapter
+from src.training.adapters.lora_xs import LoRAXSAdapter
+from src.training.adapters.tinylora import TinyLoRAAdapter
+from src.training.algorithms.dpo import DPOAlgorithm
+from src.training.algorithms.grpo import GRPOAlgorithm
+from src.training.algorithms.ppo import PPOAlgorithm
+from src.training.algorithms.reinforce import REINFORCEAlgorithm
+from src.training.algorithms.sft import SFTAlgorithm
 from src.training.base import (
-    ParameterAdapter,
     RewardFunction,
     TrainingAlgorithm,
     TrainingBatch,
-    TrainingConfig,
     TrainingResult,
     TrainingStep,
 )
-from src.training.registry import TrainingRegistry
 from src.training.logger import TrainingLogger
-
-# Import to trigger registry registration
-import src.training.algorithms.grpo      # noqa: F401
-import src.training.algorithms.ppo       # noqa: F401
-import src.training.algorithms.dpo       # noqa: F401
-import src.training.algorithms.sft       # noqa: F401
-import src.training.algorithms.reinforce # noqa: F401
-import src.training.adapters.tinylora    # noqa: F401
-import src.training.adapters.lora        # noqa: F401
-import src.training.adapters.lora_xs     # noqa: F401
-import src.training.adapters.full_ft     # noqa: F401
-import src.training.rewards.composite    # noqa: F401
-import src.training.rewards.code_exec    # noqa: F401
-import src.training.rewards.teacher_eval # noqa: F401
-import src.training.rewards.hybrid       # noqa: F401
-
-from src.training.algorithms.grpo import GRPOAlgorithm
-from src.training.algorithms.ppo import PPOAlgorithm
-from src.training.algorithms.dpo import DPOAlgorithm
-from src.training.algorithms.sft import SFTAlgorithm
-from src.training.algorithms.reinforce import REINFORCEAlgorithm
-from src.training.adapters.tinylora import TinyLoRAAdapter
-from src.training.adapters.lora import LoRAAdapter
-from src.training.adapters.lora_xs import LoRAXSAdapter
-from src.training.adapters.full_ft import FullFTAdapter
-from src.training.rewards.composite import CompositeReward, RewardBreakdown
-from src.training.rewards.code_exec import CodeExecReward
-from src.training.rewards.teacher_eval import TeacherEvalReward
-from src.training.rewards.hybrid import HybridReward
 from src.training.pipeline import PipelineConfig, TrainingPipeline
-
+from src.training.registry import TrainingRegistry
+from src.training.rewards.code_exec import CodeExecReward
+from src.training.rewards.composite import CompositeReward, RewardBreakdown
+from src.training.rewards.hybrid import HybridReward
+from src.training.rewards.teacher_eval import TeacherEvalReward
 
 # ──────────────────────────────────────────────
 # ヘルパー
@@ -90,7 +85,7 @@ def _make_batch(
     return TrainingBatch(prompts=prompts, responses=responses, rewards=rewards)
 
 
-def _make_model(hidden_dim: int = 16) -> "nn.Sequential":
+def _make_model(hidden_dim: int = 16) -> nn.Sequential:
     if not HAS_TORCH:
         return None  # type: ignore[return-value]
     return nn.Sequential(

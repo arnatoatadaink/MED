@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 import numpy as np
 from numpy.typing import NDArray
@@ -37,7 +37,7 @@ class Embedder:
 
     def __init__(
         self,
-        config: Optional[EmbeddingConfig] = None,
+        config: EmbeddingConfig | None = None,
         mock: bool = False,
     ) -> None:
         self._config = config or get_settings().embedding
@@ -96,7 +96,7 @@ class Embedder:
     def embed_batch(
         self,
         texts: Sequence[str],
-        batch_size: Optional[int] = None,
+        batch_size: int | None = None,
     ) -> NDArray[np.float32]:
         """テキスト複数件を一括で埋め込みベクトルに変換する。
 
@@ -118,7 +118,7 @@ class Embedder:
     def _model_embed(
         self,
         texts: list[str],
-        batch_size: Optional[int] = None,
+        batch_size: int | None = None,
     ) -> NDArray[np.float32]:
         """実際のモデルでエンコードする。"""
         bs = batch_size or self._config.batch_size

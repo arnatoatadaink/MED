@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +57,7 @@ class FusionReranker:
     def __init__(
         self,
         k: int = _DEFAULT_K,
-        source_weights: Optional[dict[str, float]] = None,
+        source_weights: dict[str, float] | None = None,
     ) -> None:
         self._k = k
         self._weights = source_weights or {}
@@ -66,7 +65,7 @@ class FusionReranker:
     def fuse(
         self,
         ranked_lists: dict[str, list[tuple[str, float]]],
-        top_k: Optional[int] = None,
+        top_k: int | None = None,
     ) -> list[FusionResult]:
         """複数ランクリストを RRF で統合する。
 
@@ -114,7 +113,7 @@ class FusionReranker:
     def fuse_doc_ids(
         self,
         ranked_lists: dict[str, list[tuple[str, float]]],
-        top_k: Optional[int] = None,
+        top_k: int | None = None,
     ) -> list[str]:
         """fuse() の簡略版: doc_id リストのみ返す。"""
         return [r.doc_id for r in self.fuse(ranked_lists, top_k=top_k)]
@@ -122,7 +121,7 @@ class FusionReranker:
     def fuse_with_dedup(
         self,
         ranked_lists: dict[str, list[tuple[str, float]]],
-        top_k: Optional[int] = None,
+        top_k: int | None = None,
     ) -> list[FusionResult]:
         """重複 doc_id を除去した fuse() （fuse と同一、API 一貫性のため）。
 

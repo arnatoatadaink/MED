@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from src.training.base import RewardFunction
 from src.training.registry import TrainingRegistry
@@ -75,8 +75,8 @@ class CompositeReward(RewardFunction):
     def __init__(
         self,
         gateway: Any = None,
-        weights: Optional[dict[str, float]] = None,
-        provider: Optional[str] = None,
+        weights: dict[str, float] | None = None,
+        provider: str | None = None,
         max_response_chars: int = 2000,
     ) -> None:
         self._gateway = gateway
@@ -96,7 +96,7 @@ class CompositeReward(RewardFunction):
         self,
         prompt: str,
         response: str,
-        metadata: Optional[dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> float:
         """Composite 報酬スコアを計算する。
 
@@ -110,7 +110,7 @@ class CompositeReward(RewardFunction):
         self,
         prompt: str,
         response: str,
-        metadata: Optional[dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> RewardBreakdown:
         """各サブ報酬の内訳付きで計算する。"""
         meta = metadata or {}

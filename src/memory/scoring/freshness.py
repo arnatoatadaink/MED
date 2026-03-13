@@ -13,10 +13,7 @@
 from __future__ import annotations
 
 import math
-from datetime import datetime, timezone
-from typing import Optional
-
-from src.common.config import get_settings
+from datetime import UTC, datetime
 
 # ドメイン別デフォルト半減期（日数）
 _DEFAULT_HALF_LIFE: dict[str, float] = {
@@ -40,15 +37,15 @@ class FreshnessScorer:
 
     def __init__(
         self,
-        half_life_days: Optional[dict[str, float]] = None,
+        half_life_days: dict[str, float] | None = None,
     ) -> None:
         self._half_life = half_life_days or _DEFAULT_HALF_LIFE.copy()
 
     def score(
         self,
         domain: str,
-        retrieved_at: Optional[datetime] = None,
-        now: Optional[datetime] = None,
+        retrieved_at: datetime | None = None,
+        now: datetime | None = None,
     ) -> float:
         """フレッシュネススコアを計算する。
 
@@ -64,13 +61,13 @@ class FreshnessScorer:
             return 0.5  # 不明な場合は中間値
 
         if now is None:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
         # タイムゾーン揃え
         if retrieved_at.tzinfo is None:
-            retrieved_at = retrieved_at.replace(tzinfo=timezone.utc)
+            retrieved_at = retrieved_at.replace(tzinfo=UTC)
         if now.tzinfo is None:
-            now = now.replace(tzinfo=timezone.utc)
+            now = now.replace(tzinfo=UTC)
 
         elapsed_days = max(0.0, (now - retrieved_at).total_seconds() / 86400.0)
         half_life = self._half_life.get(domain, _FALLBACK_HALF_LIFE)
@@ -80,8 +77,8 @@ class FreshnessScorer:
     def score_batch(
         self,
         domain: str,
-        retrieved_ats: list[Optional[datetime]],
-        now: Optional[datetime] = None,
+        retrieved_ats: list[datetime | None],
+        now: datetime | None = None,
     ) -> list[float]:
         """複数ドキュメントのフレッシュネススコアを一括計算する。"""
         return [self.score(domain, rt, now=now) for rt in retrieved_ats]

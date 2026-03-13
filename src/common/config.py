@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Optional, Tuple, Type
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
@@ -60,7 +60,7 @@ class EmbeddingConfig(BaseModel):
     dim: int = 768
     batch_size: int = 64
     device: str = "cpu"
-    cache_dir: Optional[Path] = None
+    cache_dir: Path | None = None
 
 
 # ============================================================================
@@ -129,7 +129,7 @@ class OpenAIConfig(BaseModel):
 
     default_model: str = "gpt-4o"
     mini_model: str = "gpt-4o-mini"
-    base_url: Optional[str] = None
+    base_url: str | None = None
     max_retries: int = 3
     timeout_seconds: float = 60.0
 
@@ -399,12 +399,12 @@ class Settings(BaseSettings):
     @classmethod
     def settings_customise_sources(
         cls,
-        settings_cls: Type[BaseSettings],
+        settings_cls: type[BaseSettings],
         init_settings: PydanticBaseSettingsSource,
         env_settings: PydanticBaseSettingsSource,
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
-    ) -> Tuple[PydanticBaseSettingsSource, ...]:
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
         """env var / .env を YAML (init_settings) より高優先にする。
 
         優先順位 (高 → 低):
@@ -594,7 +594,7 @@ def _build_init_kwargs(configs_dir: Path) -> dict[str, Any]:
 # ============================================================================
 
 
-def load_settings(configs_dir: Optional[Path] = None) -> Settings:
+def load_settings(configs_dir: Path | None = None) -> Settings:
     """YAML ファイルと環境変数から Settings を構築して返す。
 
     Args:

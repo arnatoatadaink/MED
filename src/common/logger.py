@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import Optional
 
 # デフォルトフォーマット
 _TEXT_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Optional
+from typing import Any
 
 from src.training.base import RewardFunction
 from src.training.registry import TrainingRegistry
@@ -43,7 +43,7 @@ class TeacherEvalReward(RewardFunction):
     def __init__(
         self,
         gateway: Any = None,
-        provider: Optional[str] = None,
+        provider: str | None = None,
         fallback_score: float = 0.5,
     ) -> None:
         self._gateway = gateway
@@ -58,7 +58,7 @@ class TeacherEvalReward(RewardFunction):
         self,
         prompt: str,
         response: str,
-        metadata: Optional[dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> float:
         if self._gateway is None:
             return self._fallback

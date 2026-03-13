@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Optional
 
 from src.llm.gateway import LLMGateway
 from src.memory.schema import Document, SearchResult
@@ -56,7 +55,7 @@ class CrossEncoder:
     def __init__(
         self,
         gateway: LLMGateway,
-        provider: Optional[str] = None,
+        provider: str | None = None,
         max_doc_chars: int = 1000,
         max_concurrency: int = 5,
         fallback_score: float = 0.5,
@@ -115,7 +114,7 @@ class CrossEncoder:
         self,
         query: str,
         search_results: list[SearchResult],
-        top_k: Optional[int] = None,
+        top_k: int | None = None,
     ) -> list[SearchResult]:
         """SearchResult リストを Cross-Encoder スコアで再ランク付けする。
 

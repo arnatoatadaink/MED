@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-import math
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from src.memory.schema import Document, SourceMeta, SourceType
+from src.memory.scoring.composite_scorer import CompositeScorer
 from src.memory.scoring.freshness import FreshnessScorer
 from src.memory.scoring.usefulness import UsefulnessScorer, UsefulnessWeights
-from src.memory.scoring.composite_scorer import CompositeScorer
-from src.memory.schema import Document, Domain, SourceMeta, SourceType
-
 
 # ──────────────────────────────────────────────
 # FreshnessScorer
@@ -21,28 +19,28 @@ from src.memory.schema import Document, Domain, SourceMeta, SourceType
 class TestFreshnessScorer:
     def test_new_document_score_near_one(self) -> None:
         scorer = FreshnessScorer()
-        now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        now = datetime(2026, 1, 1, tzinfo=UTC)
         retrieved_at = now - timedelta(hours=1)
         score = scorer.score("code", retrieved_at=retrieved_at, now=now)
         assert score > 0.999
 
     def test_old_document_score_near_zero(self) -> None:
         scorer = FreshnessScorer()
-        now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        now = datetime(2026, 1, 1, tzinfo=UTC)
         retrieved_at = now - timedelta(days=3650)  # 10年前
         score = scorer.score("code", retrieved_at=retrieved_at, now=now)
         assert score < 0.1
 
     def test_half_life_at_half_life_days(self) -> None:
         scorer = FreshnessScorer(half_life_days={"code": 180.0})
-        now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        now = datetime(2026, 1, 1, tzinfo=UTC)
         retrieved_at = now - timedelta(days=180)
         score = scorer.score("code", retrieved_at=retrieved_at, now=now)
         assert abs(score - 0.5) < 0.01
 
     def test_unknown_domain_uses_fallback(self) -> None:
         scorer = FreshnessScorer()
-        now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        now = datetime(2026, 1, 1, tzinfo=UTC)
         retrieved_at = now - timedelta(days=10)
         score = scorer.score("unknown_domain", retrieved_at=retrieved_at, now=now)
         assert 0.0 <= score <= 1.0
@@ -54,7 +52,7 @@ class TestFreshnessScorer:
 
     def test_score_range(self) -> None:
         scorer = FreshnessScorer()
-        now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        now = datetime(2026, 1, 1, tzinfo=UTC)
         for days in [0, 30, 180, 365, 730]:
             rt = now - timedelta(days=days)
             s = scorer.score("code", retrieved_at=rt, now=now)
@@ -62,7 +60,7 @@ class TestFreshnessScorer:
 
     def test_academic_slower_decay_than_code(self) -> None:
         scorer = FreshnessScorer()
-        now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        now = datetime(2026, 1, 1, tzinfo=UTC)
         rt = now - timedelta(days=365)
         code_score = scorer.score("code", retrieved_at=rt, now=now)
         academic_score = scorer.score("academic", retrieved_at=rt, now=now)
@@ -70,7 +68,7 @@ class TestFreshnessScorer:
 
     def test_score_batch(self) -> None:
         scorer = FreshnessScorer()
-        now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        now = datetime(2026, 1, 1, tzinfo=UTC)
         rts = [now - timedelta(days=d) for d in [0, 90, 365]]
         scores = scorer.score_batch("code", rts, now=now)
         assert len(scores) == 3
@@ -79,7 +77,7 @@ class TestFreshnessScorer:
     def test_set_half_life(self) -> None:
         scorer = FreshnessScorer()
         scorer.set_half_life("custom", 100.0)
-        now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        now = datetime(2026, 1, 1, tzinfo=UTC)
         rt = now - timedelta(days=100)
         score = scorer.score("custom", retrieved_at=rt, now=now)
         assert abs(score - 0.5) < 0.01
@@ -198,7 +196,7 @@ class TestUsefulnessScorer:
 
 
 def _make_doc(domain: str = "code", days_old: int = 30) -> Document:
-    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
     retrieved_at = now - timedelta(days=days_old)
     return Document(
         content="test content",
@@ -211,13 +209,13 @@ class TestCompositeScorer:
     def test_score_in_range(self) -> None:
         scorer = CompositeScorer()
         doc = _make_doc()
-        now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        now = datetime(2026, 1, 1, tzinfo=UTC)
         score = scorer.compute_for_document(doc, now=now)
         assert 0.0 <= score <= 1.0
 
     def test_newer_doc_scores_higher(self) -> None:
         scorer = CompositeScorer()
-        now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        now = datetime(2026, 1, 1, tzinfo=UTC)
         new_doc = _make_doc(days_old=1)
         old_doc = _make_doc(days_old=500)
         score_new = scorer.compute_for_document(new_doc, now=now)
@@ -226,7 +224,7 @@ class TestCompositeScorer:
 
     def test_compute_from_row(self) -> None:
         scorer = CompositeScorer()
-        now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        now = datetime(2026, 1, 1, tzinfo=UTC)
         row = {
             "domain": "code",
             "retrieval_count": 10,
@@ -263,7 +261,7 @@ class TestCompositeScorer:
             await store.save(doc)
 
         scorer = CompositeScorer()
-        now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        now = datetime(2026, 1, 1, tzinfo=UTC)
         updated = await scorer.update_store(store, doc_ids=[d.id for d in docs], now=now)
         assert updated == 3
 

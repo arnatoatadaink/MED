@@ -19,16 +19,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
 
 from src.llm.code_generator import CodeGenerator, CodeResult
 from src.llm.gateway import LLMGateway
 from src.llm.response_generator import GeneratedResponse, ResponseGenerator
-from src.memory.embedder import Embedder
-from src.memory.faiss_index import FAISSIndexManager
 from src.memory.iterative_retrieval import IterativeRetriever
 from src.memory.memory_manager import MemoryManager
-from src.memory.metadata_store import MetadataStore
 from src.memory.schema import SearchResult
 from src.rag.chunker import Chunker
 from src.rag.retriever import RetrieverRouter
@@ -47,7 +43,7 @@ class QueryResponse:
     faiss_results: list[SearchResult] = field(default_factory=list)
     provider: str = ""
     model: str = ""
-    code_result: Optional[CodeResult] = None
+    code_result: CodeResult | None = None
     sandbox_stdout: str = ""
     sandbox_success: bool = False
     context_doc_ids: list[str] = field(default_factory=list)
@@ -70,10 +66,10 @@ class MEDPipeline:
 
     def __init__(
         self,
-        memory_manager: Optional[MemoryManager] = None,
-        gateway: Optional[LLMGateway] = None,
-        retriever_router: Optional[RetrieverRouter] = None,
-        sandbox_manager: Optional[SandboxManager] = None,
+        memory_manager: MemoryManager | None = None,
+        gateway: LLMGateway | None = None,
+        retriever_router: RetrieverRouter | None = None,
+        sandbox_manager: SandboxManager | None = None,
         *,
         enable_external_rag: bool = True,
         enable_sandbox: bool = True,
@@ -108,7 +104,7 @@ class MEDPipeline:
     async def query(
         self,
         query: str,
-        domain: Optional[str] = None,
+        domain: str | None = None,
         k: int = 5,
         run_code: bool = False,
     ) -> QueryResponse:
@@ -146,7 +142,7 @@ class MEDPipeline:
         )
 
         # ── Step 4: コード生成 + Sandbox 実行 ─────
-        code_result: Optional[CodeResult] = None
+        code_result: CodeResult | None = None
         sandbox_stdout = ""
         sandbox_success = False
 
@@ -185,7 +181,7 @@ class MEDPipeline:
         self,
         content: str,
         domain: str = "general",
-        teacher_id: Optional[str] = None,
+        teacher_id: str | None = None,
     ) -> str:
         """単一ドキュメントをメモリに追加する（ユーティリティメソッド）。
 
