@@ -163,6 +163,21 @@ def build_tab() -> None:
                 send_btn = gr.Button("送信", variant="primary", scale=1)
             clear_btn = gr.Button("履歴クリア", variant="secondary", size="sm")
 
+            # ── サンプルプロンプト ───────────────────────────────
+            with gr.Accordion("💡 サンプルプロンプト", open=False):
+                gr.Markdown("_クリックで入力欄にセットされます_")
+                _SAMPLES = [
+                    ("Python 二分探索",       "Python で二分探索（バイナリサーチ）を実装してください"),
+                    ("FAISS とは",            "FAISSとは何ですか？どのような場面で使われますか？"),
+                    ("コードレビュー依頼",     "以下のコードのバグを見つけて修正してください:\n```python\ndef add(a, b):\n    return a - b\n```"),
+                    ("RAG の仕組み",          "RAG（Retrieval-Augmented Generation）の仕組みをわかりやすく説明してください"),
+                    ("TinyLoRA とは",         "TinyLoRA とはどのような技術ですか？通常の LoRA との違いを教えてください"),
+                    ("GPT と Claude の違い",  "GPT-4o と Claude Sonnet の特徴と使い分けを比較してください"),
+                ]
+                for label, prompt in _SAMPLES:
+                    btn = gr.Button(label, size="sm", variant="secondary")
+                    btn.click(fn=lambda p=prompt: p, outputs=[msg_box])
+
         with gr.Column(scale=1):
             gr.Markdown("### 設定")
             mode_radio = gr.Radio(
