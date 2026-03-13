@@ -1,11 +1,12 @@
 """src/gui/app.py — Gradio Web GUI メインアプリケーション。
 
 タブ構成:
-  1. チャット      — RAG + LLM クエリインターフェース
-  2. FAISSメモリ   — インデックス統計・検索・追加
-  3. コードサンドボックス — Docker 安全実行
-  4. 設定         — APIキー・YAML設定編集
+  1. ガイド        — セットアップウィザード & 機能説明
+  2. チャット      — RAG + LLM クエリインターフェース
+  3. FAISSメモリ   — インデックス統計・検索・追加
+  4. コードサンドボックス — Docker 安全実行
   5. 学習         — GRPO + TinyLoRA ダッシュボード
+  6. 設定         — APIキー・YAML設定編集
 
 起動方法:
     python scripts/launch_gui.py [--host HOST] [--port PORT] [--share]
@@ -21,6 +22,7 @@ import gradio as gr
 
 # タブモジュール
 from src.gui.tabs import chat, memory, sandbox, settings, training
+from src.gui.tabs import guide
 from src.gui.components.status_bar import get_status_markdown
 
 # ────────────────────────────────────────────────────────────────
@@ -239,6 +241,9 @@ def build_app() -> gr.Blocks:
 
         # ── メインタブ ──────────────────────────────────────────
         with gr.Tabs(elem_classes=["tab-nav"]):
+
+            with gr.TabItem("📖 ガイド"):
+                guide.build_tab()
 
             with gr.TabItem("💬 チャット"):
                 gr.Markdown(
