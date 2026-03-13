@@ -1,0 +1,99 @@
+site_name: MED — Memory Environment Distillation
+site_description: RAG × FAISS × LLM × TinyLoRA — Teacher-Student メモリ蒸留システム
+site_author: MED Project
+docs_dir: docs/site
+site_dir: docs/build
+
+theme:
+  name: material
+  language: ja
+  palette:
+    - scheme: slate
+      primary: deep purple
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: ライトモードに切り替え
+    - scheme: default
+      primary: deep purple
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: ダークモードに切り替え
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - toc.follow
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+plugins:
+  - search:
+      lang: ja
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+
+nav:
+  - ホーム: index.md
+  - はじめに:
+    - セットアップ: getting-started/setup.md
+    - クイックスタート: getting-started/quickstart.md
+    - アーキテクチャ概要: getting-started/architecture.md
+  - 機能ガイド:
+    - チャット (RAG + LLM): features/chat.md
+    - FAISSメモリ管理: features/memory.md
+    - サンドボックス実行: features/sandbox.md
+    - 学習フレームワーク: features/training.md
+    - 設定・プロバイダー: features/settings.md
+  - Phase 2 — メモリ成熟:
+    - 概要: phase2/overview.md
+    - Teacher 信頼度評価: phase2/teacher-trust.md
+    - MemoryReviewer: phase2/reviewer.md
+    - 品質メトリクス: phase2/quality-metrics.md
+  - アーキテクチャ詳細:
+    - Knowledge Graph: architecture/knowledge-graph.md
+    - Fusion / Rerank: architecture/fusion-rerank.md
+    - MCP Tools: architecture/mcp-tools.md
+    - 学習パイプライン: architecture/training-pipeline.md
+  - 設定リファレンス:
+    - llm_config.yaml: reference/llm-config.md
+    - faiss_config.yaml: reference/faiss-config.md
+    - training.yaml: reference/training-config.md
+    - sandbox_policy.yaml: reference/sandbox-policy.md
+  - 開発ガイド:
+    - コントリビューション: dev/contributing.md
+    - テスト: dev/testing.md
+    - ロードマップ: dev/roadmap.md
