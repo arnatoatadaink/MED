@@ -28,6 +28,7 @@ from src.memory.embedder import Embedder
 from src.memory.faiss_index import FAISSIndexManager
 from src.memory.metadata_store import MetadataStore
 from src.memory.schema import Document, Domain, SearchResult, SourceMeta, SourceType, UsefulnessScore
+from src.memory.teacher_registry import TeacherRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +39,14 @@ class MemoryManager:
     追加・削除では FAISS → SQLite の順に操作し、SQLite が失敗した場合は
     FAISS 側をロールバックして整合性を保つ。
 
+    teacher_registry が設定されている場合、ドキュメント追加時に
+    Teacher 素性（teacher_id）を自動登録し doc 数をカウントする。
+
     Attributes:
-        embedder: テキスト埋め込みモジュール。
-        faiss: ドメイン別 FAISS インデックス管理。
-        store: SQLite メタデータストア。
+        embedder:         テキスト埋め込みモジュール。
+        faiss:            ドメイン別 FAISS インデックス管理。
+        store:            SQLite メタデータストア。
+        teacher_registry: Teacher プロファイル管理（省略可）。
     """
 
     def __init__(
@@ -52,11 +57,13 @@ class MemoryManager:
         *,
         faiss_config: Optional[FAISSConfig] = None,
         metadata_config: Optional[MetadataConfig] = None,
+        teacher_registry: Optional[TeacherRegistry] = None,
     ) -> None:
         settings = get_settings()
         self.embedder = embedder or Embedder()
         self.faiss = faiss or FAISSIndexManager(faiss_config or settings.faiss)
         self.store = store or MetadataStore(metadata_config or settings.metadata)
+        self.teacher_registry: Optional[TeacherRegistry] = teacher_registry
         self._initialized = False
 
     # ------------------------------------------------------------------
@@ -66,6 +73,8 @@ class MemoryManager:
     async def initialize(self) -> None:
         """SQLite テーブル作成など初期化処理を実行する。"""
         await self.store.initialize()
+        if self.teacher_registry is not None:
+            await self.teacher_registry.initialize()
         self._initialized = True
         logger.info("MemoryManager initialized")
 
@@ -111,6 +120,9 @@ class MemoryManager:
 
         # KG 登録フック（Phase 1.5 で実装）
         await self._kg_register_hook(doc)
+
+        # Teacher 素性フック — teacher_id が設定されていれば Registry に記録
+        await self._teacher_record_hook(doc)
 
         logger.debug("Added doc=%s domain=%s", doc.id, domain)
         return doc.id
@@ -349,3 +361,21 @@ class MemoryManager:
         """KG 登録フック（Phase 1.5 で EntityExtractor を呼び出す）。"""
         # Phase 1.5 で実装: EntityExtractor.extract(doc) → KGStore.add_entity/relation
         pass
+
+    async def _teacher_record_hook(self, doc: Document) -> None:
+        """Teacher 素性フック — teacher_id が設定されていれば TeacherRegistry に記録する。
+
+        TeacherRegistry が未設定の場合は何もしない（オプション機能）。
+        """
+        if self.teacher_registry is None:
+            return
+        teacher_id = doc.source.teacher_id
+        if not teacher_id:
+            return
+        try:
+            await self.teacher_registry.record_doc(teacher_id)
+        except Exception:
+            logger.exception(
+                "TeacherRegistry.record_doc failed for teacher=%s doc=%s",
+                teacher_id, doc.id,
+            )
