@@ -70,6 +70,10 @@ select = ["E", "F", "I", "UP"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "docker: mark test as requiring a running Docker daemon",
+    "slow: mark test as slow (may take several seconds)",
+]
 
 [tool.mypy]
 python_version = "3.11"
