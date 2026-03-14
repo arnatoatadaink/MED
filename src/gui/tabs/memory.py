@@ -149,8 +149,8 @@ def _quality_report_to_md(r: dict) -> str:
     lines = [
         prefix,
         f"### {goal_icon} Phase 2 目標進捗\n",
-        f"| 目標 | 現在値 | 目標値 | 進捗 |",
-        f"|------|--------|--------|------|",
+        "| 目標 | 現在値 | 目標値 | 進捗 |",
+        "|------|--------|--------|------|",
         f"| ドキュメント数 | `{r['total_docs']:,}` | `{r['doc_target']:,}` "
         f"| `{_bar(prog.get('docs', 0))}` |",
         f"| 平均信頼度 | `{r['avg_confidence']:.3f}` | `{r['confidence_target']}` "
@@ -158,14 +158,14 @@ def _quality_report_to_md(r: dict) -> str:
         f"| 実行成功率 | `{r['exec_success_rate']:.1%}` | `{r['exec_success_target']:.0%}` "
         f"| `{_bar(prog.get('exec_success', 0))}` |",
         "",
-        f"### レビュー状況\n",
-        f"| 承認 | 却下 | 未審査 | 承認率 |",
-        f"|------|------|--------|--------|",
+        "### レビュー状況\n",
+        "| 承認 | 却下 | 未審査 | 承認率 |",
+        "|------|------|--------|--------|",
         f"| `{r['approved_docs']:,}` | `{r['rejected_docs']:,}` "
         f"| `{r['pending_docs']:,}` | `{r.get('approval_rate', 0):.1%}` |",
         "",
         f"| 平均品質スコア | `{r['avg_teacher_quality']:.3f}` |",
-        f"|------|------|",
+        "|------|------|",
         f"| 平均複合スコア | `{r['avg_composite_score']:.3f}` |",
         f"| 平均検索回数 | `{r['avg_retrieval_count']:.1f}` |",
     ]

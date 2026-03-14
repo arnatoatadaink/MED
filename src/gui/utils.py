@@ -5,8 +5,8 @@
 
 from __future__ import annotations
 
-import httpx
 import gradio as gr
+import httpx
 
 # オーケストレーター接続先 (configs/default.yaml の gui.orchestrator_url と合わせる)
 ORCHESTRATOR_URL = "http://localhost:8000"

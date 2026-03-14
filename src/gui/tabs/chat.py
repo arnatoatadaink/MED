@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import time
 from collections.abc import Generator
-from typing import Generator
 
 import gradio as gr
 import httpx

@@ -17,9 +17,9 @@ from __future__ import annotations
 import logging
 import re
 import textwrap
-from dataclasses import dataclass, field
+from collections.abc import Generator
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Generator
 
 import httpx
 
