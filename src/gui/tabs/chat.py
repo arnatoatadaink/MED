@@ -3,29 +3,27 @@
 Teacher/Student モデルへのクエリと RAG 結果を表示する。
 FastAPI オーケストレーターが起動中の場合はHTTP経由で通信し、
 未起動時はモックレスポンスを返す。
+
+Gradio バージョン差異:
+  5.x: タプル形式履歴 [(user, bot), ...]、show_copy_button、bubble_full_width
+  6.x: 辞書形式履歴 [{"role":..., "content":...}, ...]、buttons=["copy"]
+       bubble_full_width 削除(代替なし)
 """
 
 from __future__ import annotations
 
 import time
 from collections.abc import Generator
+from typing import Generator
 
 import gradio as gr
 import httpx
 
+from src.gui.utils import GRADIO_MAJOR, ORCHESTRATOR_URL, is_api_alive
+
 # ────────────────────────────────────────────────────────────────
 # API クライアントヘルパー
 # ────────────────────────────────────────────────────────────────
-
-_ORCHESTRATOR_URL = "http://localhost:8000"
-
-
-def _is_api_alive() -> bool:
-    try:
-        r = httpx.get(f"{_ORCHESTRATOR_URL}/health", timeout=1.0)
-        return r.status_code == 200
-    except Exception:
-        return False
 
 
 def _query_api(
@@ -40,7 +38,7 @@ def _query_api(
         "use_memory": use_memory,
         "use_rag": use_rag,
     }
-    r = httpx.post(f"{_ORCHESTRATOR_URL}/query", json=payload, timeout=60.0)
+    r = httpx.post(f"{ORCHESTRATOR_URL}/query", json=payload, timeout=60.0)
     r.raise_for_status()
     return r.json()
 
@@ -92,11 +90,18 @@ def respond(
         return
 
     # 即座に「思考中…」を表示
-    thinking_history = history + [(message, "⏳ 処理中…")]
+    # Gradio 6.x: 辞書形式  /  5.x: タプル形式
+    if GRADIO_MAJOR >= 6:
+        thinking_history = history + [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": "⏳ 処理中…"},
+        ]
+    else:
+        thinking_history = history + [(message, "⏳ 処理中…")]
     yield thinking_history, "", ""
 
     try:
-        if _is_api_alive():
+        if is_api_alive():
             result = _query_api(message, mode, use_memory, use_rag)
         else:
             result = _mock_response(message, mode)
@@ -114,7 +119,13 @@ def respond(
     latency = result.get("latency_ms", 0)
     meta = f"モデル: `{model_used}` | レイテンシ: {latency}ms"
 
-    new_history = history + [(message, answer)]
+    if GRADIO_MAJOR >= 6:
+        new_history = history + [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": answer},
+        ]
+    else:
+        new_history = history + [(message, answer)]
     yield new_history, meta, sources_md
 
 
@@ -126,12 +137,23 @@ def build_tab() -> None:
     """Gradio Blocks コンテキスト内でチャットタブを描画する。"""
     with gr.Row():
         with gr.Column(scale=3):
-            chatbot = gr.Chatbot(
-                label="チャット",
-                height=480,
-                show_copy_button=True,
-                bubble_full_width=False,
-            )
+            # Gradio 5.x: show_copy_button + bubble_full_width (deprecated but works)
+            # Gradio 6.x: buttons=["copy"]、bubble_full_width は削除(代替なし)
+            #             type="messages" で辞書形式履歴を使用
+            if GRADIO_MAJOR >= 6:
+                # Gradio 6.x: messages形式(辞書)のみサポート、type引数は廃止
+                chatbot = gr.Chatbot(
+                    label="チャット",
+                    height=480,
+                    buttons=["copy"],
+                )
+            else:
+                chatbot = gr.Chatbot(
+                    label="チャット",
+                    height=480,
+                    show_copy_button=True,
+                    bubble_full_width=False,
+                )
             with gr.Row():
                 msg_box = gr.Textbox(
                     placeholder="クエリを入力してください… (Shift+Enter で改行)",
@@ -141,6 +163,21 @@ def build_tab() -> None:
                 )
                 send_btn = gr.Button("送信", variant="primary", scale=1)
             clear_btn = gr.Button("履歴クリア", variant="secondary", size="sm")
+
+            # ── サンプルプロンプト ───────────────────────────────
+            with gr.Accordion("💡 サンプルプロンプト", open=False):
+                gr.Markdown("_クリックで入力欄にセットされます_")
+                _SAMPLES = [
+                    ("Python 二分探索",       "Python で二分探索（バイナリサーチ）を実装してください"),
+                    ("FAISS とは",            "FAISSとは何ですか？どのような場面で使われますか？"),
+                    ("コードレビュー依頼",     "以下のコードのバグを見つけて修正してください:\n```python\ndef add(a, b):\n    return a - b\n```"),
+                    ("RAG の仕組み",          "RAG（Retrieval-Augmented Generation）の仕組みをわかりやすく説明してください"),
+                    ("TinyLoRA とは",         "TinyLoRA とはどのような技術ですか？通常の LoRA との違いを教えてください"),
+                    ("GPT と Claude の違い",  "GPT-4o と Claude Sonnet の特徴と使い分けを比較してください"),
+                ]
+                for label, prompt in _SAMPLES:
+                    btn = gr.Button(label, size="sm", variant="secondary")
+                    btn.click(fn=lambda p=prompt: p, outputs=[msg_box])
 
         with gr.Column(scale=1):
             gr.Markdown("### 設定")

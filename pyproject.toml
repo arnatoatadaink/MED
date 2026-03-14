@@ -38,9 +38,6 @@ training = [
     "vllm>=0.3.0",
     "wandb>=0.16.0",
 ]
-gui = [
-    "gradio>=4.20.0",
-]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
@@ -48,6 +45,13 @@ dev = [
     "testcontainers>=3.7.0",
     "ruff>=0.3.0",
     "mypy>=1.8.0",
+]
+docs = [
+    "mkdocs>=1.6.0",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.24.0",
+    "mkdocs-gen-files>=0.5.0",
+    "mkdocs-literate-nav>=0.6.0",
 ]
 
 [project.scripts]

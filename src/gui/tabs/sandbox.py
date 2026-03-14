@@ -11,7 +11,7 @@ import time
 import gradio as gr
 import httpx
 
-_ORCHESTRATOR_URL = "http://localhost:8000"
+from src.gui.utils import GRADIO_MAJOR, ORCHESTRATOR_URL, is_api_alive
 
 _EXAMPLE_PYTHON = """\
 # FAISSインデックス動作確認の例
@@ -60,17 +60,9 @@ _SUPPORTED_LANGS = ["python", "bash", "javascript", "ruby"]
 # 実行ヘルパー
 # ────────────────────────────────────────────────────────────────
 
-def _is_api_alive() -> bool:
-    try:
-        r = httpx.get(f"{_ORCHESTRATOR_URL}/health", timeout=1.0)
-        return r.status_code == 200
-    except Exception:
-        return False
-
-
 def _execute_via_api(code: str, language: str, timeout: int) -> dict:
     r = httpx.post(
-        f"{_ORCHESTRATOR_URL}/sandbox/execute",
+        f"{ORCHESTRATOR_URL}/sandbox/execute",
         json={"code": code, "language": language, "timeout": timeout},
         timeout=float(timeout + 10),
     )
@@ -104,7 +96,7 @@ def _run_code(code: str, language: str, timeout: int) -> tuple[str, str, str]:
     if not code.strip():
         return "", "", "❌ コードが空です"
 
-    if _is_api_alive():
+    if is_api_alive():
         try:
             result = _execute_via_api(code, language, timeout)
         except Exception as e:
@@ -168,17 +160,21 @@ def build_tab() -> None:
         with gr.Column(scale=1):
             gr.Markdown("### 実行結果")
             exec_meta = gr.Markdown("_実行後に表示_")
+            # Gradio 6.x: show_copy_button 削除 → buttons=["copy"]
+            _copy_kwargs: dict = (
+                {"buttons": ["copy"]} if GRADIO_MAJOR >= 6 else {"show_copy_button": True}
+            )
             stdout_box = gr.Textbox(
                 label="標準出力 (stdout)",
                 lines=10,
                 interactive=False,
-                show_copy_button=True,
+                **_copy_kwargs,
             )
             stderr_box = gr.Textbox(
                 label="標準エラー (stderr)",
                 lines=5,
                 interactive=False,
-                show_copy_button=True,
+                **_copy_kwargs,
             )
 
             gr.Markdown("### セキュリティポリシー")
@@ -195,7 +191,8 @@ def build_tab() -> None:
         if example_name and example_name in _EXAMPLES:
             lang, code = _EXAMPLES[example_name]
             return code, lang
-        return gr.update(), gr.update()
+        # gr.update() は Gradio 6.x で deprecated → gr.skip() を使用
+        return gr.skip(), gr.skip()
 
     example_selector.change(
         fn=_load_example,
