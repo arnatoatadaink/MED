@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
 
 from src.llm.gateway import LLMGateway, LLMMessage, LLMResponse
 from src.memory.schema import SearchResult
@@ -66,10 +65,10 @@ class ResponseGenerator:
     def __init__(
         self,
         gateway: LLMGateway,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         max_context_docs: int = 5,
         max_context_chars: int = 4000,
-        provider: Optional[str] = None,
+        provider: str | None = None,
     ) -> None:
         self._gateway = gateway
         self._system = system_prompt or _DEFAULT_SYSTEM

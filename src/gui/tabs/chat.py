@@ -13,6 +13,7 @@ Gradio バージョン差異:
 from __future__ import annotations
 
 import time
+from collections.abc import Generator
 from typing import Generator
 
 import gradio as gr
@@ -78,11 +79,11 @@ def _format_sources(sources: list) -> str:
 
 def respond(
     message: str,
-    history: list,
+    history: list[tuple[str, str]],
     mode: str,
     use_memory: bool,
     use_rag: bool,
-) -> Generator[tuple[list, str, str], None, None]:
+) -> Generator[tuple[list[tuple[str, str]], str, str], None, None]:
     """Gradio チャット用ストリーミング風ジェネレータ。"""
     if not message.strip():
         yield history, "", "_入力が空です_"

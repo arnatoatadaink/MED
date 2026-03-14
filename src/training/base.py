@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 try:
     import torch
@@ -32,7 +32,6 @@ except ImportError:
     HAS_TORCH = False
 
 from pydantic import BaseModel, Field
-
 
 # ──────────────────────────────────────────────
 # データ構造
@@ -94,7 +93,7 @@ class TrainingResult:
     final_loss: float
     best_reward: float
     steps: list[TrainingStep] = field(default_factory=list)
-    checkpoint_path: Optional[str] = None
+    checkpoint_path: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -154,7 +153,7 @@ class TrainingAlgorithm(ABC):
         self,
         batch: TrainingBatch,
         model: Any,
-        adapter: "ParameterAdapter",
+        adapter: ParameterAdapter,
     ) -> Any:  # torch.Tensor when torch is available
         """バッチからロスを計算する。
 
@@ -231,7 +230,7 @@ class RewardFunction(ABC):
         self,
         prompt: str,
         response: str,
-        metadata: Optional[dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> float:
         """(prompt, response) ペアの報酬スコアを計算する。
 

@@ -27,7 +27,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Type
 
 from src.training.base import ParameterAdapter, RewardFunction, TrainingAlgorithm
 
@@ -40,9 +39,9 @@ class TrainingRegistry:
     クラスメソッドのみで構成されるシングルトン的な Registry。
     """
 
-    _algorithms: dict[str, Type[TrainingAlgorithm]] = {}
-    _adapters: dict[str, Type[ParameterAdapter]] = {}
-    _rewards: dict[str, Type[RewardFunction]] = {}
+    _algorithms: dict[str, type[TrainingAlgorithm]] = {}
+    _adapters: dict[str, type[ParameterAdapter]] = {}
+    _rewards: dict[str, type[RewardFunction]] = {}
 
     # ── 登録デコレータ ──────────────────────────
 
@@ -54,7 +53,7 @@ class TrainingRegistry:
             @TrainingRegistry.algorithm("grpo")
             class GRPOAlgorithm(TrainingAlgorithm): ...
         """
-        def decorator(klass: Type[TrainingAlgorithm]) -> Type[TrainingAlgorithm]:
+        def decorator(klass: type[TrainingAlgorithm]) -> type[TrainingAlgorithm]:
             if name in cls._algorithms:
                 logger.warning("Algorithm '%s' overwritten in registry", name)
             cls._algorithms[name] = klass
@@ -65,7 +64,7 @@ class TrainingRegistry:
     @classmethod
     def adapter(cls, name: str):
         """ParameterAdapter の登録デコレータ。"""
-        def decorator(klass: Type[ParameterAdapter]) -> Type[ParameterAdapter]:
+        def decorator(klass: type[ParameterAdapter]) -> type[ParameterAdapter]:
             if name in cls._adapters:
                 logger.warning("Adapter '%s' overwritten in registry", name)
             cls._adapters[name] = klass
@@ -76,7 +75,7 @@ class TrainingRegistry:
     @classmethod
     def reward(cls, name: str):
         """RewardFunction の登録デコレータ。"""
-        def decorator(klass: Type[RewardFunction]) -> Type[RewardFunction]:
+        def decorator(klass: type[RewardFunction]) -> type[RewardFunction]:
             if name in cls._rewards:
                 logger.warning("Reward '%s' overwritten in registry", name)
             cls._rewards[name] = klass
@@ -87,7 +86,7 @@ class TrainingRegistry:
     # ── 取得メソッド ──────────────────────────
 
     @classmethod
-    def get_algorithm(cls, name: str) -> Type[TrainingAlgorithm]:
+    def get_algorithm(cls, name: str) -> type[TrainingAlgorithm]:
         """登録済みアルゴリズムクラスを取得する。
 
         Raises:
@@ -101,7 +100,7 @@ class TrainingRegistry:
         return cls._algorithms[name]
 
     @classmethod
-    def get_adapter(cls, name: str) -> Type[ParameterAdapter]:
+    def get_adapter(cls, name: str) -> type[ParameterAdapter]:
         """登録済みアダプタクラスを取得する。"""
         if name not in cls._adapters:
             available = sorted(cls._adapters.keys())
@@ -111,7 +110,7 @@ class TrainingRegistry:
         return cls._adapters[name]
 
     @classmethod
-    def get_reward(cls, name: str) -> Type[RewardFunction]:
+    def get_reward(cls, name: str) -> type[RewardFunction]:
         """登録済み報酬関数クラスを取得する。"""
         if name not in cls._rewards:
             available = sorted(cls._rewards.keys())

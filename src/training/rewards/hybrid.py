@@ -16,7 +16,7 @@ CompositeReward の汎用版として、任意の報酬を合成可能。
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from src.training.base import RewardFunction
 from src.training.registry import TrainingRegistry
@@ -55,7 +55,7 @@ class HybridReward(RewardFunction):
         self,
         prompt: str,
         response: str,
-        metadata: Optional[dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> float:
         """全コンポーネントの加重平均を計算する。"""
         if not self._components:

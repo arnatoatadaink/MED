@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Optional
+from typing import Any
 
 from src.training.base import RewardFunction
 from src.training.registry import TrainingRegistry
@@ -52,7 +52,7 @@ class CodeExecReward(RewardFunction):
         self,
         prompt: str,
         response: str,
-        metadata: Optional[dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> float:
         """レスポンス中のコードを実行して報酬を返す。"""
         meta = metadata or {}

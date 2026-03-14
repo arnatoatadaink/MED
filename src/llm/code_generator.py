@@ -20,8 +20,7 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 
 from src.llm.gateway import LLMGateway, LLMMessage
 
@@ -74,7 +73,7 @@ class CodeGenerator:
     def __init__(
         self,
         gateway: LLMGateway,
-        provider: Optional[str] = None,
+        provider: str | None = None,
         default_language: str = "python",
     ) -> None:
         self._gateway = gateway
@@ -84,8 +83,8 @@ class CodeGenerator:
     async def generate(
         self,
         task: str,
-        language: Optional[str] = None,
-        context_code: Optional[str] = None,
+        language: str | None = None,
+        context_code: str | None = None,
         max_tokens: int = 2048,
         temperature: float = 0.2,  # コードは低温で安定性重視
     ) -> CodeResult:

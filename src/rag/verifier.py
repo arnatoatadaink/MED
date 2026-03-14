@@ -13,7 +13,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from src.llm.gateway import LLMGateway
 from src.rag.retriever import RawResult
@@ -44,9 +43,9 @@ class ResultVerifier:
 
     def __init__(
         self,
-        gateway: Optional[LLMGateway] = None,
+        gateway: LLMGateway | None = None,
         max_content_length: int = 500,
-        provider: Optional[str] = None,
+        provider: str | None = None,
     ) -> None:
         self._gateway = gateway
         self._max_len = max_content_length
@@ -79,7 +78,7 @@ class ResultVerifier:
 
         semaphore = asyncio.Semaphore(max_concurrency)
 
-        async def _check(result: RawResult) -> Optional[RawResult]:
+        async def _check(result: RawResult) -> RawResult | None:
             async with semaphore:
                 try:
                     relevant = await self._is_relevant(result, query)

@@ -34,7 +34,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +86,7 @@ class TeacherFeedbackPipeline:
         self._registry = registry
         self._scorer = scorer
         self._update_all_docs = update_all_docs
-        self._loop_task: Optional[asyncio.Task] = None
+        self._loop_task: asyncio.Task | None = None
 
     # ------------------------------------------------------------------
     # メイン処理

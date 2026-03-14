@@ -14,9 +14,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
-from src.memory.schema import Document, Domain, SourceMeta, SourceType
+from src.memory.schema import Document, SourceMeta, SourceType
 from src.rag.retriever import RawResult
 
 logger = logging.getLogger(__name__)
@@ -71,7 +70,7 @@ class Chunker:
         self,
         result: RawResult,
         domain: str = "general",
-        parent_id: Optional[str] = None,
+        parent_id: str | None = None,
     ) -> list[Document]:
         """RawResult を Document リストに変換する。
 
@@ -92,7 +91,7 @@ class Chunker:
         source_type = _SOURCE_TYPE_MAP.get(result.source, SourceType.TAVILY)
 
         documents: list[Document] = []
-        first_doc_id: Optional[str] = None
+        first_doc_id: str | None = None
 
         for idx, chunk_text in enumerate(chunks):
             source_meta = SourceMeta(

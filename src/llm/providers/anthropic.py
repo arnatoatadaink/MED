@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from src.common.config import Settings
 from src.llm.gateway import BaseLLMProvider, LLMMessage, LLMResponse
@@ -28,7 +27,7 @@ class AnthropicProvider(BaseLLMProvider):
         self,
         messages: list[LLMMessage],
         *,
-        model: Optional[str] = None,
+        model: str | None = None,
         max_tokens: int = 2048,
         temperature: float = 0.7,
     ) -> LLMResponse:
@@ -41,7 +40,7 @@ class AnthropicProvider(BaseLLMProvider):
         model_name = model or self._settings.llm.anthropic.default_model
 
         # system プロンプトを分離
-        system_content: Optional[str] = None
+        system_content: str | None = None
         user_messages = []
         for msg in messages:
             if msg.role == "system":

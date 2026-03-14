@@ -16,7 +16,6 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from typing import Optional
 
 from src.llm.gateway import LLMGateway
 
@@ -94,8 +93,8 @@ class FeedbackAnalyzer:
 
     def __init__(
         self,
-        gateway: Optional[LLMGateway] = None,
-        provider: Optional[str] = None,
+        gateway: LLMGateway | None = None,
+        provider: str | None = None,
         use_llm: bool = True,
     ) -> None:
         self._gateway = gateway

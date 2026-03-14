@@ -16,7 +16,6 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from typing import Optional
 
 from src.llm.gateway import LLMGateway
 
@@ -67,7 +66,7 @@ class ErrorAnalysis:
     """エラー分析結果。"""
 
     error_type: str
-    error_line: Optional[int]
+    error_line: int | None
     root_cause: str
     suggestion: str
     fixed_code: str = ""
@@ -91,7 +90,7 @@ class ErrorAnalyzer:
     def __init__(
         self,
         gateway: LLMGateway,
-        provider: Optional[str] = None,
+        provider: str | None = None,
         max_code_chars: int = 1500,
         max_error_chars: int = 500,
     ) -> None:
@@ -161,7 +160,7 @@ class ErrorAnalyzer:
                 return name
         return "UnknownError"
 
-    def _detect_line(self, error_output: str) -> Optional[int]:
+    def _detect_line(self, error_output: str) -> int | None:
         m = _LINE_PATTERN.search(error_output)
         if m:
             try:

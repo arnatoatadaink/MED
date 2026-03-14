@@ -15,9 +15,7 @@ Phase 1: IndexFlatIP (全件探索, 内積)
 from __future__ import annotations
 
 import logging
-import shutil
 from pathlib import Path
-from typing import Optional
 
 import faiss
 import numpy as np
@@ -182,7 +180,7 @@ class DomainIndex:
         if len(doc_ids) > 0:
             self.add(doc_ids, embeddings)
 
-    def should_migrate(self) -> Optional[str]:
+    def should_migrate(self) -> str | None:
         """scale_rules に基づき、移行が必要かチェックする。
 
         Returns:
@@ -231,7 +229,7 @@ class FAISSIndexManager:
     config の indices 設定に基づき、ドメインごとの DomainIndex を管理する。
     """
 
-    def __init__(self, config: Optional[FAISSConfig] = None) -> None:
+    def __init__(self, config: FAISSConfig | None = None) -> None:
         self._config = config or get_settings().faiss
         self._indices: dict[str, DomainIndex] = {}
         self._init_indices()
@@ -311,14 +309,14 @@ class FAISSIndexManager:
         """ドメインごとのベクトル数。"""
         return {domain: idx.count for domain, idx in self._indices.items()}
 
-    def save(self, base_dir: Optional[Path] = None) -> None:
+    def save(self, base_dir: Path | None = None) -> None:
         """全ドメインのインデックスを保存する。"""
         base = base_dir or self._config.base_dir
         for domain_name, index in self._indices.items():
             domain_dir = Path(base) / domain_name
             index.save(domain_dir)
 
-    def load(self, base_dir: Optional[Path] = None) -> None:
+    def load(self, base_dir: Path | None = None) -> None:
         """全ドメインのインデックスをロードする。"""
         base = base_dir or self._config.base_dir
         for domain_name, index in self._indices.items():

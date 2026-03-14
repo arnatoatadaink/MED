@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
 import pytest
 
-from src.knowledge_graph.store import Entity, KnowledgeGraphStore, Relation
-from src.knowledge_graph.extractor import EntityExtractor, ExtractedKG
+from src.knowledge_graph.extractor import EntityExtractor
 from src.knowledge_graph.router_bridge import KGRouterBridge
+from src.knowledge_graph.store import KnowledgeGraphStore
 from src.llm.gateway import LLMGateway, LLMResponse
 from src.memory.schema import Document, SourceMeta, SourceType
-
 
 # ──────────────────────────────────────────────
 # フィクスチャ

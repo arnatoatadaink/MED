@@ -13,13 +13,12 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from src.memory.schema import Document, SourceMeta, SourceType
-
 
 # ===========================================================================
 # Helpers
@@ -84,7 +83,7 @@ class TestApplyTrust:
 # ===========================================================================
 
 class TestComputeForDocumentTrust:
-    _now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    _now = datetime(2026, 1, 1, tzinfo=UTC)
 
     def test_default_trust_equals_base(self):
         scorer = _scorer()
@@ -121,7 +120,7 @@ class TestComputeForDocumentTrust:
 # ===========================================================================
 
 class TestComputeFromRowTrust:
-    _now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    _now = datetime(2026, 1, 1, tzinfo=UTC)
 
     def _row(self, teacher_id: str | None = None) -> dict:
         return {
@@ -307,7 +306,7 @@ class TestUpdateStoreTrustMap:
 # ===========================================================================
 
 class TestTeacherTrustWeight:
-    _now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    _now = datetime(2026, 1, 1, tzinfo=UTC)
 
     def test_weight_0_trust_has_no_effect(self):
         scorer = _scorer(trust_weight=0.0)

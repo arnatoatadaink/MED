@@ -15,7 +15,6 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Optional
 
 from src.llm.gateway import LLMGateway
 
@@ -118,7 +117,7 @@ class TeacherComparison:
     def __init__(
         self,
         gateway: LLMGateway,
-        provider: Optional[str] = None,
+        provider: str | None = None,
         concurrency: int = 4,
     ) -> None:
         self._gateway = gateway

@@ -16,10 +16,10 @@ from __future__ import annotations
 
 import logging
 import statistics
-import time
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, AsyncIterator, Optional
+from typing import Any
 
 try:
     import torch
@@ -31,7 +31,6 @@ from src.training.base import (
     RewardFunction,
     TrainingAlgorithm,
     TrainingBatch,
-    TrainingConfig,
     TrainingResult,
     TrainingStep,
 )
@@ -106,7 +105,7 @@ class TrainingPipeline:
         adapter: ParameterAdapter,
         reward_fn: RewardFunction,
         config: PipelineConfig,
-        logger: Optional[TrainingLogger] = None,
+        logger: TrainingLogger | None = None,
     ) -> None:
         self._model = model
         self._algorithm = algorithm
@@ -117,7 +116,7 @@ class TrainingPipeline:
             run_name=config.run_name,
             use_wandb=config.use_wandb,
         )
-        self._sft_algorithm: Optional[TrainingAlgorithm] = None
+        self._sft_algorithm: TrainingAlgorithm | None = None
         self._step = 0
 
     @classmethod
@@ -126,25 +125,25 @@ class TrainingPipeline:
         config: PipelineConfig,
         model: Any,
         gateway: Any = None,
-    ) -> "TrainingPipeline":
+    ) -> TrainingPipeline:
         """PipelineConfig からパイプラインを生成する。
 
         Registry を使ってアルゴリズム・アダプタ・報酬関数をインスタンス化する。
         """
         # Import all modules to trigger registration
-        import src.training.algorithms.grpo  # noqa: F401
-        import src.training.algorithms.ppo   # noqa: F401
-        import src.training.algorithms.dpo   # noqa: F401
-        import src.training.algorithms.sft   # noqa: F401
-        import src.training.algorithms.reinforce  # noqa: F401
+        import src.training.adapters.full_ft  # noqa: F401
+        import src.training.adapters.lora  # noqa: F401
+        import src.training.adapters.lora_xs  # noqa: F401
         import src.training.adapters.tinylora  # noqa: F401
-        import src.training.adapters.lora      # noqa: F401
-        import src.training.adapters.lora_xs   # noqa: F401
-        import src.training.adapters.full_ft   # noqa: F401
-        import src.training.rewards.composite  # noqa: F401
+        import src.training.algorithms.dpo  # noqa: F401
+        import src.training.algorithms.grpo  # noqa: F401
+        import src.training.algorithms.ppo  # noqa: F401
+        import src.training.algorithms.reinforce  # noqa: F401
+        import src.training.algorithms.sft  # noqa: F401
         import src.training.rewards.code_exec  # noqa: F401
+        import src.training.rewards.composite  # noqa: F401
+        import src.training.rewards.hybrid  # noqa: F401
         import src.training.rewards.teacher_eval  # noqa: F401
-        import src.training.rewards.hybrid     # noqa: F401
 
         algo_cls = TrainingRegistry.get_algorithm(config.algorithm)
         adapter_cls = TrainingRegistry.get_adapter(config.adapter)

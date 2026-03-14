@@ -13,14 +13,13 @@ from pathlib import Path
 import pytest
 
 from src.memory.teacher_registry import (
-    TeacherProfile,
-    TeacherRegistry,
     _EWMA_ALPHA,
     _MIN_TRUST,
     _WARMUP_N,
+    TeacherProfile,
+    TeacherRegistry,
     _ewma_update,
 )
-
 
 # ===========================================================================
 # _ewma_update — ユニット
@@ -320,6 +319,7 @@ class TestTeacherRegistrySetTrust:
 # ===========================================================================
 
 import numpy as np
+
 from src.memory.schema import Document, SourceMeta, SourceType
 
 

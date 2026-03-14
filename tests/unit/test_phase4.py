@@ -18,13 +18,10 @@ from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import dataclass, field
-from typing import Any, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from dataclasses import dataclass
 
 import numpy as np
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Stubs
@@ -930,7 +927,6 @@ class TestBenchmarkSuite:
         assert isinstance(report, BenchmarkReport)
 
     def test_overall_score(self):
-        from src.training.evaluation.benchmark_suite import BenchmarkReport
         suite = self._suite()
         report = asyncio.get_event_loop().run_until_complete(
             suite.run(benchmark_names=["qa_retrieval"])

@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 import aiosqlite
 
@@ -59,7 +59,7 @@ class SQLResult:
     question: str
     sql: str
     rows: list[dict[str, Any]] = field(default_factory=list)
-    error: Optional[str] = None
+    error: str | None = None
 
     @property
     def success(self) -> bool:
@@ -84,7 +84,7 @@ class SQLQueryTool:
         self,
         gateway: LLMGateway,
         db_path: str = ":memory:",
-        provider: Optional[str] = None,
+        provider: str | None = None,
         max_rows: int = 100,
     ) -> None:
         self._gateway = gateway

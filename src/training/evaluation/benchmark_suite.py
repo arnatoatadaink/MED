@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Coroutine, Optional
+from typing import Any
 
 from src.llm.gateway import LLMGateway
 from src.training.evaluation.student_evaluator import EvalMetrics, EvalSample, StudentEvaluator
@@ -127,9 +127,9 @@ class BenchmarkSuite:
     def __init__(
         self,
         gateway: LLMGateway,
-        memory_manager: Optional[Any] = None,
-        reward_fn: Optional[Any] = None,
-        custom_benchmarks: Optional[dict[str, list[EvalSample]]] = None,
+        memory_manager: Any | None = None,
+        reward_fn: Any | None = None,
+        custom_benchmarks: dict[str, list[EvalSample]] | None = None,
     ) -> None:
         self._gateway = gateway
         self._memory = memory_manager
@@ -154,8 +154,8 @@ class BenchmarkSuite:
 
     async def run(
         self,
-        student_model: Optional[Any] = None,
-        benchmark_names: Optional[list[str]] = None,
+        student_model: Any | None = None,
+        benchmark_names: list[str] | None = None,
     ) -> BenchmarkReport:
         """ベンチマークを実行する。
 

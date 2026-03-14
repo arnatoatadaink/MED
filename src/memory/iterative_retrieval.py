@@ -22,7 +22,7 @@ HyDE (Hypothetical Document Embeddings):
 from __future__ import annotations
 
 import logging
-from typing import Optional, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 import numpy as np
 from numpy.typing import NDArray
@@ -55,7 +55,7 @@ class IterativeRetriever:
         self,
         memory_manager,  # MemoryManager (avoid circular import)
         embedder,        # Embedder
-        llm: Optional[LLMCallable] = None,
+        llm: LLMCallable | None = None,
         dedup: bool = True,
     ) -> None:
         self._mm = memory_manager
@@ -66,7 +66,7 @@ class IterativeRetriever:
     async def retrieve(
         self,
         query: str,
-        domain: Optional[str] = None,
+        domain: str | None = None,
         max_rounds: int = 3,
         k_per_round: int = 5,
         strategy: str = "vector_add",
@@ -102,7 +102,7 @@ class IterativeRetriever:
     async def _retrieve_vector_add(
         self,
         query: str,
-        domain: Optional[str],
+        domain: str | None,
         max_rounds: int,
         k_per_round: int,
     ) -> list[SearchResult]:
@@ -170,7 +170,7 @@ class IterativeRetriever:
     async def _retrieve_llm_rewrite(
         self,
         query: str,
-        domain: Optional[str],
+        domain: str | None,
         max_rounds: int,
         k_per_round: int,
     ) -> list[SearchResult]:
@@ -225,7 +225,7 @@ class IterativeRetriever:
     async def _retrieve_hyde(
         self,
         query: str,
-        domain: Optional[str],
+        domain: str | None,
         k: int,
     ) -> list[SearchResult]:
         """Hypothetical Document Embedding 検索。
@@ -260,7 +260,7 @@ class IterativeRetriever:
     async def _search_by_vec(
         self,
         query_vec: NDArray[np.float32],
-        domain: Optional[str],
+        domain: str | None,
         k: int,
     ) -> list[SearchResult]:
         """埋め込みベクトルで直接 FAISS 検索し、メタデータを付与して返す。"""

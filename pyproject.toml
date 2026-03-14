@@ -70,10 +70,20 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
+ignore = [
+    "E501",   # line-too-long — docstring / コメント行は許容
+    "E402",   # module-level-import-not-at-top-of-file — 遅延インポートは意図的
+    "F841",   # local-variable-is-assigned-to-but-never-used — テスト用変数を許容
+    "UP042",  # replace-str-enum — 既存コードの互換性のため
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "docker: mark test as requiring a running Docker daemon",
+    "slow: mark test as slow (may take several seconds)",
+]
 
 [tool.mypy]
 python_version = "3.11"

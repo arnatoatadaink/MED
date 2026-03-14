@@ -6,13 +6,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.common.config import FAISSConfig, FAISSIndexConfig, MetadataConfig
-from src.llm.gateway import LLMGateway, LLMMessage, LLMResponse
+from src.llm.gateway import LLMGateway, LLMResponse
 from src.memory.embedder import Embedder
 from src.memory.faiss_index import FAISSIndexManager
 from src.memory.memory_manager import MemoryManager
 from src.memory.metadata_store import MetadataStore
 from src.orchestrator.pipeline import MEDPipeline
-
 
 # ──────────────────────────────────────────────
 # モック
@@ -164,6 +163,7 @@ class TestServer:
     def _make_client(self, gateway_response: str = "Server answer.") -> TestClient:
         """パイプラインをモックした TestClient を生成する。"""
         import asyncio
+
         from src.orchestrator import server as server_module
 
         pipeline = _make_pipeline(gateway_response)

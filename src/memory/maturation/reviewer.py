@@ -22,11 +22,10 @@ import json
 import logging
 import re
 from dataclasses import dataclass
-from typing import Optional
 
 from src.llm.gateway import LLMGateway
 from src.memory.metadata_store import MetadataStore
-from src.memory.schema import DifficultyLevel, Document, ReviewStatus
+from src.memory.schema import Document, ReviewStatus
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +77,7 @@ class MemoryReviewer:
         self,
         gateway: LLMGateway,
         store: MetadataStore,
-        provider: Optional[str] = None,
+        provider: str | None = None,
         max_text_length: int = 1200,
         approval_threshold: float = 0.6,
     ) -> None:

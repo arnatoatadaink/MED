@@ -31,9 +31,8 @@ from __future__ import annotations
 
 import logging
 import pickle
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 from numpy.typing import NDArray
@@ -78,7 +77,7 @@ class RankFeatures:
         ], dtype=np.float32)
 
     @classmethod
-    def from_dict(cls, data: dict) -> "RankFeatures":
+    def from_dict(cls, data: dict) -> RankFeatures:
         """辞書から RankFeatures を生成する。"""
         return cls(
             faiss_score=float(data.get("faiss_score", 0.0)),
@@ -106,7 +105,7 @@ class LTRRanker:
     def __init__(
         self,
         learning_rate: float = 0.01,
-        initial_weights: Optional[NDArray[np.float32]] = None,
+        initial_weights: NDArray[np.float32] | None = None,
         regularization: float = 0.001,
     ) -> None:
         if initial_weights is not None:
@@ -210,7 +209,7 @@ class LTRRanker:
         logger.info("LTRRanker saved to %s (updates=%d)", path, self._update_count)
 
     @classmethod
-    def load(cls, path: str | Path) -> "LTRRanker":
+    def load(cls, path: str | Path) -> LTRRanker:
         """ファイルからモデルを復元する。
 
         Args:

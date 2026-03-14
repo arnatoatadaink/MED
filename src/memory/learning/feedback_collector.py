@@ -25,7 +25,6 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +45,7 @@ class FeedbackEvent:
     feedback_type: str        # "click" | "thumbs_up" | "thumbs_down" | "rating" | "text"
     rank: int = 0             # 検索結果でのランク（0-indexed）
     timestamp: float = field(default_factory=time.time)
-    raw_value: Optional[float] = None  # 元の評価値（rating=1〜5 等）
+    raw_value: float | None = None  # 元の評価値（rating=1〜5 等）
     text: str = ""            # テキストフィードバック
 
     @property
@@ -94,14 +93,14 @@ class FeedbackCollector:
     def __init__(
         self,
         max_buffer: int = 10_000,
-        gateway: Optional[object] = None,
+        gateway: object | None = None,
         use_text_analyzer: bool = False,
     ) -> None:
         self._max_buffer = max_buffer
         self._events: list[FeedbackEvent] = []
         self._lock = asyncio.Lock()
 
-        self._analyzer: Optional[object] = None
+        self._analyzer: object | None = None
         if gateway is not None and use_text_analyzer:
             try:
                 from src.llm.feedback_analyzer import FeedbackAnalyzer
@@ -124,8 +123,8 @@ class FeedbackCollector:
     def record_explicit(
         self,
         doc_id: str,
-        thumbs_up: Optional[bool] = None,
-        rating: Optional[float] = None,
+        thumbs_up: bool | None = None,
+        rating: float | None = None,
         query: str = "",
     ) -> None:
         """明示的フィードバックを記録する。

@@ -20,7 +20,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from src.common.config import Settings, get_settings
 
@@ -50,7 +50,7 @@ class LLMResponse:
     input_tokens: int = 0
     output_tokens: int = 0
     latency_ms: float = 0.0
-    raw: Optional[Any] = None  # プロバイダ固有の生レスポンス
+    raw: Any | None = None  # プロバイダ固有の生レスポンス
 
 
 # ============================================================================
@@ -72,7 +72,7 @@ class BaseLLMProvider(ABC):
         self,
         messages: list[LLMMessage],
         *,
-        model: Optional[str] = None,
+        model: str | None = None,
         max_tokens: int = 2048,
         temperature: float = 0.7,
     ) -> LLMResponse:
@@ -102,7 +102,7 @@ class LLMGateway:
         settings: Settings オブジェクト。省略時は get_settings() を使用。
     """
 
-    def __init__(self, settings: Optional[Settings] = None) -> None:
+    def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
         self._providers: dict[str, BaseLLMProvider] = {}
         self._total_input_tokens = 0
@@ -113,8 +113,8 @@ class LLMGateway:
     def _register_providers(self) -> None:
         """利用可能なプロバイダを登録する。"""
         from src.llm.providers.anthropic import AnthropicProvider
-        from src.llm.providers.openai import OpenAIProvider
         from src.llm.providers.ollama import OllamaProvider
+        from src.llm.providers.openai import OpenAIProvider
         from src.llm.providers.vllm_student import VLLMStudentProvider
 
         candidates = [
@@ -138,9 +138,9 @@ class LLMGateway:
         self,
         prompt: str,
         *,
-        system: Optional[str] = None,
-        provider: Optional[str] = None,
-        model: Optional[str] = None,
+        system: str | None = None,
+        provider: str | None = None,
+        model: str | None = None,
         max_tokens: int = 2048,
         temperature: float = 0.7,
     ) -> LLMResponse:
@@ -173,8 +173,8 @@ class LLMGateway:
         self,
         messages: list[LLMMessage],
         *,
-        provider: Optional[str] = None,
-        model: Optional[str] = None,
+        provider: str | None = None,
+        model: str | None = None,
         max_tokens: int = 2048,
         temperature: float = 0.7,
     ) -> LLMResponse:
@@ -184,7 +184,7 @@ class LLMGateway:
         """
         providers_to_try = self._build_provider_order(provider)
 
-        last_exc: Optional[Exception] = None
+        last_exc: Exception | None = None
         for prov_name in providers_to_try:
             prov = self._providers.get(prov_name)
             if prov is None:
@@ -224,7 +224,7 @@ class LLMGateway:
             f"Last error: {last_exc}"
         )
 
-    def _build_provider_order(self, requested: Optional[str]) -> list[str]:
+    def _build_provider_order(self, requested: str | None) -> list[str]:
         """試みるプロバイダ名のリストを返す。"""
         if requested is not None:
             return [requested]  # 指定プロバイダのみ（フォールバックなし）

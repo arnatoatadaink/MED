@@ -15,7 +15,6 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +76,7 @@ class UsageTracker:
 
     def __init__(
         self,
-        cost_table: Optional[dict[str, dict[str, float]]] = None,
+        cost_table: dict[str, dict[str, float]] | None = None,
     ) -> None:
         self._cost_table = cost_table or dict(_COST_TABLE)
         self._records: list[UsageRecord] = []

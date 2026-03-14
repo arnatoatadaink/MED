@@ -9,20 +9,16 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
-from unittest.mock import AsyncMock, MagicMock
-
-import pytest
+from unittest.mock import MagicMock
 
 from src.memory.schema import (
+    _TEACHER_ID_KEY,
+    _TEACHER_PROVIDER_KEY,
     Document,
     SourceMeta,
     SourceType,
-    _TEACHER_ID_KEY,
-    _TEACHER_PROVIDER_KEY,
     _infer_provider,
 )
-
 
 # ===========================================================================
 # _infer_provider

@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +94,7 @@ class QualityReport:
     def summary(self) -> str:
         """人間可読なサマリー文字列を返す。"""
         lines = [
-            f"=== Memory Quality Report ===",
+            "=== Memory Quality Report ===",
             f"Total docs:         {self.total_docs:,} / {self.doc_target:,} "
             f"({'✓' if self.meets_doc_target else '✗'})",
             f"Avg confidence:     {self.avg_confidence:.3f} / {self.confidence_target:.1f} "
@@ -123,7 +122,7 @@ class QualityMetrics:
     def __init__(self, store: object) -> None:
         self._store = store
 
-    async def compute(self, domain: Optional[str] = None) -> QualityReport:
+    async def compute(self, domain: str | None = None) -> QualityReport:
         """メモリ全体の品質メトリクスを計算する。
 
         Args:

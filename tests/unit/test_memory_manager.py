@@ -4,14 +4,12 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-import pytest_asyncio
 
 from src.memory.embedder import Embedder
 from src.memory.faiss_index import FAISSIndexManager
 from src.memory.memory_manager import MemoryManager
 from src.memory.metadata_store import MetadataStore
-from src.memory.schema import Document, Domain, SourceMeta, SourceType
-
+from src.memory.schema import Document, SourceMeta, SourceType
 
 # ──────────────────────────────────────────────
 # フィクスチャ

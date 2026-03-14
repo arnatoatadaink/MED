@@ -18,12 +18,11 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, Field, field_validator
-
 
 # ============================================================================
 # 列挙型
@@ -104,7 +103,7 @@ _MODEL_PROVIDER_MAP: dict[str, str] = {
 }
 
 
-def _infer_provider(teacher_id: str) -> Optional[str]:
+def _infer_provider(teacher_id: str) -> str | None:
     """teacher_id のプレフィックスからプロバイダ名を推定する。
 
     例: ``"claude-opus-4-6"`` → ``"anthropic"``
@@ -131,10 +130,10 @@ class SourceMeta(BaseModel):
     """
 
     source_type: SourceType = SourceType.MANUAL
-    url: Optional[str] = None
-    title: Optional[str] = None
-    author: Optional[str] = None
-    language: Optional[str] = None  # プログラミング言語 (code ドメイン向け)
+    url: str | None = None
+    title: str | None = None
+    author: str | None = None
+    language: str | None = None  # プログラミング言語 (code ドメイン向け)
     tags: list[str] = Field(default_factory=list)
     retrieved_at: datetime = Field(default_factory=datetime.utcnow)
     extra: dict[str, Any] = Field(default_factory=dict)
@@ -144,9 +143,9 @@ class SourceMeta(BaseModel):
     def set_teacher(
         self,
         teacher_id: str,
-        provider: Optional[str] = None,
-        model: Optional[str] = None,
-    ) -> "SourceMeta":
+        provider: str | None = None,
+        model: str | None = None,
+    ) -> SourceMeta:
         """Teacher 素性を extra dict に書き込む（メソッドチェーン可）。
 
         Args:
@@ -163,12 +162,12 @@ class SourceMeta(BaseModel):
         return self
 
     @property
-    def teacher_id(self) -> Optional[str]:
+    def teacher_id(self) -> str | None:
         """Teacher モデル識別子。未設定なら ``None``。"""
         return self.extra.get(_TEACHER_ID_KEY)
 
     @property
-    def teacher_provider(self) -> Optional[str]:
+    def teacher_provider(self) -> str | None:
         """Teacher プロバイダ名。未設定なら ``None``。"""
         return self.extra.get(_TEACHER_PROVIDER_KEY)
 
@@ -250,34 +249,34 @@ class Document(BaseModel):
 
     # ── コンテンツ ──
     content: str
-    content_hash: Optional[str] = None  # deduplicator.py が設定
+    content_hash: str | None = None  # deduplicator.py が設定
     chunk_index: int = 0  # チャンク分割時のインデックス
-    parent_id: Optional[str] = None  # チャンク元ドキュメントの ID
+    parent_id: str | None = None  # チャンク元ドキュメントの ID
 
     # ── 分類 ──
     domain: Domain = Domain.GENERAL
 
     # ── 埋め込みベクトル ──
-    embedding: Optional[NDArray[np.float32]] = None  # shape: (dim,)
+    embedding: NDArray[np.float32] | None = None  # shape: (dim,)
 
     # ── メタデータ ──
     source: SourceMeta = Field(default_factory=SourceMeta)
     usefulness: UsefulnessScore = Field(default_factory=UsefulnessScore)
 
     # ── 品質管理 (maturation/) ──
-    difficulty: Optional[DifficultyLevel] = None
+    difficulty: DifficultyLevel | None = None
     review_status: ReviewStatus = ReviewStatus.UNREVIEWED
     confidence: float = 0.5  # 総合信頼度 (0.0-1.0)
 
     # ── コード実行情報 (sandbox/) ──
     is_executable: bool = False  # コードブロックを含むか
     execution_verified: bool = False  # Sandbox で検証済みか
-    last_execution_success: Optional[bool] = None
+    last_execution_success: bool | None = None
 
     # ── タイムスタンプ ──
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    reviewed_at: Optional[datetime] = None
+    reviewed_at: datetime | None = None
 
     @field_validator("confidence")
     @classmethod
@@ -286,7 +285,7 @@ class Document(BaseModel):
 
     @field_validator("embedding")
     @classmethod
-    def validate_embedding(cls, v: Optional[NDArray[np.float32]]) -> Optional[NDArray[np.float32]]:
+    def validate_embedding(cls, v: NDArray[np.float32] | None) -> NDArray[np.float32] | None:
         """埋め込みベクトルが 1 次元であることを検証する。"""
         if v is not None and v.ndim != 1:
             raise ValueError(f"embedding must be 1-dimensional, got ndim={v.ndim}")
@@ -308,14 +307,14 @@ class SearchResult(BaseModel):
     rank: int = 0  # 検索結果内での順位 (0-indexed)
 
     # Rerank 後のスコア (LTR / Cross-Encoder が設定)
-    rerank_score: Optional[float] = None
+    rerank_score: float | None = None
 
 
 class SearchQuery(BaseModel):
     """検索リクエスト。iterative_retrieval.py 等が利用する。"""
 
     text: str
-    domain: Optional[Domain] = None  # None なら全ドメイン横断
+    domain: Domain | None = None  # None なら全ドメイン横断
     top_k: int = 5
     min_score: float = 0.0
     filters: dict[str, Any] = Field(default_factory=dict)
@@ -335,7 +334,7 @@ class ExecutionResult(BaseModel):
     stderr: str = ""
     execution_time_ms: float = 0.0
     language: str = "python"
-    error_type: Optional[str] = None  # "SyntaxError", "RuntimeError" 等
+    error_type: str | None = None  # "SyntaxError", "RuntimeError" 等
     timed_out: bool = False
 
 
@@ -364,8 +363,8 @@ class TrainingBatch(BaseModel):
     """学習アルゴリズムに渡すバッチ。"""
 
     queries: list[str]
-    reference_responses: Optional[list[str]] = None  # SFT / DPO 用
-    difficulty_levels: Optional[list[DifficultyLevel]] = None  # カリキュラム学習用
+    reference_responses: list[str] | None = None  # SFT / DPO 用
+    difficulty_levels: list[DifficultyLevel] | None = None  # カリキュラム学習用
 
 
 class TrainStepResult(BaseModel):
@@ -373,6 +372,6 @@ class TrainStepResult(BaseModel):
 
     loss: float
     mean_reward: float = 0.0
-    grad_norm: Optional[float] = None
-    learning_rate: Optional[float] = None
+    grad_norm: float | None = None
+    learning_rate: float | None = None
     extra_metrics: dict[str, float] = Field(default_factory=dict)

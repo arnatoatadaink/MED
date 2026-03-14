@@ -1,0 +1,56 @@
+# Dockerfile.test — CI用テスト実行イメージ
+#
+# ビルド:
+#   docker build -f Dockerfile.test -t med-test .
+#
+# 実行:
+#   # 全テスト（Dockerソケットマウント必須: docker-in-docker）
+#   docker run --rm -v /var/run/docker.sock:/var/run/docker.sock med-test
+#
+#   # ユニットテストのみ（Dockerソケット不要）
+#   docker run --rm med-test pytest tests/unit/ -v
+#
+#   # カバレッジ付き
+#   docker run --rm med-test pytest tests/unit/ --cov=src --cov-report=xml
+
+FROM python:3.11-slim
+
+# システム依存パッケージ
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# 依存パッケージをキャッシュ効率よくインストール
+COPY pyproject.toml ./
+
+# メイン + dev 依存パッケージのみインストール（trainingは除外）
+RUN pip install --no-cache-dir -e ".[dev]" \
+    && pip install --no-cache-dir \
+        faiss-cpu \
+        aiosqlite \
+        pyyaml \
+        httpx \
+        networkx \
+        docker
+# sentence-transformers / PyTorch は除外 — tests/unit は mock=True で動作するため不要
+# イメージサイズ ~2GB 削減
+
+# ソースコードをコピー
+COPY src/ ./src/
+COPY tests/ ./tests/
+COPY configs/ ./configs/
+
+# データディレクトリを作成（テスト用 tmp は pytest tmp_path で管理）
+RUN mkdir -p data/faiss_indices data/adapters data/training_logs
+
+# 環境変数
+ENV PYTHONPATH=/app
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# デフォルトはユニットテスト（Dockerソケット不要）
+CMD pytest tests/unit/ -v --tb=short --no-header -p no:warnings

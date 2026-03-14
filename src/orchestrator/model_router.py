@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
 
 from src.llm.gateway import LLMGateway
 from src.orchestrator.query_parser import ParsedQuery
@@ -71,7 +70,7 @@ class ModelRouter:
     def __init__(
         self,
         gateway: LLMGateway,
-        kg_bridge: Optional[object] = None,
+        kg_bridge: object | None = None,
         student_complexity_threshold: str = "moderate",
         always_use_teacher_for_code: bool = False,
     ) -> None:

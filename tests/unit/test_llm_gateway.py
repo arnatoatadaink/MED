@@ -11,7 +11,6 @@ from src.llm.gateway import (
     LLMResponse,
 )
 
-
 # ──────────────────────────────────────────────
 # モックプロバイダ
 # ──────────────────────────────────────────────
@@ -142,7 +141,6 @@ class TestFallback:
         gw._providers["openai"] = SuccessProvider("openai")
 
         # anthropic が失敗 → openai にフォールバック
-        from src.llm.gateway import _DEFAULT_PROVIDER_ORDER
         response = await gw.complete("test")  # デフォルト順で試みる
         assert response.provider == "openai"
 
@@ -228,8 +226,8 @@ class TestProviderRegistration:
 
 class TestProviderAvailability:
     def test_anthropic_unavailable_without_key(self) -> None:
-        from src.llm.providers.anthropic import AnthropicProvider
         from src.common.config import get_settings
+        from src.llm.providers.anthropic import AnthropicProvider
         settings = get_settings()
         provider = AnthropicProvider(settings)
         # CI 環境では API キーがないため False を期待
@@ -237,15 +235,15 @@ class TestProviderAvailability:
         assert isinstance(provider.is_available(), bool)
 
     def test_openai_unavailable_without_key(self) -> None:
-        from src.llm.providers.openai import OpenAIProvider
         from src.common.config import get_settings
+        from src.llm.providers.openai import OpenAIProvider
         settings = get_settings()
         provider = OpenAIProvider(settings)
         assert isinstance(provider.is_available(), bool)
 
     def test_ollama_always_available(self) -> None:
-        from src.llm.providers.ollama import OllamaProvider
         from src.common.config import get_settings
+        from src.llm.providers.ollama import OllamaProvider
         settings = get_settings()
         provider = OllamaProvider(settings)
         # Ollama はデフォルト URL が設定されているので True
@@ -254,8 +252,8 @@ class TestProviderAvailability:
     def test_vllm_unavailable_without_env(self) -> None:
         import os
         os.environ.pop("VLLM_BASE_URL", None)
-        from src.llm.providers.vllm_student import VLLMStudentProvider
         from src.common.config import get_settings
+        from src.llm.providers.vllm_student import VLLMStudentProvider
         settings = get_settings()
         provider = VLLMStudentProvider(settings)
         assert provider.is_available() is False

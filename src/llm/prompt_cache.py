@@ -21,7 +21,7 @@ import logging
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ class PromptCache:
         key_content = f"{prompt}|{system}|{model}|{temperature}"
         return hashlib.sha256(key_content.encode()).hexdigest()[:32]
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """キャッシュからエントリを取得する。
 
         Returns:
@@ -97,7 +97,7 @@ class PromptCache:
         logger.debug("PromptCache: hit key=%s (count=%d)", key[:8], entry.hit_count)
         return entry.value
 
-    def set(self, key: str, value: Any, ttl: Optional[float] = None) -> None:
+    def set(self, key: str, value: Any, ttl: float | None = None) -> None:
         """キャッシュにエントリを保存する。"""
         # 既存エントリの更新
         if key in self._cache:

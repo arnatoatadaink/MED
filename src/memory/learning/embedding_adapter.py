@@ -26,7 +26,6 @@ import logging
 import pickle
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 from numpy.typing import NDArray
@@ -141,7 +140,7 @@ class EmbeddingAdapter:
         logger.info("EmbeddingAdapter saved to %s", path)
 
     @classmethod
-    def load(cls, path: str | Path) -> "EmbeddingAdapter":
+    def load(cls, path: str | Path) -> EmbeddingAdapter:
         """pickle から重みを復元する。"""
         with open(path, "rb") as f:
             data = pickle.load(f)

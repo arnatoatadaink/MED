@@ -21,7 +21,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +56,7 @@ class RetryHandler:
     def __init__(
         self,
         executor: object,
-        gateway: Optional[object] = None,
+        gateway: object | None = None,
         max_retries: int = 2,
         retry_delay: float = 0.5,
         use_error_analyzer: bool = True,
@@ -68,7 +67,7 @@ class RetryHandler:
         self._retry_delay = retry_delay
         self._use_error_analyzer = use_error_analyzer
 
-        self._analyzer: Optional[object] = None
+        self._analyzer: object | None = None
         if gateway is not None and use_error_analyzer:
             try:
                 from src.llm.error_analyzer import ErrorAnalyzer
@@ -165,7 +164,7 @@ class RetryHandler:
             error_history=error_history,
         )
 
-    async def _try_fix(self, code: str, error_output: str) -> Optional[str]:
+    async def _try_fix(self, code: str, error_output: str) -> str | None:
         """エラー解析で修正コードを取得する。"""
         if self._analyzer is None:
             return None

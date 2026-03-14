@@ -39,7 +39,6 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import aiosqlite
 
@@ -75,7 +74,7 @@ class TeacherProfile:
     """Teacher モデルの信頼プロファイル。"""
 
     teacher_id: str
-    provider: Optional[str]
+    provider: str | None
     trust_score: float
     total_docs: int
     avg_reward: float
@@ -157,7 +156,7 @@ class TeacherRegistry:
     async def ensure(
         self,
         teacher_id: str,
-        provider: Optional[str] = None,
+        provider: str | None = None,
     ) -> TeacherProfile:
         """teacher_id を登録する。既存ならそのまま返す（upsert）。
 
@@ -191,7 +190,7 @@ class TeacherRegistry:
         logger.debug("TeacherRegistry.ensure: %s", profile.summary())
         return profile
 
-    async def get(self, teacher_id: str) -> Optional[TeacherProfile]:
+    async def get(self, teacher_id: str) -> TeacherProfile | None:
         """teacher_id のプロファイルを返す。未登録なら None。"""
         async with aiosqlite.connect(self._db_path) as db:
             db.row_factory = aiosqlite.Row

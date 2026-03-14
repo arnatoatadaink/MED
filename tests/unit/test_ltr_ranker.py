@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from src.memory.learning.ltr_ranker import LTRRanker, RankFeatures, N_FEATURES
-
+from src.memory.learning.ltr_ranker import N_FEATURES, LTRRanker, RankFeatures
 
 # ──────────────────────────────────────────────
 # RankFeatures

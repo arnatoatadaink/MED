@@ -22,7 +22,6 @@ from __future__ import annotations
 import logging
 import re
 from enum import Enum
-from typing import Optional
 
 from src.llm.gateway import LLMGateway
 
@@ -81,7 +80,7 @@ class QueryClassifier:
     def __init__(
         self,
         gateway: LLMGateway,
-        provider: Optional[str] = None,
+        provider: str | None = None,
         use_fallback: bool = True,
         default_type: QueryType = QueryType.SEMANTIC,
     ) -> None:

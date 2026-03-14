@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 import aiosqlite
 
@@ -48,7 +48,7 @@ class AggResult:
 
     sql: str
     rows: list[dict[str, Any]] = field(default_factory=list)
-    error: Optional[str] = None
+    error: str | None = None
 
     @property
     def success(self) -> bool:
@@ -58,7 +58,7 @@ class AggResult:
     def row_count(self) -> int:
         return len(self.rows)
 
-    def scalar(self) -> Optional[Any]:
+    def scalar(self) -> Any | None:
         """単一行・単一列の結果を返す（COUNT(*) など）。"""
         if self.rows and len(self.rows) == 1:
             values = list(self.rows[0].values())
@@ -87,8 +87,8 @@ class BIAggregationTool:
         self,
         table: str,
         column: str = "*",
-        where: Optional[str] = None,
-        group_by: Optional[str] = None,
+        where: str | None = None,
+        group_by: str | None = None,
     ) -> AggResult:
         """COUNT 集計を実行する。
 
@@ -107,8 +107,8 @@ class BIAggregationTool:
         self,
         table: str,
         column: str,
-        where: Optional[str] = None,
-        group_by: Optional[str] = None,
+        where: str | None = None,
+        group_by: str | None = None,
     ) -> AggResult:
         """SUM 集計を実行する。"""
         return await self._aggregate("SUM", table, column, where, group_by)
@@ -117,8 +117,8 @@ class BIAggregationTool:
         self,
         table: str,
         column: str,
-        where: Optional[str] = None,
-        group_by: Optional[str] = None,
+        where: str | None = None,
+        group_by: str | None = None,
     ) -> AggResult:
         """AVG 集計を実行する。"""
         return await self._aggregate("AVG", table, column, where, group_by)
@@ -127,8 +127,8 @@ class BIAggregationTool:
         self,
         table: str,
         column: str,
-        where: Optional[str] = None,
-        group_by: Optional[str] = None,
+        where: str | None = None,
+        group_by: str | None = None,
     ) -> AggResult:
         """MIN 集計を実行する。"""
         return await self._aggregate("MIN", table, column, where, group_by)
@@ -137,8 +137,8 @@ class BIAggregationTool:
         self,
         table: str,
         column: str,
-        where: Optional[str] = None,
-        group_by: Optional[str] = None,
+        where: str | None = None,
+        group_by: str | None = None,
     ) -> AggResult:
         """MAX 集計を実行する。"""
         return await self._aggregate("MAX", table, column, where, group_by)
@@ -181,12 +181,12 @@ class BIAggregationTool:
 
     # ── 内部メソッド ──────────────────────────────
 
-    def _validate_table(self, table: str) -> Optional[str]:
+    def _validate_table(self, table: str) -> str | None:
         if table not in _ALLOWED_TABLES:
             return f"Table '{table}' is not allowed. Use: {sorted(_ALLOWED_TABLES)}"
         return None
 
-    def _validate_column(self, table: str, column: str) -> Optional[str]:
+    def _validate_column(self, table: str, column: str) -> str | None:
         if column == "*":
             return None
         allowed = _ALLOWED_COLUMNS.get(table, set())
@@ -199,8 +199,8 @@ class BIAggregationTool:
         func: str,
         table: str,
         column: str,
-        where: Optional[str],
-        group_by: Optional[str],
+        where: str | None,
+        group_by: str | None,
     ) -> AggResult:
         err = self._validate_table(table)
         if err:

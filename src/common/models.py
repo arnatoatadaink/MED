@@ -9,10 +9,9 @@ HTTP API / 内部バス共通の型定義を提供する。
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
-
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -38,13 +37,13 @@ class QueryRequest(BaseModel):
     """チャットクエリリクエスト。"""
 
     query: str = Field(..., min_length=1, description="ユーザークエリ")
-    domain: Optional[str] = Field(None, description="ドメイン指定 (code/academic/general)")
+    domain: str | None = Field(None, description="ドメイン指定 (code/academic/general)")
     target: TargetModel = Field(TargetModel.AUTO, description="利用モデル指定")
     use_memory: bool = Field(True, description="FAISS メモリを使用するか")
     use_rag: bool = Field(True, description="外部 RAG を使用するか")
     use_sandbox: bool = Field(False, description="コード実行を有効にするか")
     max_tokens: int = Field(1024, ge=1, le=8192, description="最大出力トークン数")
-    session_id: Optional[str] = Field(None, description="セッション ID")
+    session_id: str | None = Field(None, description="セッション ID")
 
     model_config = {"json_schema_extra": {"example": {"query": "Implement binary search in Python.", "use_sandbox": True}}}
 
@@ -57,10 +56,10 @@ class QueryResponse(BaseModel):
     model_used: str = ""
     domain: str = "general"
     retrieval_sources: list[str] = Field(default_factory=list)
-    execution_result: Optional[str] = None
+    execution_result: str | None = None
     tokens_used: int = 0
     latency_ms: float = 0.0
-    session_id: Optional[str] = None
+    session_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -68,7 +67,7 @@ class MemorySearchRequest(BaseModel):
     """FAISSメモリ検索リクエスト。"""
 
     query: str = Field(..., min_length=1)
-    domain: Optional[str] = None
+    domain: str | None = None
     top_k: int = Field(5, ge=1, le=50)
     min_score: float = Field(0.0, ge=0.0, le=1.0)
 
@@ -101,7 +100,7 @@ class TrainingRequest(BaseModel):
     adapter: str = Field("tinylora", description="パラメータアダプタ")
     n_steps: int = Field(100, ge=1, le=10000)
     batch_size: int = Field(8, ge=1, le=256)
-    domain: Optional[str] = None
+    domain: str | None = None
     notes: str = ""
 
 
@@ -135,7 +134,7 @@ class SandboxResponse(BaseModel):
     stderr: str = ""
     exit_code: int = 0
     execution_time_ms: float = 0.0
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
 
 class HealthResponse(BaseModel):
@@ -146,11 +145,11 @@ class HealthResponse(BaseModel):
     components: dict[str, str] = Field(default_factory=dict)
 
     @classmethod
-    def healthy(cls, components: Optional[dict[str, str]] = None) -> "HealthResponse":
+    def healthy(cls, components: dict[str, str] | None = None) -> HealthResponse:
         return cls(status="ok", components=components or {})
 
     @classmethod
-    def degraded(cls, reason: str) -> "HealthResponse":
+    def degraded(cls, reason: str) -> HealthResponse:
         return cls(status="degraded", components={"error": reason})
 
 
@@ -158,5 +157,5 @@ class ErrorResponse(BaseModel):
     """エラーレスポンス。"""
 
     error: str
-    detail: Optional[str] = None
+    detail: str | None = None
     code: int = 500
