@@ -22,6 +22,7 @@ jobs:
   lint:
     name: Lint (ruff)
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 
@@ -41,6 +42,7 @@ jobs:
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: lint
     steps:
       - uses: actions/checkout@v4
@@ -53,7 +55,8 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -e ".[dev]"
-          pip install faiss-cpu sentence-transformers aiosqlite pyyaml httpx networkx docker
+          pip install faiss-cpu aiosqlite pyyaml httpx networkx docker
+          # sentence-transformers は除外（tests/unit は mock=True で動作するため PyTorch 不要）
 
       - name: Run unit tests
         run: |
@@ -80,6 +83,7 @@ jobs:
   docker-tests:
     name: Docker Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: unit-tests
     steps:
       - uses: actions/checkout@v4
@@ -99,20 +103,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # ユニットテストを Docker コンテナ内で実行
-      - name: Run unit tests in Docker
-        run: |
-          docker run --rm \
-            --name med-unit-tests \
-            ${{ env.IMAGE_NAME }}:latest \
-            pytest tests/unit/ \
-              -v \
-              --tb=short \
-              --no-header \
-              -p no:warnings \
-              --cov=src \
-              --cov-report=xml
-
       # Docker-in-Docker でサンドボックス統合テストを実行
       - name: Run Docker integration tests
         run: |
@@ -125,17 +115,6 @@ jobs:
               --tb=short \
               -m docker \
               -p no:warnings
-
-      # テスト結果 XML をコンテナからホストに取り出す (docker cp で権限問題を回避)
-      - name: Extract coverage report
-        if: always()
-        run: |
-          mkdir -p reports
-          CID=$(docker create ${{ env.IMAGE_NAME }}:latest \
-            pytest tests/unit/ --cov=src --cov-report=xml -q)
-          docker start -a "$CID" || true
-          docker cp "$CID:/app/coverage.xml" reports/coverage.xml 2>/dev/null || true
-          docker rm "$CID" || true
 
       - name: Upload Docker test coverage
         uses: actions/upload-artifact@v4

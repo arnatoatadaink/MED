@@ -31,12 +31,13 @@ COPY pyproject.toml ./
 RUN pip install --no-cache-dir -e ".[dev]" \
     && pip install --no-cache-dir \
         faiss-cpu \
-        sentence-transformers \
         aiosqlite \
         pyyaml \
         httpx \
         networkx \
         docker
+# sentence-transformers / PyTorch は除外 — tests/unit は mock=True で動作するため不要
+# イメージサイズ ~2GB 削減
 
 # ソースコードをコピー
 COPY src/ ./src/
