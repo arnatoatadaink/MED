@@ -54,8 +54,11 @@ def _doc(content: str = "test content", domain: str = "code") -> Document:
 
 class TestInitialization:
     def test_create_without_args(self) -> None:
-        """引数なしで MemoryManager を生成できる。"""
-        mgr = MemoryManager()
+        """引数なしで MemoryManager を生成できる（Embedder はモック）。"""
+        from unittest.mock import patch
+
+        with patch("src.memory.memory_manager.Embedder", return_value=Embedder(mock=True)):
+            mgr = MemoryManager()
         assert not mgr._initialized
 
     @pytest.mark.asyncio
