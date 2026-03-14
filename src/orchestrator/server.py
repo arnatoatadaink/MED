@@ -171,7 +171,7 @@ async def stats():
 
 
 @app.get("/maturation/quality")
-async def maturation_quality(domain: Optional[str] = None):
+async def maturation_quality(domain: str | None = None):
     """Phase 2 品質レポートを返す。
 
     QualityReport には以下が含まれる:

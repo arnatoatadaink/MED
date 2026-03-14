@@ -29,6 +29,7 @@ _LOCAL_PROVIDERS = {"ollama", "vllm"}
 
 def _get_primary_provider() -> str:
     from pathlib import Path
+
     import yaml
     cfg_path = Path(__file__).parent.parent.parent.parent / "configs" / "llm_config.yaml"
     if cfg_path.exists():
@@ -49,7 +50,7 @@ def _check_setup() -> tuple[list[dict], bool]:
 
     # ① プロバイダー設定
     steps.append({
-        "label": f"プロバイダー設定",
+        "label": "プロバイダー設定",
         "status": "ok",
         "detail": f"主要プロバイダー: `{primary}`",
         "hint": "🔧 設定 → プロバイダー設定 → プリセット から変更できます",
@@ -84,6 +85,7 @@ def _check_setup() -> tuple[list[dict], bool]:
     else:
         # カスタムプロバイダー — api_key_env を読む
         from pathlib import Path
+
         import yaml
         cfg_path = Path(__file__).parent.parent.parent.parent / "configs" / "llm_config.yaml"
         cfg = {}

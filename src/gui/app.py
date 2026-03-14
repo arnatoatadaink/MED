@@ -23,8 +23,7 @@ import gradio as gr
 from src.gui.components.status_bar import get_status_markdown
 
 # タブモジュール
-from src.gui.tabs import chat, memory, sandbox, settings, training, guide
-from src.gui.components.status_bar import get_status_markdown
+from src.gui.tabs import chat, guide, memory, sandbox, settings, training
 
 # ────────────────────────────────────────────────────────────────
 # テーマ & CSS
