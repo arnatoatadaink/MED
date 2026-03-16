@@ -237,73 +237,73 @@ MED/
 
 ## 開発フェーズと優先順位
 
-### Phase 1 (Week 1-3): v3 MVP — ★着手中★
-1. `src/common/config.py` — pydantic-settings ✅ **完了**
-2. `src/memory/schema.py` — Document, UsefulnessScore, SourceMeta dataclass
-3. `src/memory/embedder.py` — sentence-transformers wrapper
-4. `src/memory/faiss_index.py` — ドメイン別FAISS管理(Flat→IVF→PQ自動切替)
-5. `src/memory/metadata_store.py` — SQLite CRUD + 有用性カラム
-6. `src/memory/memory_manager.py` — FAISS-SQLite原子的操作
-7. `src/memory/scoring/` — freshness, usefulness, composite_scorer
-8. `src/memory/learning/ltr_ranker.py` — 線形LTR(オンライン学習)
-9. `src/memory/iterative_retrieval.py` — マルチホップ(ベクトル加算→LLMリライト)
-10. `src/llm/gateway.py` + `src/llm/providers/` — LLMプロバイダ抽象化
-11. `src/rag/` — Retriever Router + GitHub/SO/Tavily + Verifier
-12. `src/llm/response_generator.py` + `src/llm/code_generator.py`
-13. `src/sandbox/` — Docker管理 + 実行 + セキュリティ
-14. `src/orchestrator/server.py` + `pipeline.py` — FastAPI統合
+### Phase 1 (Week 1-3): v3 MVP — ✅ **完了**
+1. `src/common/config.py` — pydantic-settings ✅ **完了** (53 tests)
+2. `src/memory/schema.py` — Document, UsefulnessScore, SourceMeta dataclass ✅ **完了**
+3. `src/memory/embedder.py` — sentence-transformers wrapper ✅ **完了**
+4. `src/memory/faiss_index.py` — ドメイン別FAISS管理(Flat→IVF→PQ自動切替) ✅ **完了**
+5. `src/memory/metadata_store.py` — SQLite CRUD + 有用性カラム ✅ **完了**
+6. `src/memory/memory_manager.py` — FAISS-SQLite原子的操作 ✅ **完了**
+7. `src/memory/scoring/` — freshness, usefulness, composite_scorer ✅ **完了**
+8. `src/memory/learning/ltr_ranker.py` — 線形LTR(オンライン学習) ✅ **完了**
+9. `src/memory/iterative_retrieval.py` — マルチホップ(ベクトル加算→LLMリライト) ✅ **完了**
+10. `src/llm/gateway.py` + `src/llm/providers/` — LLMプロバイダ抽象化 ✅ **完了**
+11. `src/rag/` — Retriever Router + GitHub/SO/Tavily/arXiv + Verifier ✅ **完了**
+12. `src/llm/response_generator.py` + `src/llm/code_generator.py` ✅ **完了**
+13. `src/sandbox/` — Docker管理 + 実行 + セキュリティ ✅ **完了**
+14. `src/orchestrator/server.py` + `pipeline.py` — FastAPI統合 ✅ **完了**
 
-### Phase 1.5 (3-5日): Knowledge Graph プロトタイプ — ★plan.md由来★
+### Phase 1.5 (3-5日): Knowledge Graph プロトタイプ — ✅ **完了**
 Phase 1完了後、メモリ成熟前に KG の基盤を構築する。
 
-- `src/knowledge_graph/store.py` — KnowledgeGraphStore (NetworkX backend)
+- `src/knowledge_graph/store.py` — KnowledgeGraphStore (NetworkX backend) ✅ **完了**
   - add_entity / add_relation / query_neighbors / find_path
-- `src/knowledge_graph/extractor.py` — EntityExtractor (Teacher API呼び出し)
-- `src/knowledge_graph/router_bridge.py` — ModelRouterとKGの接続
-- FAISS格納時にKGへ自動登録するパイプライン
-- 単体テスト
+- `src/knowledge_graph/extractor.py` — EntityExtractor (Teacher API呼び出し) ✅ **完了**
+- `src/knowledge_graph/router_bridge.py` — ModelRouterとKGの接続 ✅ **完了**
+- `src/retrieval/query_classifier.py` — SEMANTIC/FACTUAL/RELATIONAL/HYBRID分類 ✅ **完了**
+- `src/retrieval/fusion_reranker.py` — RRF Fusion/Rerank ✅ **完了**
+- 単体テスト (`tests/unit/test_knowledge_graph.py`) ✅ **完了**
 
 技術選定:
-- Phase 1.5: **NetworkX** (インメモリ、依存ゼロ、プロトタイプ)
-- Phase 2+: **Neo4j** (永続化、本格クエリ)
+- Phase 1.5: **NetworkX** (インメモリ、依存ゼロ、プロトタイプ) ✅ **採用**
+- Phase 2+: **Neo4j** (永続化、本格クエリ) ⬜ 将来対応
 
-未決事項:
-- Entity抽出: Teacher API（精度優先）vs spaCy小モデル（コスト優先）→ **Teacher API推奨**
-- KGスキーマ: 汎用 vs MED特化 → 要検討
-- KG永続化: Phase 1.5は NetworkX + pickle、Phase 2 で Neo4j 移行
+未決事項 → **解決済み**:
+- Entity抽出: **Teacher API採用**（精度優先）
+- KG永続化: Phase 1.5は NetworkX + pickle、Phase 2 で Neo4j 移行予定
 
-### Phase 2 (Week 4-5): メモリ成熟 + SQL/BI MCP + Fusion
-既存メモリ成熟タスク:
-- `src/memory/maturation/` — seed_builder, reviewer, difficulty_tagger
-- `src/memory/learning/cross_encoder.py`
-- メモリ品質目標: 10,000docs, confidence>0.7, 実行成功率>80%
+### Phase 2 (Week 4-5): メモリ成熟 + SQL/BI MCP + Fusion — ✅ **完了**
+メモリ成熟タスク:
+- `src/memory/maturation/seed_builder.py` ✅ **完了**
+- `src/memory/maturation/reviewer.py` (MemoryReviewer) ✅ **完了**
+- `src/memory/maturation/difficulty_tagger.py` ✅ **完了**
+- `src/memory/maturation/quality_metrics.py` ✅ **完了**
+- `src/memory/learning/cross_encoder.py` ✅ **完了**
+- `src/memory/teacher_registry.py` (TeacherRegistry + EWMA信頼度) ✅ **完了**
+- `src/memory/learning/teacher_feedback_pipeline.py` ✅ **完了**
+- GUI Phase 2 成熟管理タブ ✅ **完了**
 
 KG統合タスク（plan.md由来）:
-- `src/mcp_tools/sql_query_tool.py` — テキスト → SQL変換 → 実行
-- `src/mcp_tools/bi_aggregation_tool.py` — 集計クエリ(COUNT/SUM/AVG)
-- `src/retrieval/query_classifier.py` — SEMANTIC / FACTUAL / RELATIONAL / HYBRID 分類
-- `src/retrieval/fusion_reranker.py` — FAISS + KG + SQL の RRF Fusion
-- Neo4j 移行スクリプト（NetworkX → Neo4j）
-- 統合テスト
+- `src/mcp_tools/sql_query_tool.py` ✅ **完了**
+- `src/mcp_tools/bi_aggregation_tool.py` ✅ **完了**
+- メモリ品質目標: 10,000docs, confidence>0.7, 実行成功率>80% ⬜ **運用時に達成**
 
-### Phase 3 (Week 6-7): 学習フレームワーク + KG訓練品質向上
-既存学習タスク:
-- `src/training/base.py` + `registry.py` — 抽象IF+Registry
-- `src/training/algorithms/grpo.py` — デフォルトRL
-- `src/training/adapters/tinylora.py` — 極少パラメータアダプタ
-- `src/training/rewards/composite.py` — Reward関数
-- `src/training/pipeline.py` — 3段階学習制御
+### Phase 3 (Week 6-7): 学習フレームワーク — ✅ **骨格完了**（本番学習は運用フェーズ）
+- `src/training/base.py` + `registry.py` — 抽象IF+Registry ✅ **完了**
+- `src/training/algorithms/` — grpo, ppo, dpo, sft, reinforce ✅ **完了** (骨格)
+- `src/training/adapters/` — tinylora, lora, lora_xs, full_ft ✅ **完了** (骨格)
+- `src/training/rewards/` — composite, code_exec, teacher_eval, hybrid ✅ **完了** (骨格)
+- `src/training/pipeline.py` — 3段階学習制御 ✅ **完了** (骨格)
 
-KG訓練統合タスク（plan.md由来）:
-- KGパスをTeacherプロンプトに含める（CoT強化）
-- 訓練データ生成時にKG根拠をアノテーション
-- GRPO報酬関数にKG整合性スコアを追加検討
-- 評価指標にEntity精度・関係再現率を追加
+KG訓練統合タスク（将来）:
+- KGパスをTeacherプロンプトに含める（CoT強化） ⬜ Phase 3+ で実装
+- GRPO報酬関数にKG整合性スコアを追加 ⬜ Phase 3+ で実装
+- 評価指標にEntity精度・関係再現率を追加 ⬜ Phase 3+ で実装
 
-### Phase 4 (Week 8-9): 運用最適化
-- `src/orchestrator/model_router.py` — KG参照ルーティング含む
-- 拡張アルゴリズム(PPO, DPO)
-- ベンチマーク
+### Phase 4 (Week 8-9): 運用最適化 — ⬜ 未着手
+- `src/orchestrator/model_router.py` — KG参照ルーティング本格実装
+- 拡張アルゴリズム(PPO, DPO)本番対応
+- ベンチマーク整備
 
 ## 設計原則
 
@@ -345,10 +345,56 @@ KG訓練統合タスク（plan.md由来）:
 
 ## 実装進捗
 
-| ステップ | ファイル | 状態 |
-|---------|---------|------|
-| Phase 1-1 | `src/common/config.py` | ✅ 完了 (53 tests) |
-| Phase 1-2 | `src/memory/schema.py` | ⬜ 未着手 ← 次 |
-| Phase 1-3〜14 | (上記参照) | ⬜ 未着手 |
-| Phase 1.5 | `src/knowledge_graph/` | ⬜ 未着手 |
-| GUI | `src/gui/` | ✅ 別セッションで実装済み（5タブ） |
+| フェーズ | ファイル / モジュール | 状態 |
+|---------|---------------------|------|
+| **Phase 1** | `src/common/config.py` | ✅ 完了 (53 tests) |
+| **Phase 1** | `src/memory/schema.py` | ✅ 完了 |
+| **Phase 1** | `src/memory/embedder.py` | ✅ 完了 |
+| **Phase 1** | `src/memory/faiss_index.py` | ✅ 完了 |
+| **Phase 1** | `src/memory/metadata_store.py` | ✅ 完了 |
+| **Phase 1** | `src/memory/memory_manager.py` | ✅ 完了 |
+| **Phase 1** | `src/memory/scoring/` (freshness / usefulness / composite) | ✅ 完了 |
+| **Phase 1** | `src/memory/learning/ltr_ranker.py` | ✅ 完了 |
+| **Phase 1** | `src/memory/iterative_retrieval.py` | ✅ 完了 |
+| **Phase 1** | `src/llm/gateway.py` + `src/llm/providers/` (4プロバイダー) | ✅ 完了 |
+| **Phase 1** | `src/rag/` (retriever / chunker / verifier / 4検索源) | ✅ 完了 |
+| **Phase 1** | `src/llm/response_generator.py` + `code_generator.py` | ✅ 完了 |
+| **Phase 1** | `src/sandbox/` (manager / executor / security / retry) | ✅ 完了 |
+| **Phase 1** | `src/orchestrator/` (server / pipeline / query_parser) | ✅ 完了 |
+| **Phase 1.5** | `src/knowledge_graph/store.py` (NetworkX KG) | ✅ 完了 |
+| **Phase 1.5** | `src/knowledge_graph/extractor.py` (Teacher API) | ✅ 完了 |
+| **Phase 1.5** | `src/knowledge_graph/router_bridge.py` | ✅ 完了 |
+| **Phase 1.5** | `src/retrieval/query_classifier.py` | ✅ 完了 |
+| **Phase 1.5** | `src/retrieval/fusion_reranker.py` (RRF) | ✅ 完了 |
+| **Phase 2** | `src/memory/maturation/` (reviewer / tagger / metrics / seed) | ✅ 完了 |
+| **Phase 2** | `src/memory/learning/cross_encoder.py` | ✅ 完了 |
+| **Phase 2** | `src/memory/teacher_registry.py` (EWMA 信頼度) | ✅ 完了 |
+| **Phase 2** | `src/memory/learning/teacher_feedback_pipeline.py` | ✅ 完了 |
+| **Phase 2** | `src/mcp_tools/sql_query_tool.py` | ✅ 完了 |
+| **Phase 2** | `src/mcp_tools/bi_aggregation_tool.py` | ✅ 完了 |
+| **Phase 3** | `src/training/` (base / registry / algorithms×5 / adapters×4 / rewards×4 / pipeline) | ✅ 完了 (骨格) |
+| **GUI** | `src/gui/` — Gradio 6タブ (chat / memory / sandbox / training / settings / guide) | ✅ 完了 |
+| **GUI** | `src/gui/docs_chat.py` — ドキュメント Q&A チャットBot (案C) | ✅ 完了 |
+| **ドキュメント** | `docs/site/` — MkDocs 24ページ (案B) + `mkdocs.yml` | ✅ 完了 |
+| **CI / テスト** | `.github/workflows/ci.yml` + `Dockerfile.test` + `tests/conftest.py` | ✅ 完了 |
+| **CI / テスト** | `tests/unit/` (25ファイル) + `tests/integration/` (1ファイル) | ✅ 完了 |
+| **Phase 4** | `src/orchestrator/model_router.py` KG参照ルーティング本格実装 | ⬜ 未着手 |
+| **Phase 3+** | 学習フレームワーク 本番稼働 (KG CoT / GRPO本番 / ベンチマーク) | ⬜ 未着手 |
+| **将来** | Neo4j 移行 / PostgreSQL 移行 / vLLM Student 本番 | ⬜ 将来対応 |
+
+### 次セッションへの引き継ぎ事項
+
+**残作業 (優先度: 高)**
+- `tests/integration/` の E2E テストを実際の Docker 環境で実行・検証
+- `scripts/` 各スクリプト (`seed_memory.py`, `mature_memory.py`, `train_student.py`) の動作確認
+- オーケストレーターを実際に起動してエンドツーエンドの動作確認
+
+**残作業 (優先度: 中)**
+- Phase 4: `src/orchestrator/model_router.py` に KG 参照ルーティングを本格実装
+- Phase 3+: GRPO + TinyLoRA 本番学習パイプラインの実稼働
+- `data/faiss_indices/` へのシードデータ投入 (`scripts/seed_memory.py`)
+
+**技術的負債**
+- `src/memory/maturation/seed_builder.py` — Teacher API 呼び出し部分はスタブ。実プロバイダー接続時に完成
+- `src/training/algorithms/` — 骨格実装のみ。VERL/trl との実際の統合が必要
+- KG永続化: NetworkX + pickle → Neo4j 移行スクリプト未実装
