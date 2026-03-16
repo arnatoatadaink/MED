@@ -236,9 +236,9 @@ class MetadataStore:
         await self._db.execute("PRAGMA journal_mode=WAL;")
         await self._db.execute("PRAGMA foreign_keys=ON;")
         await self._db.execute(_CREATE_TABLE_SQL)
+        await self._migrate()  # 列追加を先に行い、その後インデックス作成
         for idx_sql in _CREATE_INDICES_SQL:
             await self._db.execute(idx_sql)
-        await self._migrate()
         await self._db.commit()
         logger.info("MetadataStore initialized: %s", self._db_path)
 
