@@ -766,7 +766,7 @@ def _respond(message: str, history: list) -> tuple[list, str]:
     except Exception as e:
         answer = f"❌ エラーが発生しました: {e}"
 
-    if GRADIO_MAJOR >= 5:
+    if GRADIO_MAJOR >= 6:
         new_history = list(history) + [
             {"role": "user", "content": message},
             {"role": "assistant", "content": answer},
@@ -798,13 +798,12 @@ def _build_assistant_section() -> None:
         engine_status = gr.Markdown("⏳ エンジン初期化中...")
 
         # チャット履歴
-        if GRADIO_MAJOR >= 5:
+        # Gradio 6.x: type/show_copy_button/bubble_full_width 削除 → buttons=["copy"]
+        if GRADIO_MAJOR >= 6:
             chatbot = gr.Chatbot(
                 label="MEDアシスタント",
-                type="messages",
                 height=420,
-                show_copy_button=True,
-                bubble_full_width=False,
+                buttons=["copy"],
                 avatar_images=(None, "🤖"),
             )
         else:
