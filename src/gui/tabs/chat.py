@@ -21,42 +21,77 @@ import httpx
 from src.gui.utils import GRADIO_MAJOR, ORCHESTRATOR_URL, is_api_alive
 
 # ────────────────────────────────────────────────────────────────
+# プロバイダー / モデル選択肢
+# ────────────────────────────────────────────────────────────────
+
+_PROVIDER_CHOICES = [
+    "auto (設定ファイル依存)",
+    "anthropic",
+    "openai",
+    "ollama",
+    "vllm",
+]
+
+# プロバイダーごとのよく使うモデル例
+_MODEL_EXAMPLES: dict[str, list[str]] = {
+    "anthropic": [
+        "claude-sonnet-4-20250514",
+        "claude-opus-4-6",
+        "claude-haiku-4-5-20251001",
+    ],
+    "openai": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+    "ollama": ["llama3.1:8b", "llama3.1:70b", "mistral:7b", "codellama:13b"],
+    "vllm": ["Qwen/Qwen2.5-7B-Instruct"],
+}
+
+
+# ────────────────────────────────────────────────────────────────
 # API クライアントヘルパー
 # ────────────────────────────────────────────────────────────────
 
 
 def _query_api(
-    prompt: str,
+    query: str,
     mode: str,
     use_memory: bool,
     use_rag: bool,
+    provider: str | None,
+    model: str | None,
 ) -> dict:
-    payload = {
-        "prompt": prompt,
-        "mode": mode,
+    payload: dict = {
+        "query": query,
         "use_memory": use_memory,
         "use_rag": use_rag,
     }
+    if mode and mode != "auto":
+        payload["mode"] = mode
+    if provider:
+        payload["provider"] = provider
+    if model:
+        payload["model"] = model
     r = httpx.post(f"{ORCHESTRATOR_URL}/query", json=payload, timeout=60.0)
     r.raise_for_status()
     return r.json()
 
 
-def _mock_response(prompt: str, mode: str) -> dict:
+def _mock_response(query: str, mode: str, provider: str | None, model: str | None) -> dict:
     """APIが未起動の場合のモックレスポンス。"""
     time.sleep(0.3)
+    provider_label = provider or "config依存"
+    model_label = model or "config依存"
     return {
         "answer": (
             f"[MOCK — オーケストレーター未接続]\n\n"
-            f"モード: **{mode}**\n\n"
-            f"クエリ受信: `{prompt[:80]}{'...' if len(prompt) > 80 else ''}`\n\n"
+            f"モード: **{mode}** | プロバイダー: **{provider_label}** | モデル: **{model_label}**\n\n"
+            f"クエリ受信: `{query[:80]}{'...' if len(query) > 80 else ''}`\n\n"
             "FastAPI サーバーを起動すると実際の応答が返ります:\n"
-            "```bash\nuvicorn src.orchestrator.server:app --reload\n```"
+            "```bash\nuvicorn src.orchestrator.server:app --reload --port 8000\n```"
         ),
-        "sources": [],
-        "model_used": f"mock-{mode}",
-        "retrieval_count": 0,
-        "latency_ms": 300,
+        "provider": provider_label,
+        "model": model_label,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "context_doc_count": 0,
     }
 
 
@@ -78,18 +113,23 @@ def _format_sources(sources: list) -> str:
 
 def respond(
     message: str,
-    history: list[tuple[str, str]],
+    history: list,
     mode: str,
     use_memory: bool,
     use_rag: bool,
-) -> Generator[tuple[list[tuple[str, str]], str, str], None, None]:
+    provider_choice: str,
+    model_name: str,
+) -> Generator[tuple[list, str, str], None, None]:
     """Gradio チャット用ストリーミング風ジェネレータ。"""
     if not message.strip():
         yield history, "", "_入力が空です_"
         return
 
+    # プロバイダー / モデルを解決
+    actual_provider = None if provider_choice.startswith("auto") else provider_choice
+    actual_model = model_name.strip() or None
+
     # 即座に「思考中…」を表示
-    # Gradio 6.x: 辞書形式  /  5.x: タプル形式
     if GRADIO_MAJOR >= 6:
         thinking_history = history + [
             {"role": "user", "content": message},
@@ -101,22 +141,30 @@ def respond(
 
     try:
         if is_api_alive():
-            result = _query_api(message, mode, use_memory, use_rag)
+            result = _query_api(message, mode, use_memory, use_rag, actual_provider, actual_model)
         else:
-            result = _mock_response(message, mode)
+            result = _mock_response(message, mode, actual_provider, actual_model)
     except Exception as e:
         result = {
             "answer": f"❌ エラー: {e}",
-            "sources": [],
-            "model_used": "error",
-            "latency_ms": 0,
+            "provider": "error",
+            "model": "error",
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "context_doc_count": 0,
         }
 
     answer = result.get("answer", "")
     sources_md = _format_sources(result.get("sources", []))
-    model_used = result.get("model_used", "unknown")
-    latency = result.get("latency_ms", 0)
-    meta = f"モデル: `{model_used}` | レイテンシ: {latency}ms"
+    provider_used = result.get("provider", "unknown")
+    model_used = result.get("model", "unknown")
+    in_tok = result.get("input_tokens", 0)
+    out_tok = result.get("output_tokens", 0)
+    ctx_count = result.get("context_doc_count", 0)
+    meta = (
+        f"プロバイダー: `{provider_used}` | モデル: `{model_used}`  \n"
+        f"トークン: ↑{in_tok} ↓{out_tok} | コンテキスト: {ctx_count}件"
+    )
 
     if GRADIO_MAJOR >= 6:
         new_history = history + [
@@ -136,11 +184,7 @@ def build_tab() -> None:
     """Gradio Blocks コンテキスト内でチャットタブを描画する。"""
     with gr.Row():
         with gr.Column(scale=3):
-            # Gradio 5.x: show_copy_button + bubble_full_width (deprecated but works)
-            # Gradio 6.x: buttons=["copy"]、bubble_full_width は削除(代替なし)
-            #             type="messages" で辞書形式履歴を使用
             if GRADIO_MAJOR >= 6:
-                # Gradio 6.x: messages形式(辞書)のみサポート、type引数は廃止
                 chatbot = gr.Chatbot(
                     label="チャット",
                     height=480,
@@ -179,7 +223,7 @@ def build_tab() -> None:
                     btn.click(fn=lambda p=prompt: p, outputs=[msg_box])
 
         with gr.Column(scale=1):
-            gr.Markdown("### 設定")
+            gr.Markdown("### モデル設定")
             mode_radio = gr.Radio(
                 choices=["auto", "student", "teacher"],
                 value="auto",
@@ -189,6 +233,33 @@ def build_tab() -> None:
             use_memory_chk = gr.Checkbox(value=True, label="FAISSメモリ使用")
             use_rag_chk = gr.Checkbox(value=True, label="外部RAG使用")
 
+            gr.Markdown("#### LLM プロバイダー / モデル")
+            provider_dd = gr.Dropdown(
+                choices=_PROVIDER_CHOICES,
+                value=_PROVIDER_CHOICES[0],
+                label="プロバイダー",
+                info="設定ファイルの primary_provider を使う場合は auto のまま",
+            )
+            model_box = gr.Textbox(
+                placeholder="空白=設定ファイルのデフォルト",
+                label="モデル名 (任意)",
+                lines=1,
+            )
+
+            # プロバイダー選択時にモデル例を表示
+            model_hint = gr.Markdown("_モデル名例が選択後に表示されます_")
+
+            def _update_model_hint(prov: str) -> str:
+                if prov.startswith("auto"):
+                    return "_モデル名例: プロバイダーを選択してください_"
+                examples = _MODEL_EXAMPLES.get(prov, [])
+                if not examples:
+                    return f"_{prov} のモデル名を直接入力してください_"
+                joined = " / ".join(f"`{m}`" for m in examples)
+                return f"_例: {joined}_"
+
+            provider_dd.change(fn=_update_model_hint, inputs=[provider_dd], outputs=[model_hint])
+
             gr.Markdown("### レスポンス情報")
             meta_box = gr.Markdown("_送信後に表示_")
 
@@ -196,11 +267,11 @@ def build_tab() -> None:
             sources_box = gr.Markdown("_ソースなし_")
 
     # イベント接続
-    send_inputs = [msg_box, chatbot, mode_radio, use_memory_chk, use_rag_chk]
+    send_inputs = [msg_box, chatbot, mode_radio, use_memory_chk, use_rag_chk, provider_dd, model_box]
     send_outputs = [chatbot, meta_box, sources_box]
 
-    def _on_send(message, history, mode, use_memory, use_rag):
-        for update in respond(message, history, mode, use_memory, use_rag):
+    def _on_send(message, history, mode, use_memory, use_rag, provider_choice, model_name):
+        for update in respond(message, history, mode, use_memory, use_rag, provider_choice, model_name):
             yield update[0], update[1], update[2]
 
     send_btn.click(
