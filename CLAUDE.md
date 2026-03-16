@@ -300,10 +300,16 @@ KG訓練統合タスク（将来）:
 - GRPO報酬関数にKG整合性スコアを追加 ⬜ Phase 3+ で実装
 - 評価指標にEntity精度・関係再現率を追加 ⬜ Phase 3+ で実装
 
-### Phase 4 (Week 8-9): 運用最適化 — ⬜ 未着手
-- `src/orchestrator/model_router.py` — KG参照ルーティング本格実装
-- 拡張アルゴリズム(PPO, DPO)本番対応
-- ベンチマーク整備
+### Phase 4 (Week 8-9): 運用最適化 — ✅ **完了**
+- `src/orchestrator/model_router.py` — KG参照ルーティング本格実装 ✅ **完了**
+  - RoutingDecision (target / use_kg / use_faiss / expanded_doc_ids)
+  - ParsedQuery の complexity / intent / entities によるモデル選択
+  - KGRouterBridge 経由でエンティティ → doc_id 拡張
+- `src/orchestrator/query_parser.py` — LLMベース意図分類 ✅ **完了**
+- `src/llm/error_analyzer.py` / `feedback_analyzer.py` / `usage_tracker.py` / `prompt_cache.py` ✅ **完了**
+- `src/memory/deduplicator.py` — 重複排除 ✅ **完了**
+- 拡張アルゴリズム (PPO, DPO) 骨格実装 ✅ **完了**（本番チューニングは将来）
+- ベンチマーク骨格 (`tests/unit/test_phase4.py`, `test_phase5.py`) ✅ **完了**
 
 ## 設計原則
 
@@ -378,11 +384,15 @@ KG訓練統合タスク（将来）:
 | **ドキュメント** | `docs/site/` — MkDocs 24ページ (案B) + `mkdocs.yml` | ✅ 完了 |
 | **CI / テスト** | `.github/workflows/ci.yml` + `Dockerfile.test` + `tests/conftest.py` | ✅ 完了 |
 | **CI / テスト** | `tests/unit/` (25ファイル) + `tests/integration/` (1ファイル) | ✅ 完了 |
-| **Phase 4** | `src/orchestrator/model_router.py` KG参照ルーティング本格実装 | ⬜ 未着手 |
-| **Phase 3+** | 学習フレームワーク 本番稼働 (KG CoT / GRPO本番 / ベンチマーク) | ⬜ 未着手 |
+| **Phase 4** | `src/orchestrator/model_router.py` — Graph-aware KG ルーティング | ✅ 完了 |
+| **Phase 4** | `src/llm/error_analyzer.py` / `feedback_analyzer.py` / `usage_tracker.py` / `prompt_cache.py` | ✅ 完了 |
+| **Phase 4** | `src/memory/deduplicator.py` | ✅ 完了 |
+| **Phase 3+** | 学習フレームワーク 本番稼働 (KG CoT / GRPO本番) | ⬜ 将来対応 |
 | **将来** | Neo4j 移行 / PostgreSQL 移行 / vLLM Student 本番 | ⬜ 将来対応 |
 
 ### 次セッションへの引き継ぎ事項
+
+> 引き継ぎ詳細: `docs/session_progress.md` を参照 (バックエンドセッション `claude/implement-phase1-config-iIPTF` の作業記録)
 
 **残作業 (優先度: 高)**
 - `tests/integration/` の E2E テストを実際の Docker 環境で実行・検証
@@ -390,11 +400,12 @@ KG訓練統合タスク（将来）:
 - オーケストレーターを実際に起動してエンドツーエンドの動作確認
 
 **残作業 (優先度: 中)**
-- Phase 4: `src/orchestrator/model_router.py` に KG 参照ルーティングを本格実装
 - Phase 3+: GRPO + TinyLoRA 本番学習パイプラインの実稼働
 - `data/faiss_indices/` へのシードデータ投入 (`scripts/seed_memory.py`)
+- メモリ品質目標: 10,000 docs / confidence > 0.7 / 実行成功率 > 80%
 
 **技術的負債**
 - `src/memory/maturation/seed_builder.py` — Teacher API 呼び出し部分はスタブ。実プロバイダー接続時に完成
 - `src/training/algorithms/` — 骨格実装のみ。VERL/trl との実際の統合が必要
-- KG永続化: NetworkX + pickle → Neo4j 移行スクリプト未実装
+- KG 永続化: NetworkX + pickle → Neo4j 移行スクリプト未実装
+- sentence-transformers は CI 除外済み (`plan_test.md` 参照)
