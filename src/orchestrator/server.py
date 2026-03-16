@@ -58,6 +58,11 @@ class QueryRequest(BaseModel):
     domain: str | None = None
     k: int = Field(default=5, ge=1, le=20)
     run_code: bool = False
+    mode: str | None = None        # "auto" | "student" | "teacher" (ルーティングヒント)
+    use_memory: bool = True        # FAISS メモリ検索を使用するか
+    use_rag: bool = True           # 外部 RAG 検索を使用するか
+    provider: str | None = None    # LLM プロバイダー上書き (例: "anthropic", "openai")
+    model: str | None = None       # モデル名上書き (例: "claude-opus-4-6", "gpt-4o")
 
 
 class QueryResponseModel(BaseModel):
@@ -109,6 +114,10 @@ async def query(request: QueryRequest):
             domain=request.domain,
             k=request.k,
             run_code=request.run_code,
+            provider=request.provider,
+            model=request.model,
+            use_memory=request.use_memory,
+            use_rag=request.use_rag,
         )
     except Exception as exc:
         logger.exception("Query failed: %s", exc)

@@ -107,6 +107,10 @@ class MEDPipeline:
         domain: str | None = None,
         k: int = 5,
         run_code: bool = False,
+        provider: str | None = None,
+        model: str | None = None,
+        use_memory: bool = True,
+        use_rag: bool = True,
     ) -> QueryResponse:
         """クエリを受け取り、RAG + LLM で回答を生成する。
 
@@ -123,22 +127,24 @@ class MEDPipeline:
             raise RuntimeError("MEDPipeline.initialize() must be called before use")
 
         # ── Step 1: FAISS 検索 ──────────────────────
-        if self._enable_iterative:
-            faiss_results = await self._iterative.retrieve(
-                query, domain=domain, max_rounds=3, k_per_round=k, strategy="vector_add"
-            )
-        else:
-            faiss_results = await self._mm.search(query, domain=domain, k=k)
+        faiss_results: list[SearchResult] = []
+        if use_memory:
+            if self._enable_iterative:
+                faiss_results = await self._iterative.retrieve(
+                    query, domain=domain, max_rounds=3, k_per_round=k, strategy="vector_add"
+                )
+            else:
+                faiss_results = await self._mm.search(query, domain=domain, k=k)
 
         logger.debug("FAISS: %d results for query=%r", len(faiss_results), query[:50])
 
         # ── Step 2: 外部 RAG 検索 → 保存 ───────────
-        if self._enable_rag:
+        if use_rag and self._enable_rag:
             await self._fetch_and_store_external(query, domain=domain or "general")
 
         # ── Step 3: LLM レスポンス生成 ──────────────
         gen_response: GeneratedResponse = await self._response_gen.generate(
-            query, context_docs=faiss_results
+            query, context_docs=faiss_results, provider=provider, model=model
         )
 
         # ── Step 4: コード生成 + Sandbox 実行 ─────

@@ -82,6 +82,8 @@ class ResponseGenerator:
         context_docs: list[SearchResult],
         max_tokens: int = 1024,
         temperature: float = 0.7,
+        provider: str | None = None,
+        model: str | None = None,
     ) -> GeneratedResponse:
         """クエリと検索結果から回答を生成する。
 
@@ -109,7 +111,8 @@ class ResponseGenerator:
 
         raw: LLMResponse = await self._gateway.complete_messages(
             messages,
-            provider=self._provider,
+            provider=provider or self._provider,
+            model=model,
             max_tokens=max_tokens,
             temperature=temperature,
         )
