@@ -828,7 +828,7 @@ def _build_assistant_section() -> None:
 
         # サンプル質問ボタン
         with gr.Accordion("💡 サンプル質問", open=False):
-            with gr.Row(wrap=True):
+            with gr.Row():  # wrap= は Gradio 6.x で削除
                 sample_btns = [
                     gr.Button(q, size="sm", variant="secondary")
                     for q in _SAMPLE_QUESTIONS
