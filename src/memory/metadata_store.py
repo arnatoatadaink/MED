@@ -598,3 +598,64 @@ class MetadataStore:
             cursor = await self._db.execute("SELECT AVG(confidence) FROM documents")
         row = await cursor.fetchone()
         return row[0] or 0.0
+
+    async def get_stats(self, domain: str | None = None) -> dict:
+        """品質メトリクス用の集計統計を返す。
+
+        QualityMetrics.compute() から呼び出される。
+
+        Args:
+            domain: ドメイン絞り込み（None で全ドメイン）。
+
+        Returns:
+            total_docs / approved_docs / rejected_docs / pending_docs /
+            avg_confidence / avg_teacher_quality / avg_composite_score /
+            exec_success_rate / avg_retrieval_count / avg_selection_count /
+            difficulty_distribution を含む dict。
+        """
+        where = "WHERE domain = ?" if domain else ""
+        params: tuple = (domain,) if domain else ()
+
+        # 全体集計（1クエリ）
+        agg_sql = f"""
+            SELECT
+                COUNT(*)                          AS total_docs,
+                SUM(review_status = 'approved')   AS approved_docs,
+                SUM(review_status = 'rejected')   AS rejected_docs,
+                SUM(review_status = 'unreviewed') AS pending_docs,
+                AVG(confidence)                   AS avg_confidence,
+                AVG(teacher_quality)              AS avg_teacher_quality,
+                AVG(composite_score)              AS avg_composite_score,
+                AVG(execution_success_rate)       AS exec_success_rate,
+                AVG(retrieval_count)              AS avg_retrieval_count,
+                AVG(selection_count)              AS avg_selection_count
+            FROM documents {where}
+        """
+        cursor = await self._db.execute(agg_sql, params)
+        row = dict(await cursor.fetchone())
+
+        # 難易度分布
+        diff_sql = f"""
+            SELECT difficulty, COUNT(*) AS cnt
+            FROM documents {where}
+            GROUP BY difficulty
+        """
+        cursor = await self._db.execute(diff_sql, params)
+        difficulty_distribution = {
+            (r["difficulty"] or "unknown"): r["cnt"]
+            for r in await cursor.fetchall()
+        }
+
+        return {
+            "total_docs":            row["total_docs"] or 0,
+            "approved_docs":         row["approved_docs"] or 0,
+            "rejected_docs":         row["rejected_docs"] or 0,
+            "pending_docs":          row["pending_docs"] or 0,
+            "avg_confidence":        row["avg_confidence"] or 0.0,
+            "avg_teacher_quality":   row["avg_teacher_quality"] or 0.0,
+            "avg_composite_score":   row["avg_composite_score"] or 0.0,
+            "exec_success_rate":     row["exec_success_rate"] or 0.0,
+            "avg_retrieval_count":   row["avg_retrieval_count"] or 0.0,
+            "avg_selection_count":   row["avg_selection_count"] or 0.0,
+            "difficulty_distribution": difficulty_distribution,
+        }
