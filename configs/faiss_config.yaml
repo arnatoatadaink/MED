@@ -2,7 +2,7 @@ base_dir: "data/faiss_indices"
 
 indices:
   code:
-    dim: 768
+    dim: 384
     initial_type: "Flat"
     metric: "inner_product"
     nprobe: 32
@@ -13,7 +13,7 @@ indices:
         migrate_to: "IVF4096,PQ48"
 
   academic:
-    dim: 768
+    dim: 384
     initial_type: "Flat"
     metric: "inner_product"
     nprobe: 32
@@ -22,7 +22,7 @@ indices:
         migrate_to: "HNSW32"
 
   general:
-    dim: 768
+    dim: 384
     initial_type: "Flat"
     metric: "inner_product"
     nprobe: 32

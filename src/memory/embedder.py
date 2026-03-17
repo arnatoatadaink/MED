@@ -6,8 +6,8 @@
     from src.memory.embedder import Embedder
 
     embedder = Embedder()                       # デフォルト: all-MiniLM-L6-v2
-    vec = embedder.embed("Hello, world!")        # shape: (768,)
-    vecs = embedder.embed_batch(["a", "b"])      # shape: (2, 768)
+    vec = embedder.embed("Hello, world!")        # shape: (384,)
+    vecs = embedder.embed_batch(["a", "b"])      # shape: (2, 384)
 
 テスト時はモックモード:
     embedder = Embedder(mock=True)               # ランダムベクトルを返す
