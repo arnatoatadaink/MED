@@ -230,7 +230,7 @@ class MEDPipeline:
                 "content": sr.document.content[:300],
                 "score": round(sr.score, 4),
                 "domain": sr.document.domain,
-                "source": sr.document.source_url or "",
+                "source": sr.document.source.url or "",
             }
 
         def _raw_to_dict(r: object) -> dict:
