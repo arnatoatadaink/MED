@@ -39,6 +39,9 @@ class ResultVerifier:
         gateway: LLMGateway インスタンス。None の場合は検証をスキップ（全結果通過）。
         max_content_length: LLM に渡す最大コンテンツ文字数。
         provider: 使用する LLM プロバイダ（省略時はデフォルト）。
+        enable_llm: True の場合のみ LLM 検証を実行する。
+                    False (デフォルト) では全結果を通過させる。
+                    LLM 検証はプロバイダー設定画面のテスト機能で確認すること。
     """
 
     def __init__(
@@ -46,10 +49,12 @@ class ResultVerifier:
         gateway: LLMGateway | None = None,
         max_content_length: int = 500,
         provider: str | None = None,
+        enable_llm: bool = False,
     ) -> None:
         self._gateway = gateway
         self._max_len = max_content_length
         self._provider = provider
+        self._enable_llm = enable_llm
 
     async def verify(
         self,
@@ -70,6 +75,11 @@ class ResultVerifier:
         """
         if not results:
             return []
+
+        # LLM 検証が無効の場合は全結果を通過させる
+        if not self._enable_llm:
+            logger.debug("Verifier: LLM verification disabled, passing all %d results", len(results))
+            return results
 
         if self._gateway is None:
             logger.debug("Verifier: no gateway, passing all %d results", len(results))
