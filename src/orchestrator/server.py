@@ -15,6 +15,7 @@ MED システムの REST API エンドポイントを提供する。
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -63,6 +64,7 @@ class QueryRequest(BaseModel):
     use_rag: bool = True           # 外部 RAG 検索を使用するか
     provider: str | None = None    # LLM プロバイダー上書き (例: "anthropic", "openai")
     model: str | None = None       # モデル名上書き (例: "claude-opus-4-6", "gpt-4o")
+    timeout_seconds: int = Field(default=300, ge=5, le=86400)  # 5秒〜24時間
 
 
 class QueryResponseModel(BaseModel):
@@ -109,7 +111,7 @@ async def query(request: QueryRequest):
         raise HTTPException(status_code=503, detail="Pipeline not initialized")
 
     try:
-        result: QueryResponse = await _pipeline.query(
+        coro = _pipeline.query(
             query=request.query,
             domain=request.domain,
             k=request.k,
@@ -118,6 +120,16 @@ async def query(request: QueryRequest):
             model=request.model,
             use_memory=request.use_memory,
             use_rag=request.use_rag,
+        )
+        result: QueryResponse = await asyncio.wait_for(
+            coro, timeout=float(request.timeout_seconds)
+        )
+    except asyncio.TimeoutError:
+        logger.warning("Query timed out after %ds", request.timeout_seconds)
+        raise HTTPException(
+            status_code=504,
+            detail=f"クエリがタイムアウトしました ({request.timeout_seconds}秒)。"
+                   "タイムアウト設定を延長するか、クエリを短くしてください。",
         )
     except Exception as exc:
         logger.exception("Query failed: %s", exc)

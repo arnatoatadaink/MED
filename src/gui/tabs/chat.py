@@ -38,6 +38,17 @@ _MODEL_EXAMPLES: dict[str, list[str]] = {
 # ────────────────────────────────────────────────────────────────
 
 
+_TIMEOUT_MIN = 5          # 最小タイムアウト: 5秒
+_TIMEOUT_MAX = 86400      # 最大タイムアウト: 24時間
+_TIMEOUT_DEFAULT = 300    # デフォルト: 5分
+
+
+def _calc_timeout(hours: int, minutes: int, seconds: int) -> int:
+    """時/分/秒 → 秒数を返す。範囲は [5, 86400] にクランプ。"""
+    total = int(hours) * 3600 + int(minutes) * 60 + int(seconds)
+    return max(_TIMEOUT_MIN, min(_TIMEOUT_MAX, total))
+
+
 def _query_api(
     query: str,
     mode: str,
@@ -45,6 +56,7 @@ def _query_api(
     use_rag: bool,
     provider: str | None,
     model: str | None,
+    timeout_seconds: int = _TIMEOUT_DEFAULT,
 ) -> dict:
     payload: dict = {
         "query": query,
@@ -57,7 +69,10 @@ def _query_api(
         payload["provider"] = provider
     if model:
         payload["model"] = model
-    r = httpx.post(f"{ORCHESTRATOR_URL}/query", json=payload, timeout=60.0)
+    payload["timeout_seconds"] = timeout_seconds
+    # クライアント側タイムアウトはサーバー側より少し長く設定（接続/応答バッファ）
+    http_timeout = timeout_seconds + 10
+    r = httpx.post(f"{ORCHESTRATOR_URL}/query", json=payload, timeout=http_timeout)
     r.raise_for_status()
     return r.json()
 
@@ -107,11 +122,16 @@ def respond(
     use_rag: bool,
     provider_choice: str,
     model_name: str,
+    timeout_h: int,
+    timeout_m: int,
+    timeout_s: int,
 ) -> Generator[tuple[list, str, str], None, None]:
     """Gradio チャット用ストリーミング風ジェネレータ。"""
     if not message.strip():
         yield history, "", "_入力が空です_"
         return
+
+    timeout_seconds = _calc_timeout(timeout_h, timeout_m, timeout_s)
 
     # プロバイダー / モデルを解決
     actual_provider = None if provider_choice.startswith("auto") else provider_choice
@@ -129,7 +149,10 @@ def respond(
 
     try:
         if is_api_alive():
-            result = _query_api(message, mode, use_memory, use_rag, actual_provider, actual_model)
+            result = _query_api(
+                message, mode, use_memory, use_rag,
+                actual_provider, actual_model, timeout_seconds,
+            )
         else:
             result = _mock_response(message, mode, actual_provider, actual_model)
     except Exception as e:
@@ -253,6 +276,42 @@ def build_tab() -> gr.Dropdown:
 
             provider_dd.change(fn=_update_model_hint, inputs=[provider_dd], outputs=[model_hint])
 
+            gr.Markdown("#### タイムアウト設定")
+            gr.Markdown(
+                "_範囲: 5秒 〜 24時間。デフォルトは 5分 (0h 5m 0s)。_",
+            )
+            with gr.Row():
+                timeout_h = gr.Number(
+                    value=0, minimum=0, maximum=24, step=1,
+                    label="時 (h)", precision=0, scale=1,
+                )
+                timeout_m = gr.Number(
+                    value=5, minimum=0, maximum=59, step=1,
+                    label="分 (m)", precision=0, scale=1,
+                )
+                timeout_s = gr.Number(
+                    value=0, minimum=0, maximum=59, step=1,
+                    label="秒 (s)", precision=0, scale=1,
+                )
+            timeout_display = gr.Markdown("_設定値: 300秒 (5分)_")
+
+            def _update_timeout_display(h, m, s):
+                t = _calc_timeout(h, m, s)
+                if t >= 3600:
+                    label = f"{t // 3600}時間 {(t % 3600) // 60}分 {t % 60}秒"
+                elif t >= 60:
+                    label = f"{t // 60}分 {t % 60}秒"
+                else:
+                    label = f"{t}秒"
+                return f"_設定値: **{t}秒** ({label})_"
+
+            for w in (timeout_h, timeout_m, timeout_s):
+                w.change(
+                    fn=_update_timeout_display,
+                    inputs=[timeout_h, timeout_m, timeout_s],
+                    outputs=[timeout_display],
+                )
+
             gr.Markdown("### レスポンス情報")
             meta_box = gr.Markdown("_送信後に表示_")
 
@@ -260,7 +319,11 @@ def build_tab() -> gr.Dropdown:
             sources_box = gr.Markdown("_ソースなし_")
 
     # イベント接続
-    send_inputs = [msg_box, chatbot, mode_radio, use_memory_chk, use_rag_chk, provider_dd, model_box]
+    send_inputs = [
+        msg_box, chatbot, mode_radio, use_memory_chk, use_rag_chk,
+        provider_dd, model_box,
+        timeout_h, timeout_m, timeout_s,
+    ]
     send_outputs = [chatbot, meta_box, sources_box]
 
     def _on_send(message, history, mode, use_memory, use_rag, provider_choice, model_name):

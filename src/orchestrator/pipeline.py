@@ -140,7 +140,9 @@ class MEDPipeline:
 
         # ── Step 2: 外部 RAG 検索 → 保存 ───────────
         if use_rag and self._enable_rag:
-            await self._fetch_and_store_external(query, domain=domain or "general")
+            await self._fetch_and_store_external(
+                query, domain=domain or "general", provider=provider
+            )
 
         # ── Step 3: LLM レスポンス生成 ──────────────
         gen_response: GeneratedResponse = await self._response_gen.generate(
@@ -203,14 +205,17 @@ class MEDPipeline:
             teacher_id=teacher_id,
         )
 
-    async def _fetch_and_store_external(self, query: str, domain: str) -> int:
+    async def _fetch_and_store_external(
+        self, query: str, domain: str, provider: str | None = None
+    ) -> int:
         """外部 RAG 検索 → 裏どり → FAISS 保存。"""
         try:
             raw_results = await self._router.search(query, max_results=10)
             if not raw_results:
                 return 0
 
-            verified = await self._verifier.verify(raw_results, query=query)
+            # チャットで選択したプロバイダーを Verifier に伝播（未設定なら Verifier 側で可否判断）
+            verified = await self._verifier.verify(raw_results, query=query, provider=provider)
             docs = self._chunker.chunk_results(verified, domain=domain)
 
             added_ids = await self._mm.add_batch(docs)
