@@ -1,0 +1,72 @@
+# configs/query_expansion.yaml — クエリ展開パターン設定
+#
+# patterns:
+#   各パターンは正規表現。キャプチャグループ（）が展開後のサブクエリになる。
+#   _is_particle() で除外されるグループ（比較・助詞・動詞）は自動的に無視される。
+#
+# negative_signals:
+#   LLM 出力にこれらの文字列が含まれていた場合、リトライをトリガーする。
+#
+# max_expanded:
+#   展開後の最大クエリ数（元クエリを含む合計）。
+#
+# retry_max_results_per_query:
+#   リトライ時、展開クエリ1件あたりの RAG 検索数。
+
+# ── 展開パターン ──────────────────────────────────────────────────
+patterns:
+  # 日本語: AとBの比較 / AとBの違い / AとBの差
+  comparison_ja:    '(.+?)と(.+?)の(比較|違い|差|差異|相違|difference)'
+  # 日本語: AとBを比べる
+  compare_verb_ja:  '(.+?)と(.+?)(?:を|を比べ|を比較)'
+  # 日本語: A対B / A vs B（日本語混在）
+  versus_ja:        '(.+?)(?:対|vs|VS)(.+)'
+  # 英語: A vs B / A versus B
+  versus_en:        '(.+?)\s+(?:vs\.?|versus)\s+(.+)'
+  # 英語: A and B comparison / A and B difference
+  comparison_en:    '(.+?)\s+and\s+(.+?)\s+(?:comparison|difference|differences|compare)'
+  # 日本語: AとBの組み合わせ / AとBの統合 / AとBの連携
+  combined_ja:      '(.+?)と(.+?)(?:の組み合わせ|の統合|の連携|を組み合わせ)'
+  # 英語: A with B / A using B
+  using_en:         '(.+?)\s+(?:using|with)\s+(.+?)\s+(?:for|to|in)\s'
+  # 日本語: AによるB / AでのB
+  method_ja:        '(.+?)による(.+)'
+
+# ── ネガティブシグナル ────────────────────────────────────────────
+# これらが LLM 回答に含まれていた場合、リトライをトリガーする
+negative_signals:
+  # 日本語
+  - "見つかりません"
+  - "情報がありません"
+  - "不明です"
+  - "わかりません"
+  - "詳細は不明"
+  - "資料が見当たらない"
+  - "ドキュメントが見つからない"
+  - "コンテキストには含まれていません"
+  - "提供されたコンテキスト"
+  - "提供された文脈"
+  - "言及されていません"
+  - "記載がありません"
+  # English
+  - "couldn't find"
+  - "could not find"
+  - "no information"
+  - "not found"
+  - "i don't have"
+  - "i do not have"
+  - "i couldn't find"
+  - "no relevant"
+  - "unable to find"
+  - "no documents"
+  - "not mentioned"
+  - "no context"
+  - "context does not"
+  - "context doesn't"
+
+# ── 制御パラメータ ────────────────────────────────────────────────
+# 展開後の最大クエリ数（元クエリ + サブクエリの合計上限）
+max_expanded: 3
+
+# リトライ時に展開クエリ1件あたり取得する RAG 結果数
+retry_max_results_per_query: 5
