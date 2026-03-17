@@ -8,7 +8,7 @@ app:
 
 embedding:
   model: "all-MiniLM-L6-v2"
-  dim: 768
+  dim: 384
   batch_size: 64
   device: "cpu"
 

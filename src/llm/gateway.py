@@ -17,10 +17,14 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+
+import yaml
 
 from src.common.config import Settings, get_settings
 
@@ -89,8 +93,11 @@ class BaseLLMProvider(ABC):
 # ゲートウェイ
 # ============================================================================
 
-# デフォルトのフォールバック順序
-_DEFAULT_PROVIDER_ORDER = ["anthropic", "openai", "ollama"]
+# 組み込みプロバイダーのデフォルトフォールバック順序
+_BUILTIN_PROVIDER_ORDER = ["anthropic", "openai", "ollama"]
+# llm_config.yaml から primary_provider / カスタムプロバイダーを読むパス
+_LLM_CONFIG_PATH = Path(__file__).parent.parent.parent / "configs" / "llm_config.yaml"
+_KNOWN_PROVIDERS = {"anthropic", "openai", "ollama", "vllm", "azure_openai", "together"}
 
 
 class LLMGateway:
@@ -128,6 +135,49 @@ class LLMGateway:
             logger.debug(
                 "Registered provider: %s (available=%s)", provider.name, provider.is_available()
             )
+        # llm_config.yaml に保存されたカスタムプロバイダーを追加ロード
+        self._load_custom_providers()
+
+    def _load_custom_providers(self) -> None:
+        """llm_config.yaml の providers セクションからカスタムプロバイダーを登録する。
+
+        組み込み名 (anthropic, openai, ollama, vllm, azure_openai, together) 以外の
+        エントリーを OpenAICompatibleProvider として登録する。
+        type が "openai_compatible" または未指定のものが対象。
+        """
+        if not _LLM_CONFIG_PATH.exists():
+            return
+        try:
+            with open(_LLM_CONFIG_PATH, encoding="utf-8") as f:
+                cfg = yaml.safe_load(f) or {}
+            for name, conf in cfg.get("providers", {}).items():
+                if name in _KNOWN_PROVIDERS:
+                    continue
+                if not isinstance(conf, dict):
+                    continue
+                ptype = conf.get("type", "openai_compatible")
+                if ptype not in ("openai_compatible", "other"):
+                    logger.debug("Skipping custom provider %s with unsupported type %s", name, ptype)
+                    continue
+                base_url = conf.get("base_url", "")
+                if not base_url:
+                    logger.warning("Custom provider %s has no base_url; skipping", name)
+                    continue
+                from src.llm.providers.openai_compatible import OpenAICompatibleProvider
+                api_key_env = conf.get("api_key_env", "")
+                provider = OpenAICompatibleProvider(
+                    name=name,
+                    base_url=base_url,
+                    default_model=conf.get("default_model", ""),
+                    api_key_env=api_key_env,
+                )
+                self._providers[name] = provider
+                logger.info(
+                    "Loaded custom provider: %s (base_url=%s model=%s)",
+                    name, base_url, conf.get("default_model", ""),
+                )
+        except Exception:
+            logger.exception("Failed to load custom providers from %s", _LLM_CONFIG_PATH)
 
     def register(self, provider: BaseLLMProvider) -> None:
         """カスタムプロバイダを登録する。"""
@@ -225,10 +275,33 @@ class LLMGateway:
         )
 
     def _build_provider_order(self, requested: str | None) -> list[str]:
-        """試みるプロバイダ名のリストを返す。"""
+        """試みるプロバイダ名のリストを返す。
+
+        - 明示指定あり: そのプロバイダのみ（フォールバックなし）
+        - auto (None): llm_config.yaml の primary_provider を先頭に、
+          その後 _BUILTIN_PROVIDER_ORDER でフォールバック
+        """
         if requested is not None:
-            return [requested]  # 指定プロバイダのみ（フォールバックなし）
-        return list(_DEFAULT_PROVIDER_ORDER)
+            return [requested]
+
+        # llm_config.yaml から primary_provider を読み込む
+        primary: str | None = None
+        try:
+            if _LLM_CONFIG_PATH.exists():
+                with open(_LLM_CONFIG_PATH, encoding="utf-8") as f:
+                    cfg = yaml.safe_load(f) or {}
+                primary = cfg.get("primary_provider")
+        except Exception:
+            pass
+
+        if primary and primary not in _BUILTIN_PROVIDER_ORDER:
+            # カスタムプロバイダーが primary の場合はそれのみ試す
+            return [primary]
+        if primary:
+            # 組み込みプロバイダーが primary の場合は先頭に置いてフォールバック
+            order = [primary] + [p for p in _BUILTIN_PROVIDER_ORDER if p != primary]
+            return order
+        return list(_BUILTIN_PROVIDER_ORDER)
 
     @property
     def usage(self) -> dict:

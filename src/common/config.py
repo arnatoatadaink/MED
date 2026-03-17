@@ -57,7 +57,7 @@ class EmbeddingConfig(BaseModel):
     """sentence-transformers 埋め込みモデル設定。"""
 
     model: str = "all-MiniLM-L6-v2"
-    dim: int = 768
+    dim: int = 384  # all-MiniLM-L6-v2 の実出力次元
     batch_size: int = 64
     device: str = "cpu"
     cache_dir: Path | None = None
@@ -81,7 +81,7 @@ class FAISSIndexConfig(BaseModel):
     Phase 1: IndexFlatIP (Flat) → 10万件超で IVF → 100万件超で PQ 自動移行。
     """
 
-    dim: int = 768
+    dim: int = 384  # all-MiniLM-L6-v2 に合わせた実次元
     initial_type: str = "Flat"  # "Flat" | "IVF1024,Flat" | "HNSW32" etc.
     metric: str = "inner_product"  # "inner_product" | "l2"
     nprobe: int = 32
