@@ -5,14 +5,21 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import gradio as gr
 import httpx
+import yaml
 
 # オーケストレーター接続先 (configs/default.yaml の gui.orchestrator_url と合わせる)
 ORCHESTRATOR_URL = "http://localhost:8000"
 
 # Gradio メジャーバージョン (バージョン別 API 分岐に使用)
 GRADIO_MAJOR = int(gr.__version__.split(".")[0])
+
+_CONFIGS_DIR = Path(__file__).parent.parent.parent / "configs"
+_BASE_PROVIDERS = ["auto (設定ファイル依存)", "anthropic", "openai", "ollama", "vllm"]
+_KNOWN_PROVIDERS = {"anthropic", "openai", "ollama", "vllm", "azure_openai", "together"}
 
 
 def is_api_alive() -> bool:
@@ -22,3 +29,21 @@ def is_api_alive() -> bool:
         return r.status_code == 200
     except Exception:
         return False
+
+
+def get_all_provider_choices() -> list[str]:
+    """llm_config.yaml からカスタムプロバイダーを含む全プロバイダーリストを返す。
+
+    ページ初期ロード時およびカスタムプロバイダーの追加・削除後に呼び出すことで、
+    チャットタブのドロップダウンを常に最新状態に保つ。
+    """
+    try:
+        llm_path = _CONFIGS_DIR / "llm_config.yaml"
+        if llm_path.exists():
+            with open(llm_path, encoding="utf-8") as f:
+                cfg = yaml.safe_load(f) or {}
+            custom = [k for k in cfg.get("providers", {}) if k not in _KNOWN_PROVIDERS]
+            return _BASE_PROVIDERS + custom
+    except Exception:
+        pass
+    return list(_BASE_PROVIDERS)
