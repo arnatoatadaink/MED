@@ -89,6 +89,12 @@ class AddDocumentResponse(BaseModel):
     success: bool
 
 
+class SearchRequest(BaseModel):
+    query: str = Field(..., min_length=1)
+    domain: str | None = None
+    top_k: int = Field(default=5, ge=1, le=20)
+
+
 class StatsResponse(BaseModel):
     total_docs: int
     avg_confidence: float
@@ -172,6 +178,34 @@ async def delete_document(doc_id: str):
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
     return {"deleted": doc_id}
+
+
+@app.post("/search")
+async def search_memory(request: SearchRequest):
+    """FAISS メモリを検索する。"""
+    if _pipeline is None:
+        raise HTTPException(status_code=503, detail="Pipeline not initialized")
+
+    try:
+        results = await _pipeline._mm.search(
+            request.query, domain=request.domain, k=request.top_k
+        )
+    except Exception as exc:
+        logger.exception("Search failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return {
+        "results": [
+            {
+                "id": sr.document.id,
+                "content": sr.document.content[:500],
+                "score": round(sr.score, 4),
+                "domain": sr.document.domain,
+                "source": sr.document.source_url or "",
+            }
+            for sr in results
+        ]
+    }
 
 
 @app.get("/stats", response_model=StatsResponse)

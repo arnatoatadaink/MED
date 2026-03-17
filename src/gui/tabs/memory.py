@@ -25,9 +25,32 @@ def _get_memory_stats() -> dict:
     """ドメイン別メモリ統計を取得。"""
     if is_api_alive():
         try:
-            r = httpx.get(f"{ORCHESTRATOR_URL}/memory/stats", timeout=5.0)
+            r = httpx.get(f"{ORCHESTRATOR_URL}/stats", timeout=5.0)
             if r.status_code == 200:
-                return r.json()
+                raw = r.json()
+                # サーバーレスポンス { total_docs, avg_confidence, faiss_stats:{domain:count} }
+                # を GUI 期待形式 { domains:{...}, api_connected } に変換
+                faiss_stats = raw.get("faiss_stats", {})
+                avg_conf = raw.get("avg_confidence", 0.0)
+                domains = {}
+                for domain, count in faiss_stats.items():
+                    domains[domain] = {
+                        "doc_count": count,
+                        "index_type": "IndexFlatIP" if count < 10000 else "IndexIVFFlat",
+                        "avg_confidence": avg_conf,
+                        "status": "active" if count > 0 else "empty",
+                    }
+                # faiss_stats に含まれないドメインも補完
+                for domain in ["code", "academic", "general"]:
+                    if domain not in domains:
+                        domains[domain] = {
+                            "doc_count": 0,
+                            "index_type": "IndexFlatIP",
+                            "avg_confidence": 0.0,
+                            "status": "empty",
+                        }
+                return {"domains": domains, "api_connected": True,
+                        "total_docs": raw.get("total_docs", 0)}
         except Exception:
             pass
 
@@ -39,7 +62,7 @@ def _get_memory_stats() -> dict:
         count = 0
         if idx_path.exists():
             index_file = idx_path / "index.faiss"
-            count = index_file.stat().st_size // 768 // 4 if index_file.exists() else 0
+            count = index_file.stat().st_size // 384 // 4 if index_file.exists() else 0
         stats[domain] = {
             "doc_count": count,
             "index_type": "IndexFlatIP" if count < 10000 else "IndexIVFFlat",
@@ -54,7 +77,7 @@ def _search_memory(query: str, domain: str, top_k: int) -> list:
     if is_api_alive():
         try:
             r = httpx.post(
-                f"{ORCHESTRATOR_URL}/memory/search",
+                f"{ORCHESTRATOR_URL}/search",
                 json={"query": query, "domain": domain, "top_k": top_k},
                 timeout=10.0,
             )
@@ -200,8 +223,8 @@ def _add_document(content: str, domain: str, source: str) -> dict:
     if is_api_alive():
         try:
             r = httpx.post(
-                f"{ORCHESTRATOR_URL}/memory/add",
-                json={"content": content, "domain": domain, "source": source},
+                f"{ORCHESTRATOR_URL}/add",
+                json={"content": content, "domain": domain},
                 timeout=10.0,
             )
             return r.json()
