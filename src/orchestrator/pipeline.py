@@ -49,6 +49,7 @@ class QueryResponse:
     context_doc_ids: list[str] = field(default_factory=list)
     input_tokens: int = 0
     output_tokens: int = 0
+    debug_info: dict = field(default_factory=dict)
 
 
 class MEDPipeline:
@@ -139,8 +140,9 @@ class MEDPipeline:
         logger.debug("FAISS: %d results for query=%r", len(faiss_results), query[:50])
 
         # ── Step 2: 外部 RAG 検索 → 保存 ───────────
+        rag_raw_results: list = []
         if use_rag and self._enable_rag:
-            await self._fetch_and_store_external(
+            _, rag_raw_results = await self._fetch_and_store_external(
                 query, domain=domain or "general", provider=provider
             )
 
@@ -171,6 +173,32 @@ class MEDPipeline:
             except Exception:
                 logger.warning("Failed to record retrieval for doc=%s", sr.document.id)
 
+        # ── デバッグ情報 ──────────────────────────
+        debug_info = {
+            "faiss_query": query,
+            "faiss_results": [
+                {
+                    "id": sr.document.id,
+                    "content": sr.document.content[:300],
+                    "score": round(sr.score, 4),
+                    "domain": sr.document.domain,
+                    "source": sr.document.source_url or "",
+                }
+                for sr in faiss_results
+            ],
+            "rag_query": query,
+            "rag_results": [
+                {
+                    "title": getattr(r, "title", ""),
+                    "content": getattr(r, "content", "")[:300],
+                    "url": getattr(r, "url", ""),
+                    "source": getattr(r, "source", ""),
+                    "score": round(getattr(r, "score", 0.0), 4),
+                }
+                for r in rag_raw_results
+            ],
+        }
+
         return QueryResponse(
             answer=gen_response.answer,
             query=query,
@@ -183,6 +211,7 @@ class MEDPipeline:
             context_doc_ids=gen_response.context_doc_ids,
             input_tokens=gen_response.input_tokens,
             output_tokens=gen_response.output_tokens,
+            debug_info=debug_info,
         )
 
     async def add_document(
@@ -207,12 +236,16 @@ class MEDPipeline:
 
     async def _fetch_and_store_external(
         self, query: str, domain: str, provider: str | None = None
-    ) -> int:
-        """外部 RAG 検索 → 裏どり → FAISS 保存。"""
+    ) -> tuple[int, list]:
+        """外部 RAG 検索 → 裏どり → FAISS 保存。
+
+        Returns:
+            (stored_count, raw_results) — raw_results はデバッグ用の生検索結果。
+        """
         try:
             raw_results = await self._router.search(query, max_results=10)
             if not raw_results:
-                return 0
+                return 0, []
 
             # チャットで選択したプロバイダーを Verifier に伝播（未設定なら Verifier 側で可否判断）
             verified = await self._verifier.verify(raw_results, query=query, provider=provider)
@@ -220,7 +253,7 @@ class MEDPipeline:
 
             added_ids = await self._mm.add_batch(docs)
             logger.debug("External RAG: stored %d new docs", len(added_ids))
-            return len(added_ids)
+            return len(added_ids), raw_results
         except Exception:
             logger.exception("External RAG fetch failed")
-            return 0
+            return 0, []

@@ -77,6 +77,7 @@ class QueryResponseModel(BaseModel):
     output_tokens: int
     sandbox_success: bool | None = None
     sandbox_stdout: str | None = None
+    debug_info: dict | None = None
 
 
 class AddDocumentRequest(BaseModel):
@@ -151,6 +152,7 @@ async def query(request: QueryRequest):
         output_tokens=result.output_tokens,
         sandbox_success=result.sandbox_success if request.run_code else None,
         sandbox_stdout=result.sandbox_stdout if request.run_code else None,
+        debug_info=result.debug_info,
     )
 
 
