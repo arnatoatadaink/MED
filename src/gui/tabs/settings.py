@@ -434,6 +434,106 @@ def _custom_provider_names() -> list[str]:
     return list(_get_custom_providers().keys())
 
 
+async def _test_custom_provider(name: str) -> str:
+    """登録済みカスタムプロバイダーに最小限のチャット完了リクエストを送り接続を確認する。"""
+    if not name:
+        return "⚠️ テストするプロバイダーを選択してください"
+    providers = _get_custom_providers()
+    if name not in providers:
+        return f"❌ 「{name}」が見つかりません（先に追加してください）"
+
+    conf = providers[name]
+    base_url = conf.get("base_url", "")
+    model = conf.get("default_model", "")
+    api_key_env = conf.get("api_key_env", "")
+    api_key = os.environ.get(api_key_env, "not-set") if api_key_env else "not-set"
+
+    if not base_url:
+        return "❌ base_url が設定されていません"
+    if not model:
+        return "❌ default_model が設定されていません"
+
+    try:
+        import time
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(base_url=base_url, api_key=api_key)
+        start = time.monotonic()
+        resp = await client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": "Reply with only the word: OK"}],
+            max_tokens=8,
+            temperature=0.0,
+        )
+        elapsed = int((time.monotonic() - start) * 1000)
+        content = (resp.choices[0].message.content or "").strip()
+        return (
+            f"✅ **接続成功** ({elapsed} ms)\n"
+            f"- プロバイダー: `{name}`\n"
+            f"- ベースURL: `{base_url}`\n"
+            f"- モデル: `{model}`\n"
+            f"- 応答: `{content[:120]}`"
+        )
+    except ImportError:
+        return "❌ `openai` パッケージが未インストールです: `pip install openai`"
+    except Exception as exc:
+        return f"❌ **接続失敗** ({type(exc).__name__})\n```\n{str(exc)[:400]}\n```"
+
+
+async def _test_builtin_api_key(provider: str, entered_key: str = "") -> str:
+    """標準プロバイダーの API キーが有効かを最小限のリクエストで確認する。"""
+    _ENV_MAP = {
+        "anthropic": "ANTHROPIC_API_KEY",
+        "openai":    "OPENAI_API_KEY",
+        "together":  "TOGETHER_API_KEY",
+        "azure":     "AZURE_OPENAI_API_KEY",
+    }
+    env_key = _ENV_MAP.get(provider, "")
+    api_key = entered_key.strip() or os.environ.get(env_key, "")
+    if not api_key:
+        return f"⚠️ APIキーが設定されていません（環境変数: `{env_key}`）"
+
+    try:
+        import time
+
+        if provider == "anthropic":
+            import anthropic
+            client = anthropic.AsyncAnthropic(api_key=api_key)
+            start = time.monotonic()
+            await client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=5,
+                messages=[{"role": "user", "content": "Reply: OK"}],
+            )
+            elapsed = int((time.monotonic() - start) * 1000)
+            return f"✅ **Anthropic 接続成功** ({elapsed} ms)"
+
+        elif provider in ("openai", "together"):
+            from openai import AsyncOpenAI
+            _BASE = {"openai": None, "together": "https://api.together.xyz/v1"}
+            _MODEL = {
+                "openai":   "gpt-4o-mini",
+                "together": "meta-llama/Llama-3.1-8B-Instruct-Turbo",
+            }
+            client = AsyncOpenAI(api_key=api_key, base_url=_BASE[provider])
+            start = time.monotonic()
+            await client.chat.completions.create(
+                model=_MODEL[provider],
+                messages=[{"role": "user", "content": "Reply: OK"}],
+                max_tokens=5,
+            )
+            elapsed = int((time.monotonic() - start) * 1000)
+            return f"✅ **{provider} 接続成功** ({elapsed} ms)"
+
+        else:
+            return f"⚠️ `{provider}` のテストは現在未対応です"
+
+    except ImportError as exc:
+        pkg = "anthropic" if provider == "anthropic" else "openai"
+        return f"❌ `{pkg}` パッケージが未インストールです: `pip install {pkg}`"
+    except Exception as exc:
+        return f"❌ **接続失敗** ({type(exc).__name__})\n```\n{str(exc)[:400]}\n```"
+
+
 def _custom_providers_table() -> str:
     providers = _get_custom_providers()
     if not providers:
@@ -631,6 +731,22 @@ def build_tab(provider_dd: "gr.Dropdown | None" = None) -> None:
                     gr.Markdown("---\n### 登録済みカスタムプロバイダー")
                     cp_table = gr.Markdown(_custom_providers_table())
 
+                    gr.Markdown("#### 接続テスト")
+                    with gr.Row():
+                        cp_test_dd = gr.Dropdown(
+                            choices=_custom_provider_names(),
+                            label="テストするプロバイダー",
+                            scale=3,
+                        )
+                        cp_test_btn = gr.Button("🔌 接続テスト", variant="secondary", scale=1)
+                    cp_test_result = gr.Markdown()
+                    cp_test_btn.click(
+                        fn=_test_custom_provider,
+                        inputs=[cp_test_dd],
+                        outputs=[cp_test_result],
+                    )
+
+                    gr.Markdown("#### 削除")
                     with gr.Row():
                         cp_del_dd = gr.Dropdown(
                             choices=_custom_provider_names(),
@@ -640,69 +756,71 @@ def build_tab(provider_dd: "gr.Dropdown | None" = None) -> None:
                         cp_del_btn = gr.Button("削除", variant="stop", scale=1)
                     cp_del_result = gr.Markdown()
 
+                    def _names_update(names: list) -> tuple:
+                        """追加/削除後の cp_test_dd と cp_del_dd を同時更新するヘルパー。"""
+                        sel_last  = gr.update(choices=names, value=names[-1] if names else None)
+                        sel_first = gr.update(choices=names, value=names[0]  if names else None)
+                        return sel_last, sel_first  # test_dd, del_dd
+
                     if provider_dd is not None:
                         def _on_add(name, ptype, url, model, env_name, key):
                             msg = _add_custom_provider(name, ptype, url, model, env_name, key)
                             names = _custom_provider_names()
-                            all_choices = get_all_provider_choices()
+                            test_upd, del_upd = _names_update(names)
                             return (
                                 msg,
                                 _custom_providers_table(),
-                                gr.update(choices=names, value=names[-1] if names else None),
-                                gr.update(choices=all_choices),
+                                test_upd,
+                                del_upd,
+                                gr.update(choices=get_all_provider_choices()),
                             )
 
                         cp_add_btn.click(
                             fn=_on_add,
                             inputs=[cp_name, cp_type, cp_base_url, cp_model,
                                     cp_env_name, cp_api_key],
-                            outputs=[cp_add_result, cp_table, cp_del_dd, provider_dd],
+                            outputs=[cp_add_result, cp_table, cp_test_dd, cp_del_dd, provider_dd],
                         )
 
                         def _on_delete(name):
                             msg, names = _delete_custom_provider(name)
-                            all_choices = get_all_provider_choices()
+                            test_upd, del_upd = _names_update(names)
                             return (
                                 msg,
                                 _custom_providers_table(),
-                                gr.update(choices=names, value=names[0] if names else None),
-                                gr.update(choices=all_choices),
+                                test_upd,
+                                del_upd,
+                                gr.update(choices=get_all_provider_choices()),
                             )
 
                         cp_del_btn.click(
                             fn=_on_delete,
                             inputs=[cp_del_dd],
-                            outputs=[cp_del_result, cp_table, cp_del_dd, provider_dd],
+                            outputs=[cp_del_result, cp_table, cp_test_dd, cp_del_dd, provider_dd],
                         )
                     else:
                         def _on_add(name, ptype, url, model, env_name, key):
                             msg = _add_custom_provider(name, ptype, url, model, env_name, key)
                             names = _custom_provider_names()
-                            return (
-                                msg,
-                                _custom_providers_table(),
-                                gr.update(choices=names, value=names[-1] if names else None),
-                            )
+                            test_upd, del_upd = _names_update(names)
+                            return msg, _custom_providers_table(), test_upd, del_upd
 
                         cp_add_btn.click(
                             fn=_on_add,
                             inputs=[cp_name, cp_type, cp_base_url, cp_model,
                                     cp_env_name, cp_api_key],
-                            outputs=[cp_add_result, cp_table, cp_del_dd],
+                            outputs=[cp_add_result, cp_table, cp_test_dd, cp_del_dd],
                         )
 
                         def _on_delete(name):
                             msg, names = _delete_custom_provider(name)
-                            return (
-                                msg,
-                                _custom_providers_table(),
-                                gr.update(choices=names, value=names[0] if names else None),
-                            )
+                            test_upd, del_upd = _names_update(names)
+                            return msg, _custom_providers_table(), test_upd, del_upd
 
                         cp_del_btn.click(
                             fn=_on_delete,
                             inputs=[cp_del_dd],
-                            outputs=[cp_del_result, cp_table, cp_del_dd],
+                            outputs=[cp_del_result, cp_table, cp_test_dd, cp_del_dd],
                         )
 
         # ── APIキー ─────────────────────────────────────────────
@@ -710,24 +828,27 @@ def build_tab(provider_dd: "gr.Dropdown | None" = None) -> None:
             gr.Markdown(
                 "### APIキー設定\n"
                 "キーは `.env` ファイルまたは環境変数で管理します。\n"
-                "ここでの入力は**セッション中のみ有効**です（永続化しません）。"
+                "ここでの入力は**セッション中のみ有効**です（永続化しません）。\n"
+                "「テスト」ボタンで入力値（または設定済み環境変数）の有効性を確認できます。"
             )
 
-            def _key_row(label: str, env_key: str):
-                with gr.Row():
-                    current = _get_env(env_key)
-                    display = _mask(current) if current else "_(未設定)_"
-                    with gr.Column(scale=2):
-                        gr.Markdown(f"**{label}**  現在値: `{display}`")
-                    new_key = gr.Textbox(
-                        placeholder=f"{env_key} を入力…",
-                        type="password",
-                        show_label=False,
-                        scale=3,
-                    )
-                    apply_btn = gr.Button("適用", scale=1)
-                    with gr.Column(scale=2):
-                        result_md = gr.Markdown()
+            def _key_row(label: str, env_key: str, test_provider: str | None = None):
+                with gr.Group():
+                    with gr.Row():
+                        current = _get_env(env_key)
+                        display = _mask(current) if current else "_(未設定)_"
+                        with gr.Column(scale=2):
+                            gr.Markdown(f"**{label}**  現在値: `{display}`")
+                        new_key = gr.Textbox(
+                            placeholder=f"{env_key} を入力…",
+                            type="password",
+                            show_label=False,
+                            scale=3,
+                        )
+                        apply_btn = gr.Button("適用", scale=1)
+                        if test_provider:
+                            test_btn = gr.Button("🔌 テスト", variant="secondary", scale=1)
+                    result_md = gr.Markdown()
 
                     def _apply(value, _env=env_key):
                         if value.strip():
@@ -737,10 +858,15 @@ def build_tab(provider_dd: "gr.Dropdown | None" = None) -> None:
 
                     apply_btn.click(fn=_apply, inputs=[new_key], outputs=[result_md])
 
-            _key_row("Anthropic API Key",  "ANTHROPIC_API_KEY")
-            _key_row("OpenAI API Key",     "OPENAI_API_KEY")
+                    if test_provider:
+                        async def _do_test(value, _prov=test_provider):
+                            return await _test_builtin_api_key(_prov, value)
+                        test_btn.click(fn=_do_test, inputs=[new_key], outputs=[result_md])
+
+            _key_row("Anthropic API Key",  "ANTHROPIC_API_KEY",  test_provider="anthropic")
+            _key_row("OpenAI API Key",     "OPENAI_API_KEY",     test_provider="openai")
             _key_row("Azure OpenAI Key",   "AZURE_OPENAI_API_KEY")
-            _key_row("Together.ai Key",    "TOGETHER_API_KEY")
+            _key_row("Together.ai Key",    "TOGETHER_API_KEY",   test_provider="together")
             _key_row("GitHub Token",       "GITHUB_TOKEN")
             _key_row("Tavily API Key",     "TAVILY_API_KEY")
             _key_row("Stack Overflow Key", "STACKOVERFLOW_API_KEY")
