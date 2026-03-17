@@ -643,8 +643,14 @@ def build_tab(provider_dd: "gr.Dropdown | None" = None) -> None:
                     if provider_dd is not None:
                         def _on_add(name, ptype, url, model, env_name, key):
                             msg = _add_custom_provider(name, ptype, url, model, env_name, key)
+                            names = _custom_provider_names()
                             all_choices = get_all_provider_choices()
-                            return msg, _custom_providers_table(), _custom_provider_names(), gr.update(choices=all_choices)
+                            return (
+                                msg,
+                                _custom_providers_table(),
+                                gr.update(choices=names, value=names[-1] if names else None),
+                                gr.update(choices=all_choices),
+                            )
 
                         cp_add_btn.click(
                             fn=_on_add,
@@ -656,7 +662,12 @@ def build_tab(provider_dd: "gr.Dropdown | None" = None) -> None:
                         def _on_delete(name):
                             msg, names = _delete_custom_provider(name)
                             all_choices = get_all_provider_choices()
-                            return msg, _custom_providers_table(), names, gr.update(choices=all_choices)
+                            return (
+                                msg,
+                                _custom_providers_table(),
+                                gr.update(choices=names, value=names[0] if names else None),
+                                gr.update(choices=all_choices),
+                            )
 
                         cp_del_btn.click(
                             fn=_on_delete,
@@ -666,7 +677,12 @@ def build_tab(provider_dd: "gr.Dropdown | None" = None) -> None:
                     else:
                         def _on_add(name, ptype, url, model, env_name, key):
                             msg = _add_custom_provider(name, ptype, url, model, env_name, key)
-                            return msg, _custom_providers_table(), _custom_provider_names()
+                            names = _custom_provider_names()
+                            return (
+                                msg,
+                                _custom_providers_table(),
+                                gr.update(choices=names, value=names[-1] if names else None),
+                            )
 
                         cp_add_btn.click(
                             fn=_on_add,
@@ -677,7 +693,11 @@ def build_tab(provider_dd: "gr.Dropdown | None" = None) -> None:
 
                         def _on_delete(name):
                             msg, names = _delete_custom_provider(name)
-                            return msg, _custom_providers_table(), names
+                            return (
+                                msg,
+                                _custom_providers_table(),
+                                gr.update(choices=names, value=names[0] if names else None),
+                            )
 
                         cp_del_btn.click(
                             fn=_on_delete,
