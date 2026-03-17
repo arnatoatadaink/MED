@@ -114,6 +114,62 @@ def _format_sources(sources: list) -> str:
     return "\n".join(lines)
 
 
+def _build_debug_md(debug_info: dict | None) -> str:
+    """デバッグ情報を Markdown に変換する（4セクション）。"""
+    if not debug_info:
+        return "_チャット送信後に表示されます_"
+
+    lines: list[str] = []
+
+    # ── 1. FAISS 検索キー ──────────────────────────
+    lines.append("### 1. FAISS 検索キー")
+    lines.append(f"```\n{debug_info.get('faiss_query', '—')}\n```")
+
+    # ── 2. FAISS 検索結果 ──────────────────────────
+    lines.append("### 2. FAISS 検索結果")
+    faiss_results = debug_info.get("faiss_results", [])
+    if not faiss_results:
+        lines.append("_結果なし（メモリが空またはメモリ使用OFF）_")
+    else:
+        for i, r in enumerate(faiss_results, 1):
+            score = r.get("score", 0.0)
+            domain = r.get("domain", "")
+            doc_id = r.get("id", "")
+            source = r.get("source", "")
+            content = r.get("content", "")
+            lines.append(
+                f"**[{i}]** スコア `{score:.4f}` | ドメイン `{domain}` | "
+                f"ID `{doc_id[:8]}…`{' | ' + source if source else ''}"
+            )
+            lines.append(f"> {content[:200]}{'…' if len(content) > 200 else ''}")
+            lines.append("")
+
+    # ── 3. 外部 RAG 検索キー ───────────────────────
+    lines.append("### 3. 外部 RAG 検索キー")
+    lines.append(f"```\n{debug_info.get('rag_query', '—')}\n```")
+
+    # ── 4. 外部 RAG 検索結果 ───────────────────────
+    lines.append("### 4. 外部 RAG 検索結果")
+    rag_results = debug_info.get("rag_results", [])
+    if not rag_results:
+        lines.append("_結果なし（外部 RAG OFF または API キー未設定）_")
+    else:
+        for i, r in enumerate(rag_results, 1):
+            title = r.get("title", "untitled")
+            url = r.get("url", "")
+            src = r.get("source", "")
+            score = r.get("score", 0.0)
+            content = r.get("content", "")
+            title_link = f"[{title}]({url})" if url else title
+            lines.append(
+                f"**[{i}]** {title_link} | ソース `{src}` | スコア `{score:.4f}`"
+            )
+            lines.append(f"> {content[:200]}{'…' if len(content) > 200 else ''}")
+            lines.append("")
+
+    return "\n".join(lines)
+
+
 def respond(
     message: str,
     history: list,
@@ -125,10 +181,10 @@ def respond(
     timeout_h: int,
     timeout_m: int,
     timeout_s: int,
-) -> Generator[tuple[list, str, str], None, None]:
+) -> Generator[tuple[list, str, str, str], None, None]:
     """Gradio チャット用ストリーミング風ジェネレータ。"""
     if not message.strip():
-        yield history, "", "_入力が空です_"
+        yield history, "", "_入力が空です_", ""
         return
 
     timeout_seconds = _calc_timeout(timeout_h, timeout_m, timeout_s)
@@ -145,7 +201,7 @@ def respond(
         ]
     else:
         thinking_history = history + [(message, "⏳ 処理中…")]
-    yield thinking_history, "", ""
+    yield thinking_history, "", "", ""
 
     try:
         if is_api_alive():
@@ -176,6 +232,7 @@ def respond(
         f"プロバイダー: `{provider_used}` | モデル: `{model_used}`  \n"
         f"トークン: ↑{in_tok} ↓{out_tok} | コンテキスト: {ctx_count}件"
     )
+    debug_md = _build_debug_md(result.get("debug_info"))
 
     if GRADIO_MAJOR >= 6:
         new_history = history + [
@@ -184,7 +241,7 @@ def respond(
         ]
     else:
         new_history = history + [(message, answer)]
-    yield new_history, meta, sources_md
+    yield new_history, meta, sources_md, debug_md
 
 
 # ────────────────────────────────────────────────────────────────
@@ -318,19 +375,27 @@ def build_tab() -> gr.Dropdown:
             gr.Markdown("### 参照ソース")
             sources_box = gr.Markdown("_ソースなし_")
 
+    # ── デバッグアコーディオン（チャット下） ──────────────────
+    with gr.Accordion("🔍 デバッグ情報（検索キー・検索結果）", open=False):
+        gr.Markdown(
+            "_チャット送信後に FAISS / 外部 RAG の検索キーと結果が表示されます。_  \n"
+            "_コンテキストが不適切な場合の原因調査にご利用ください。_"
+        )
+        debug_md = gr.Markdown("_チャット送信後に表示されます_")
+
     # イベント接続
     send_inputs = [
         msg_box, chatbot, mode_radio, use_memory_chk, use_rag_chk,
         provider_dd, model_box,
         timeout_h, timeout_m, timeout_s,
     ]
-    send_outputs = [chatbot, meta_box, sources_box]
+    send_outputs = [chatbot, meta_box, sources_box, debug_md]
 
     def _on_send(message, history, mode, use_memory, use_rag, provider_choice, model_name,
                  t_h, t_m, t_s):
         for update in respond(message, history, mode, use_memory, use_rag, provider_choice,
                                model_name, t_h, t_m, t_s):
-            yield update[0], update[1], update[2]
+            yield update[0], update[1], update[2], update[3]
 
     send_btn.click(
         fn=_on_send,
@@ -344,6 +409,9 @@ def build_tab() -> gr.Dropdown:
         outputs=send_outputs,
     ).then(fn=lambda: "", outputs=[msg_box])
 
-    clear_btn.click(fn=lambda: ([], "", "_ソースなし_"), outputs=[chatbot, meta_box, sources_box])
+    clear_btn.click(
+        fn=lambda: ([], "", "_ソースなし_", "_チャット送信後に表示されます_"),
+        outputs=[chatbot, meta_box, sources_box, debug_md],
+    )
 
     return provider_dd
