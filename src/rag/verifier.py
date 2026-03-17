@@ -56,6 +56,7 @@ class ResultVerifier:
         results: list[RawResult],
         query: str,
         max_concurrency: int = 5,
+        provider: str | None = None,
     ) -> list[RawResult]:
         """検索結果を LLM で検証し、関連するものだけ返す。
 
@@ -74,6 +75,23 @@ class ResultVerifier:
             logger.debug("Verifier: no gateway, passing all %d results", len(results))
             return results
 
+        # 利用可能なプロバイダーがなければ検証をスキップ（エラーを出さない）
+        available = self._gateway.available_providers()
+        # 呼び出し元から明示的に渡された provider を優先、なければ初期化時指定を使用
+        effective_provider = provider or self._provider
+        if not available and effective_provider is None:
+            logger.debug(
+                "Verifier: no available LLM providers, passing all %d results through",
+                len(results),
+            )
+            return results
+        if effective_provider and effective_provider not in available:
+            logger.debug(
+                "Verifier: provider %r not available, passing all %d results through",
+                effective_provider, len(results),
+            )
+            return results
+
         import asyncio
 
         semaphore = asyncio.Semaphore(max_concurrency)
@@ -81,10 +99,10 @@ class ResultVerifier:
         async def _check(result: RawResult) -> RawResult | None:
             async with semaphore:
                 try:
-                    relevant = await self._is_relevant(result, query)
+                    relevant = await self._is_relevant(result, query, provider=effective_provider)
                     return result if relevant else None
                 except Exception:
-                    logger.exception(
+                    logger.warning(
                         "Verifier failed for url=%s; passing through", result.url
                     )
                     return result  # 検証失敗時は通過させる
@@ -99,7 +117,12 @@ class ResultVerifier:
         )
         return verified
 
-    async def _is_relevant(self, result: RawResult, query: str) -> bool:
+    async def _is_relevant(
+        self,
+        result: RawResult,
+        query: str,
+        provider: str | None = None,
+    ) -> bool:
         """単一の検索結果が関連するかを LLM で判定する。"""
         assert self._gateway is not None
 
@@ -112,7 +135,7 @@ class ResultVerifier:
 
         response = await self._gateway.complete(
             prompt,
-            provider=self._provider,
+            provider=provider,
             max_tokens=10,
             temperature=0.0,
         )
