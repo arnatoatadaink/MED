@@ -114,8 +114,48 @@ def _format_sources(sources: list) -> str:
     return "\n".join(lines)
 
 
+def _fmt_faiss_results(results: list, empty_msg: str) -> list[str]:
+    """FAISS 検索結果リストを Markdown 行リストに変換する。"""
+    if not results:
+        return [empty_msg]
+    lines = []
+    for i, r in enumerate(results, 1):
+        score = r.get("score", 0.0)
+        domain = r.get("domain", "")
+        doc_id = r.get("id", "")
+        source = r.get("source", "")
+        content = r.get("content", "")
+        lines.append(
+            f"**[{i}]** スコア `{score:.4f}` | ドメイン `{domain}` | "
+            f"ID `{doc_id[:8]}…`{' | ' + source if source else ''}"
+        )
+        lines.append(f"> {content[:200]}{'…' if len(content) > 200 else ''}")
+        lines.append("")
+    return lines
+
+
+def _fmt_rag_results(results: list, empty_msg: str) -> list[str]:
+    """外部 RAG 検索結果リストを Markdown 行リストに変換する。"""
+    if not results:
+        return [empty_msg]
+    lines = []
+    for i, r in enumerate(results, 1):
+        title = r.get("title", "untitled")
+        url = r.get("url", "")
+        src = r.get("source", "")
+        score = r.get("score", 0.0)
+        content = r.get("content", "")
+        title_link = f"[{title}]({url})" if url else title
+        lines.append(
+            f"**[{i}]** {title_link} | ソース `{src}` | スコア `{score:.4f}`"
+        )
+        lines.append(f"> {content[:200]}{'…' if len(content) > 200 else ''}")
+        lines.append("")
+    return lines
+
+
 def _build_debug_md(debug_info: dict | None) -> str:
-    """デバッグ情報を Markdown に変換する（4セクション）。"""
+    """デバッグ情報を Markdown に変換する（4 + リトライセクション）。"""
     if not debug_info:
         return "_チャット送信後に表示されます_"
 
@@ -127,22 +167,10 @@ def _build_debug_md(debug_info: dict | None) -> str:
 
     # ── 2. FAISS 検索結果 ──────────────────────────
     lines.append("### 2. FAISS 検索結果")
-    faiss_results = debug_info.get("faiss_results", [])
-    if not faiss_results:
-        lines.append("_結果なし（メモリが空またはメモリ使用OFF）_")
-    else:
-        for i, r in enumerate(faiss_results, 1):
-            score = r.get("score", 0.0)
-            domain = r.get("domain", "")
-            doc_id = r.get("id", "")
-            source = r.get("source", "")
-            content = r.get("content", "")
-            lines.append(
-                f"**[{i}]** スコア `{score:.4f}` | ドメイン `{domain}` | "
-                f"ID `{doc_id[:8]}…`{' | ' + source if source else ''}"
-            )
-            lines.append(f"> {content[:200]}{'…' if len(content) > 200 else ''}")
-            lines.append("")
+    lines.extend(_fmt_faiss_results(
+        debug_info.get("faiss_results", []),
+        "_結果なし（メモリが空またはメモリ使用OFF）_",
+    ))
 
     # ── 3. 外部 RAG 検索キー ───────────────────────
     lines.append("### 3. 外部 RAG 検索キー")
@@ -150,22 +178,28 @@ def _build_debug_md(debug_info: dict | None) -> str:
 
     # ── 4. 外部 RAG 検索結果 ───────────────────────
     lines.append("### 4. 外部 RAG 検索結果")
-    rag_results = debug_info.get("rag_results", [])
-    if not rag_results:
-        lines.append("_結果なし（外部 RAG OFF または API キー未設定）_")
-    else:
-        for i, r in enumerate(rag_results, 1):
-            title = r.get("title", "untitled")
-            url = r.get("url", "")
-            src = r.get("source", "")
-            score = r.get("score", 0.0)
-            content = r.get("content", "")
-            title_link = f"[{title}]({url})" if url else title
-            lines.append(
-                f"**[{i}]** {title_link} | ソース `{src}` | スコア `{score:.4f}`"
-            )
-            lines.append(f"> {content[:200]}{'…' if len(content) > 200 else ''}")
-            lines.append("")
+    lines.extend(_fmt_rag_results(
+        debug_info.get("rag_results", []),
+        "_結果なし（外部 RAG OFF または API キー未設定）_",
+    ))
+
+    # ── 5. CRAG リトライ（発生時のみ） ─────────────
+    if debug_info.get("retry_triggered"):
+        expanded = debug_info.get("expanded_queries", [])
+        lines.append("---")
+        lines.append("### ♻️ CRAG リトライ発生")
+        lines.append(f"**展開クエリ**: {' / '.join(f'`{q}`' for q in expanded)}")
+        lines.append("")
+        lines.append("#### 5a. リトライ後 FAISS 検索結果")
+        lines.extend(_fmt_faiss_results(
+            debug_info.get("retry_faiss_results", []),
+            "_結果なし_",
+        ))
+        lines.append("#### 5b. リトライ外部 RAG 検索結果")
+        lines.extend(_fmt_rag_results(
+            debug_info.get("retry_rag_results", []),
+            "_結果なし_",
+        ))
 
     return "\n".join(lines)
 

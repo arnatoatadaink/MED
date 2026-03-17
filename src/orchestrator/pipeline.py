@@ -27,6 +27,7 @@ from src.memory.iterative_retrieval import IterativeRetriever
 from src.memory.memory_manager import MemoryManager
 from src.memory.schema import SearchResult
 from src.rag.chunker import Chunker
+from src.rag.query_expander import QueryExpander
 from src.rag.retriever import RetrieverRouter
 from src.rag.verifier import ResultVerifier
 from src.sandbox.manager import SandboxManager
@@ -85,6 +86,7 @@ class MEDPipeline:
         self._response_gen = ResponseGenerator(self._gateway)
         self._code_gen = CodeGenerator(self._gateway)
         self._iterative = IterativeRetriever(self._mm, self._mm.embedder)
+        self._expander = QueryExpander()
 
         self._enable_rag = enable_external_rag
         self._enable_sandbox = enable_sandbox
@@ -151,6 +153,45 @@ class MEDPipeline:
             query, context_docs=faiss_results, provider=provider, model=model
         )
 
+        # ── Step 3.5: CRAG リトライ（情報不足の場合） ─
+        retry_triggered = False
+        expanded_queries: list[str] = []
+        retry_faiss_results: list[SearchResult] = []
+        retry_rag_results: list = []
+
+        if use_rag and self._enable_rag and self._expander.is_negative(gen_response.answer):
+            expanded = self._expander.expand(query)
+            # 元クエリのみの場合（展開なし）はリトライ不要
+            new_queries = [q for q in expanded if q != query]
+            if new_queries:
+                retry_triggered = True
+                expanded_queries = expanded
+                logger.info(
+                    "CRAG retry triggered for query=%r → expanded=%s",
+                    query[:60], expanded_queries,
+                )
+                # 展開クエリごとに外部 RAG を追加取得
+                for sub_q in new_queries:
+                    _, sub_raw = await self._fetch_and_store_external(
+                        sub_q,
+                        domain=domain or "general",
+                        provider=provider,
+                        max_results=self._expander.retry_max_results,
+                    )
+                    retry_rag_results.extend(sub_raw)
+
+                # FAISS を再検索（新規ドキュメントが追加されているので結果が変わる可能性あり）
+                retry_faiss_results = await self._mm.search(query, domain=domain, k=k)
+
+                # LLM を再実行
+                gen_response = await self._response_gen.generate(
+                    query, context_docs=retry_faiss_results, provider=provider, model=model
+                )
+                logger.debug(
+                    "CRAG retry complete: faiss=%d docs, rag_new=%d docs",
+                    len(retry_faiss_results), len(retry_rag_results),
+                )
+
         # ── Step 4: コード生成 + Sandbox 実行 ─────
         code_result: CodeResult | None = None
         sandbox_stdout = ""
@@ -174,30 +215,35 @@ class MEDPipeline:
                 logger.warning("Failed to record retrieval for doc=%s", sr.document.id)
 
         # ── デバッグ情報 ──────────────────────────
-        debug_info = {
+        def _sr_to_dict(sr: SearchResult) -> dict:
+            return {
+                "id": sr.document.id,
+                "content": sr.document.content[:300],
+                "score": round(sr.score, 4),
+                "domain": sr.document.domain,
+                "source": sr.document.source_url or "",
+            }
+
+        def _raw_to_dict(r: object) -> dict:
+            return {
+                "title": getattr(r, "title", ""),
+                "content": getattr(r, "content", "")[:300],
+                "url": getattr(r, "url", ""),
+                "source": getattr(r, "source", ""),
+                "score": round(getattr(r, "score", 0.0), 4),
+            }
+
+        debug_info: dict = {
             "faiss_query": query,
-            "faiss_results": [
-                {
-                    "id": sr.document.id,
-                    "content": sr.document.content[:300],
-                    "score": round(sr.score, 4),
-                    "domain": sr.document.domain,
-                    "source": sr.document.source_url or "",
-                }
-                for sr in faiss_results
-            ],
+            "faiss_results": [_sr_to_dict(sr) for sr in faiss_results],
             "rag_query": query,
-            "rag_results": [
-                {
-                    "title": getattr(r, "title", ""),
-                    "content": getattr(r, "content", "")[:300],
-                    "url": getattr(r, "url", ""),
-                    "source": getattr(r, "source", ""),
-                    "score": round(getattr(r, "score", 0.0), 4),
-                }
-                for r in rag_raw_results
-            ],
+            "rag_results": [_raw_to_dict(r) for r in rag_raw_results],
+            "retry_triggered": retry_triggered,
         }
+        if retry_triggered:
+            debug_info["expanded_queries"] = expanded_queries
+            debug_info["retry_faiss_results"] = [_sr_to_dict(sr) for sr in retry_faiss_results]
+            debug_info["retry_rag_results"] = [_raw_to_dict(r) for r in retry_rag_results]
 
         return QueryResponse(
             answer=gen_response.answer,
@@ -235,15 +281,25 @@ class MEDPipeline:
         )
 
     async def _fetch_and_store_external(
-        self, query: str, domain: str, provider: str | None = None
+        self,
+        query: str,
+        domain: str,
+        provider: str | None = None,
+        max_results: int = 10,
     ) -> tuple[int, list]:
         """外部 RAG 検索 → 裏どり → FAISS 保存。
+
+        Args:
+            query:       検索クエリ。
+            domain:      FAISS 保存ドメイン。
+            provider:    LLM プロバイダー（Verifier 用）。
+            max_results: 取得する最大件数（リトライ時は小さくする）。
 
         Returns:
             (stored_count, raw_results) — raw_results はデバッグ用の生検索結果。
         """
         try:
-            raw_results = await self._router.search(query, max_results=10)
+            raw_results = await self._router.search(query, max_results=max_results)
             if not raw_results:
                 return 0, []
 
