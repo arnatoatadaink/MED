@@ -153,22 +153,31 @@ class MEDPipeline:
             query, context_docs=faiss_results, provider=provider, model=model
         )
 
-        # ── Step 3.5: CRAG リトライ（情報不足の場合） ─
+        # ── Step 3.5: CRAG リトライ ─────────────────
+        # トリガー条件（いずれか）:
+        #   (A) LLM 回答にネガティブシグナルが含まれる
+        #   (B) FAISS 結果が閾値未満 かつ クエリが複合形（expand が新クエリを生成）
         retry_triggered = False
         expanded_queries: list[str] = []
         retry_faiss_results: list[SearchResult] = []
         retry_rag_results: list = []
 
-        if use_rag and self._enable_rag and self._expander.is_negative(gen_response.answer):
+        if use_rag and self._enable_rag:
             expanded = self._expander.expand(query)
-            # 元クエリのみの場合（展開なし）はリトライ不要
             new_queries = [q for q in expanded if q != query]
-            if new_queries:
+
+            is_negative = self._expander.is_negative(gen_response.answer)
+            min_faiss = self._expander.crag_min_faiss
+            is_sparse = min_faiss > 0 and len(faiss_results) < min_faiss
+            should_retry = bool(new_queries) and (is_negative or is_sparse)
+
+            if should_retry:
                 retry_triggered = True
                 expanded_queries = expanded
+                trigger_reason = "negative_signal" if is_negative else "sparse_faiss"
                 logger.info(
-                    "CRAG retry triggered for query=%r → expanded=%s",
-                    query[:60], expanded_queries,
+                    "CRAG retry triggered (reason=%s, faiss_count=%d) for query=%r → %s",
+                    trigger_reason, len(faiss_results), query[:60], expanded_queries,
                 )
                 # 展開クエリごとに外部 RAG を追加取得
                 for sub_q in new_queries:
