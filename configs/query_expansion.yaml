@@ -14,23 +14,50 @@
 #   リトライ時、展開クエリ1件あたりの RAG 検索数。
 
 # ── 展開パターン ──────────────────────────────────────────────────
+# 優先順位: 上のパターンが先にマッチした場合、それ以降はスキップされる。
+# 具体的・限定的なパターンを上に、汎用パターンを下に配置すること。
 patterns:
-  # 日本語: AとBの比較 / AとBの違い / AとBの差
-  comparison_ja:    '(.+?)と(.+?)の(比較|違い|差|差異|相違|difference)'
+  # ────────────────────────────────────────────────────────────────
+  # 日本語: 「X とは ... Y との違い/比較」形（最優先）
+  #   例: "TinyLoRA とはどのような技術ですか？通常の LoRA との違いを教えてください"
+  #       → group1="TinyLoRA", group2="LoRA"
+  #   ※ \s*との で "LoRA との" のスペースを許容
+  # ────────────────────────────────────────────────────────────────
+  toha_difference_ja: '(\S+)\s*とは.*?(\S+)\s*との(?:違い|比較|差異)'
+
+  # 日本語: 「X について ... Y との違い/比較」形
+  #   例: "Transformerについて、CNNとの違いを教えて"
+  #       → group1="Transformer", group2="CNN"
+  #   ※ \s*との で "CNN との" のスペースを許容
+  about_difference_ja: '(\S+)について.*?(\S+)\s*との(?:違い|比較|差異)'
+
+  # ────────────────────────────────────────────────────────────────
+  # 日本語: AとBの比較 / AとBの違い / AとBの差（単純形）
+  #   例: "TinyLoRAとLoRAの比較"
+  #   ※ 上記2パターンにマッチしなかった場合のみ到達
+  # ────────────────────────────────────────────────────────────────
+  comparison_ja:    '(\S+)と(\S+)の(比較|違い|差|差異|相違|difference)'
+
   # 日本語: AとBを比べる
-  compare_verb_ja:  '(.+?)と(.+?)(?:を|を比べ|を比較)'
+  compare_verb_ja:  '(\S+)と(\S+)(?:を比べ|を比較)'
+
   # 日本語: A対B / A vs B（日本語混在）
-  versus_ja:        '(.+?)(?:対|vs|VS)(.+)'
+  versus_ja:        '(\S+)(?:対|vs|VS)(\S+)'
+
   # 英語: A vs B / A versus B
-  versus_en:        '(.+?)\s+(?:vs\.?|versus)\s+(.+)'
+  versus_en:        '(\S+)\s+(?:vs\.?|versus)\s+(\S+)'
+
   # 英語: A and B comparison / A and B difference
-  comparison_en:    '(.+?)\s+and\s+(.+?)\s+(?:comparison|difference|differences|compare)'
+  comparison_en:    '(\S+)\s+and\s+(\S+)\s+(?:comparison|difference|differences|compare)'
+
   # 日本語: AとBの組み合わせ / AとBの統合 / AとBの連携
-  combined_ja:      '(.+?)と(.+?)(?:の組み合わせ|の統合|の連携|を組み合わせ)'
-  # 英語: A with B / A using B
-  using_en:         '(.+?)\s+(?:using|with)\s+(.+?)\s+(?:for|to|in)\s'
-  # 日本語: AによるB / AでのB
-  method_ja:        '(.+?)による(.+)'
+  combined_ja:      '(\S+)と(\S+)(?:の組み合わせ|の統合|の連携|を組み合わせ)'
+
+  # 英語: A using B for C / A with B for C
+  using_en:         '(\S+)\s+(?:using|with)\s+(\S+)\s+(?:for|to|in)\s'
+
+  # 日本語: AによるB
+  method_ja:        '(\S+)による(\S+)'
 
 # ── ネガティブシグナル ────────────────────────────────────────────
 # これらが LLM 回答に含まれていた場合、リトライをトリガーする
@@ -70,3 +97,8 @@ max_expanded: 3
 
 # リトライ時に展開クエリ1件あたり取得する RAG 結果数
 retry_max_results_per_query: 5
+
+# FAISS 結果がこの件数未満 かつ クエリが複合形（expand が新クエリを生成）の場合、
+# LLM 回答の内容によらず CRAG リトライをトリガーする。
+# 0 に設定すると FAISS スパース判定を無効化し、is_negative のみでトリガーする。
+crag_min_faiss: 2

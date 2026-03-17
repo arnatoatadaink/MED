@@ -56,6 +56,7 @@ class QueryExpander:
         self._negative_signals: list[str] = []
         self._max_expanded: int = 3
         self._retry_max_results: int = 5
+        self._crag_min_faiss: int = 2
         self._load_config()
 
     # ── 設定管理 ─────────────────────────────────────────────────
@@ -74,6 +75,7 @@ class QueryExpander:
             ]
             self._max_expanded = int(cfg.get("max_expanded", 3))
             self._retry_max_results = int(cfg.get("retry_max_results_per_query", 5))
+            self._crag_min_faiss = int(cfg.get("crag_min_faiss", 2))
             logger.debug(
                 "QueryExpander loaded: %d patterns, %d signals",
                 len(self._compiled), len(self._negative_signals),
@@ -115,12 +117,13 @@ class QueryExpander:
             m = pattern.search(q)
             if not m:
                 continue
-            # キャプチャグループから助詞・比較語を除去
+            # キャプチャグループから助詞・比較語を除去し、句読点もクリーニング
             terms = [
-                g.strip()
+                self._clean_term(g.strip())
                 for g in m.groups()
                 if g and g.strip() and not self._is_particle(g.strip())
             ]
+            terms = [t for t in terms if t]  # クリーニング後に空文字になったものを除去
             if len(terms) < 2:
                 continue
             # terms + 結合クエリ（重複除去・順序保持）
@@ -151,7 +154,20 @@ class QueryExpander:
         """リトライ時に展開クエリ1件あたり取得する RAG 結果数。"""
         return self._retry_max_results
 
+    @property
+    def crag_min_faiss(self) -> int:
+        """FAISS 結果がこの件数未満 かつ 複合クエリのとき CRAG をトリガーする閾値。"""
+        return self._crag_min_faiss
+
     # ── 内部ヘルパー ─────────────────────────────────────────────
+
+    @staticmethod
+    def _clean_term(text: str) -> str:
+        """テキスト先頭・末尾の句読点・記号を除去する。
+
+        例: "、CNN" → "CNN", "LoRA。" → "LoRA"
+        """
+        return text.strip("、。！？…・「」『』【】()（）[]{}:：!?，,;；")
 
     @staticmethod
     def _is_particle(text: str) -> bool:
