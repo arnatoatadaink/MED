@@ -326,8 +326,10 @@ def build_tab() -> gr.Dropdown:
     ]
     send_outputs = [chatbot, meta_box, sources_box]
 
-    def _on_send(message, history, mode, use_memory, use_rag, provider_choice, model_name):
-        for update in respond(message, history, mode, use_memory, use_rag, provider_choice, model_name):
+    def _on_send(message, history, mode, use_memory, use_rag, provider_choice, model_name,
+                 t_h, t_m, t_s):
+        for update in respond(message, history, mode, use_memory, use_rag, provider_choice,
+                               model_name, t_h, t_m, t_s):
             yield update[0], update[1], update[2]
 
     send_btn.click(
