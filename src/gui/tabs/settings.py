@@ -13,6 +13,8 @@ from pathlib import Path
 import gradio as gr
 import yaml
 
+from src.gui.utils import get_all_provider_choices
+
 _PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 _CONFIGS_DIR = _PROJECT_ROOT / "configs"
 _ENV_FILE = _PROJECT_ROOT / ".env"
@@ -456,8 +458,13 @@ def _custom_providers_table() -> str:
 _THEME_NAMES = ["MED Dark", "Soft Light", "Ocean Dark", "Monochrome", "Forest"]
 
 
-def build_tab() -> None:
-    """Gradio Blocks コンテキスト内で設定タブを描画する。"""
+def build_tab(provider_dd: "gr.Dropdown | None" = None) -> None:
+    """Gradio Blocks コンテキスト内で設定タブを描画する。
+
+    Args:
+        provider_dd: チャットタブのプロバイダードロップダウン。
+                     渡すとカスタムプロバイダーの追加/削除時に自動で選択肢が同期される。
+    """
 
     with gr.Tabs():
 
@@ -633,26 +640,50 @@ def build_tab() -> None:
                         cp_del_btn = gr.Button("削除", variant="stop", scale=1)
                     cp_del_result = gr.Markdown()
 
-                    def _on_add(name, ptype, url, model, env_name, key):
-                        msg = _add_custom_provider(name, ptype, url, model, env_name, key)
-                        return msg, _custom_providers_table(), _custom_provider_names()
+                    if provider_dd is not None:
+                        def _on_add(name, ptype, url, model, env_name, key):
+                            msg = _add_custom_provider(name, ptype, url, model, env_name, key)
+                            all_choices = get_all_provider_choices()
+                            return msg, _custom_providers_table(), _custom_provider_names(), gr.update(choices=all_choices)
 
-                    cp_add_btn.click(
-                        fn=_on_add,
-                        inputs=[cp_name, cp_type, cp_base_url, cp_model,
-                                cp_env_name, cp_api_key],
-                        outputs=[cp_add_result, cp_table, cp_del_dd],
-                    )
+                        cp_add_btn.click(
+                            fn=_on_add,
+                            inputs=[cp_name, cp_type, cp_base_url, cp_model,
+                                    cp_env_name, cp_api_key],
+                            outputs=[cp_add_result, cp_table, cp_del_dd, provider_dd],
+                        )
 
-                    def _on_delete(name):
-                        msg, names = _delete_custom_provider(name)
-                        return msg, _custom_providers_table(), names
+                        def _on_delete(name):
+                            msg, names = _delete_custom_provider(name)
+                            all_choices = get_all_provider_choices()
+                            return msg, _custom_providers_table(), names, gr.update(choices=all_choices)
 
-                    cp_del_btn.click(
-                        fn=_on_delete,
-                        inputs=[cp_del_dd],
-                        outputs=[cp_del_result, cp_table, cp_del_dd],
-                    )
+                        cp_del_btn.click(
+                            fn=_on_delete,
+                            inputs=[cp_del_dd],
+                            outputs=[cp_del_result, cp_table, cp_del_dd, provider_dd],
+                        )
+                    else:
+                        def _on_add(name, ptype, url, model, env_name, key):
+                            msg = _add_custom_provider(name, ptype, url, model, env_name, key)
+                            return msg, _custom_providers_table(), _custom_provider_names()
+
+                        cp_add_btn.click(
+                            fn=_on_add,
+                            inputs=[cp_name, cp_type, cp_base_url, cp_model,
+                                    cp_env_name, cp_api_key],
+                            outputs=[cp_add_result, cp_table, cp_del_dd],
+                        )
+
+                        def _on_delete(name):
+                            msg, names = _delete_custom_provider(name)
+                            return msg, _custom_providers_table(), names
+
+                        cp_del_btn.click(
+                            fn=_on_delete,
+                            inputs=[cp_del_dd],
+                            outputs=[cp_del_result, cp_table, cp_del_dd],
+                        )
 
         # ── APIキー ─────────────────────────────────────────────
         with gr.TabItem("APIキー"):

@@ -18,19 +18,7 @@ from collections.abc import Generator
 import gradio as gr
 import httpx
 
-from src.gui.utils import GRADIO_MAJOR, ORCHESTRATOR_URL, is_api_alive
-
-# ────────────────────────────────────────────────────────────────
-# プロバイダー / モデル選択肢
-# ────────────────────────────────────────────────────────────────
-
-_PROVIDER_CHOICES = [
-    "auto (設定ファイル依存)",
-    "anthropic",
-    "openai",
-    "ollama",
-    "vllm",
-]
+from src.gui.utils import GRADIO_MAJOR, ORCHESTRATOR_URL, get_all_provider_choices, is_api_alive
 
 # プロバイダーごとのよく使うモデル例
 _MODEL_EXAMPLES: dict[str, list[str]] = {
@@ -180,8 +168,12 @@ def respond(
 # タブ UI 構築
 # ────────────────────────────────────────────────────────────────
 
-def build_tab() -> None:
-    """Gradio Blocks コンテキスト内でチャットタブを描画する。"""
+def build_tab() -> gr.Dropdown:
+    """Gradio Blocks コンテキスト内でチャットタブを描画する。
+
+    Returns:
+        provider_dd: 設定タブ・app.load から選択肢を更新するために返す。
+    """
     with gr.Row():
         with gr.Column(scale=3):
             if GRADIO_MAJOR >= 6:
@@ -234,9 +226,10 @@ def build_tab() -> None:
             use_rag_chk = gr.Checkbox(value=True, label="外部RAG使用")
 
             gr.Markdown("#### LLM プロバイダー / モデル")
+            _initial_choices = get_all_provider_choices()
             provider_dd = gr.Dropdown(
-                choices=_PROVIDER_CHOICES,
-                value=_PROVIDER_CHOICES[0],
+                choices=_initial_choices,
+                value=_initial_choices[0],
                 label="プロバイダー",
                 info="設定ファイルの primary_provider を使う場合は auto のまま",
             )
@@ -287,3 +280,5 @@ def build_tab() -> None:
     ).then(fn=lambda: "", outputs=[msg_box])
 
     clear_btn.click(fn=lambda: ([], "", "_ソースなし_"), outputs=[chatbot, meta_box, sources_box])
+
+    return provider_dd

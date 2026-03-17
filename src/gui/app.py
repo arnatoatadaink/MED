@@ -21,6 +21,7 @@ import argparse
 import gradio as gr
 
 from src.gui.components.status_bar import get_status_markdown
+from src.gui.utils import get_all_provider_choices
 
 # タブモジュール
 from src.gui.tabs import chat, guide, memory, sandbox, settings, training
@@ -249,7 +250,7 @@ def build_app() -> gr.Blocks:
                 gr.Markdown(
                     "_Teacher / Student モデルへのクエリ。RAGとFAISSメモリを活用した応答を返します。_"
                 )
-                chat.build_tab()
+                provider_dd = chat.build_tab()
 
             with gr.TabItem("🧠 FAISSメモリ"):
                 gr.Markdown(
@@ -273,7 +274,7 @@ def build_app() -> gr.Blocks:
                 gr.Markdown(
                     "_APIキーの設定と YAML 設定ファイルの編集。_"
                 )
-                settings.build_tab()
+                settings.build_tab(provider_dd=provider_dd)
 
         # ── フッター ────────────────────────────────────────────
         gr.Markdown(
@@ -285,6 +286,13 @@ def build_app() -> gr.Blocks:
 
         # ── テーマ初期化 JS (ページ読み込み時に localStorage から復元) ──
         app.load(fn=None, js=_THEME_INIT_JS)
+
+        # ── ページロード時にカスタムプロバイダーを含む選択肢を同期 ──
+        def _sync_provider_choices():
+            import gradio as _gr
+            return _gr.update(choices=get_all_provider_choices())
+
+        app.load(fn=_sync_provider_choices, outputs=[provider_dd])
 
     return app
 
