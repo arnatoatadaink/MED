@@ -201,6 +201,19 @@ def _build_debug_md(debug_info: dict | None) -> str:
             "_結果なし_",
         ))
 
+    # ── 6. Agentic リトライ（発生時のみ） ──────────
+    if debug_info.get("agentic_triggered"):
+        agentic_q = debug_info.get("agentic_query", "—")
+        lines.append("---")
+        lines.append("### 🤖 Agentic リトライ発生")
+        lines.append(f"**LLM 提案クエリ**: `{agentic_q}`")
+        lines.append("")
+        lines.append("#### 6a. Agentic 外部 RAG 検索結果")
+        lines.extend(_fmt_rag_results(
+            debug_info.get("agentic_rag_results", []),
+            "_結果なし_",
+        ))
+
     return "\n".join(lines)
 
 
