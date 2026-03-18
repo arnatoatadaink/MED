@@ -273,6 +273,11 @@ class Document(BaseModel):
     execution_verified: bool = False  # Sandbox で検証済みか
     last_execution_success: bool | None = None
 
+    # ── エイリアス（別名・略称・通称） ──
+    # 取り込み後に AliasExtractor が付与する。FAISS 検索と並用して用語不一致を緩和する。
+    # 例: ["TinyLoRA", "13-param LoRA", "Learning to Reason in 13 Parameters"]
+    aliases: list[str] = Field(default_factory=list)
+
     # ── タイムスタンプ ──
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

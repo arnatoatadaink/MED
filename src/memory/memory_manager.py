@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 
 from src.common.config import FAISSConfig, MetadataConfig, get_settings
+from src.memory.alias_extractor import AliasExtractor
 from src.memory.embedder import Embedder
 from src.memory.faiss_index import FAISSIndexManager
 from src.memory.metadata_store import MetadataStore
@@ -59,12 +60,14 @@ class MemoryManager:
         faiss_config: FAISSConfig | None = None,
         metadata_config: MetadataConfig | None = None,
         teacher_registry: TeacherRegistry | None = None,
+        alias_extractor: AliasExtractor | None = None,
     ) -> None:
         settings = get_settings()
         self.embedder = embedder or Embedder()
         self.faiss = faiss or FAISSIndexManager(faiss_config or settings.faiss)
         self.store = store or MetadataStore(metadata_config or settings.metadata)
         self.teacher_registry: TeacherRegistry | None = teacher_registry
+        self.alias_extractor: AliasExtractor | None = alias_extractor
         self._initialized = False
 
     # ------------------------------------------------------------------
@@ -124,6 +127,9 @@ class MemoryManager:
 
         # Teacher 素性フック — teacher_id が設定されていれば Registry に記録
         await self._teacher_record_hook(doc)
+
+        # エイリアス抽出フック — AliasExtractor が設定されていれば aliases 列を更新
+        await self._alias_extract_hook(doc)
 
         logger.debug("Added doc=%s domain=%s", doc.id, domain)
         return doc.id
@@ -290,6 +296,70 @@ class MemoryManager:
 
         return results
 
+    async def search_hybrid(
+        self,
+        query: str,
+        domain: str | None = None,
+        k: int = 5,
+        min_score: float = -1.0,
+    ) -> list[SearchResult]:
+        """FAISS ベクトル検索 + エイリアスキーワード検索のハイブリッド検索。
+
+        1. FAISS ベクトル検索で意味的類似度が高い文書を取得
+        2. aliases 列に query キーワードを含む文書を追加取得
+        3. 重複を除いてマージ（エイリアスヒット文書はスコア 0.5 を付与）
+
+        "TinyLoRA" のように文書本文には登場しないが aliases に登録されている
+        用語を検索した場合に、FAISS だけでは取得できない文書を補完する。
+
+        Args:
+            query:     検索クエリ文字列。
+            domain:    検索対象ドメイン (None = 全ドメイン)。
+            k:         返す件数（FAISS 結果 + エイリアス結果の合計上限）。
+            min_score: FAISS スコアフィルタ。
+
+        Returns:
+            スコア降順の SearchResult リスト。
+        """
+        self._ensure_initialized()
+
+        # ── 1. FAISS ベクトル検索 ──────────────────
+        faiss_results = await self.search(query, domain=domain, k=k, min_score=min_score)
+        seen_ids = {sr.document.id for sr in faiss_results}
+
+        # ── 2. エイリアスキーワード検索 ──────────────
+        alias_doc_ids = await self.store.search_by_alias(
+            keyword=query, domain=domain, limit=k
+        )
+        # 単語単位で再検索（クエリが複数語なら各語を試す）
+        for word in query.split():
+            if len(word) >= 2:
+                extra_ids = await self.store.search_by_alias(
+                    keyword=word, domain=domain, limit=k
+                )
+                alias_doc_ids.extend(extra_ids)
+
+        # 重複除去・FAISS 結果との差分のみ取得
+        new_ids = list(dict.fromkeys(
+            doc_id for doc_id in alias_doc_ids if doc_id not in seen_ids
+        ))
+
+        alias_results: list[SearchResult] = []
+        if new_ids:
+            docs = await self.store.get_batch(new_ids[:k])
+            for doc in docs:
+                if doc is not None:
+                    # エイリアスヒット文書はスコア 0.5（ベクトル検索未到達だが関連あり）
+                    alias_results.append(SearchResult(document=doc, score=0.5, query=query))
+            logger.debug(
+                "search_hybrid: faiss=%d alias_new=%d for query=%r",
+                len(faiss_results), len(alias_results), query[:40],
+            )
+
+        # ── 3. マージ（FAISS 優先、エイリアスを末尾に追加） ──
+        combined = faiss_results + alias_results
+        return combined[:k]
+
     # ------------------------------------------------------------------
     # 検索後フィードバック
     # ------------------------------------------------------------------
@@ -362,6 +432,22 @@ class MemoryManager:
         """KG 登録フック（Phase 1.5 で EntityExtractor を呼び出す）。"""
         # Phase 1.5 で実装: EntityExtractor.extract(doc) → KGStore.add_entity/relation
         pass
+
+    async def _alias_extract_hook(self, doc: Document) -> None:
+        """エイリアス抽出フック — AliasExtractor が設定されていれば aliases 列を更新する。
+
+        失敗しても add() 全体を止めない（ベストエフォート）。
+        """
+        if self.alias_extractor is None:
+            return
+        try:
+            aliases = await self.alias_extractor.extract(doc)
+            if aliases:
+                await self.store.update_aliases(doc.id, aliases)
+        except Exception:
+            logger.debug(
+                "AliasExtractor hook failed for doc=%s (non-fatal)", doc.id[:8]
+            )
 
     async def _teacher_record_hook(self, doc: Document) -> None:
         """Teacher 素性フック — teacher_id が設定されていれば TeacherRegistry に記録する。

@@ -129,7 +129,7 @@ class MEDPipeline:
         if not self._initialized:
             raise RuntimeError("MEDPipeline.initialize() must be called before use")
 
-        # ── Step 1: FAISS 検索 ──────────────────────
+        # ── Step 1: FAISS 検索（ハイブリッド: ベクトル + エイリアスキーワード） ──
         faiss_results: list[SearchResult] = []
         if use_memory:
             if self._enable_iterative:
@@ -137,7 +137,7 @@ class MEDPipeline:
                     query, domain=domain, max_rounds=3, k_per_round=k, strategy="vector_add"
                 )
             else:
-                faiss_results = await self._mm.search(query, domain=domain, k=k)
+                faiss_results = await self._mm.search_hybrid(query, domain=domain, k=k)
 
         logger.debug("FAISS: %d results for query=%r", len(faiss_results), query[:50])
 
@@ -201,6 +201,40 @@ class MEDPipeline:
                     len(retry_faiss_results), len(retry_rag_results),
                 )
 
+        # ── Step 3.6: Agentic 1-step（CRAG 後もまだ否定的なら LLM に代替クエリを提案させる）
+        agentic_triggered = False
+        agentic_query: str = ""
+        agentic_rag_results: list = []
+
+        if (
+            use_rag and self._enable_rag
+            and self._expander.is_negative(gen_response.answer)
+        ):
+            suggested = await self._suggest_search_query(
+                query, gen_response.answer, provider=provider, model=model
+            )
+            if suggested and suggested != query:
+                agentic_triggered = True
+                agentic_query = suggested
+                logger.info(
+                    "Agentic retry: LLM suggested query=%r for original=%r",
+                    suggested[:60], query[:60],
+                )
+                _, agentic_rag_results = await self._fetch_and_store_external(
+                    suggested,
+                    domain=domain or "general",
+                    provider=provider,
+                    max_results=self._expander.retry_max_results,
+                )
+                agentic_faiss = await self._mm.search_hybrid(query, domain=domain, k=k)
+                gen_response = await self._response_gen.generate(
+                    query, context_docs=agentic_faiss, provider=provider, model=model
+                )
+                logger.debug(
+                    "Agentic retry complete: new_faiss=%d new_rag=%d",
+                    len(agentic_faiss), len(agentic_rag_results),
+                )
+
         # ── Step 4: コード生成 + Sandbox 実行 ─────
         code_result: CodeResult | None = None
         sandbox_stdout = ""
@@ -248,11 +282,15 @@ class MEDPipeline:
             "rag_query": query,
             "rag_results": [_raw_to_dict(r) for r in rag_raw_results],
             "retry_triggered": retry_triggered,
+            "agentic_triggered": agentic_triggered,
         }
         if retry_triggered:
             debug_info["expanded_queries"] = expanded_queries
             debug_info["retry_faiss_results"] = [_sr_to_dict(sr) for sr in retry_faiss_results]
             debug_info["retry_rag_results"] = [_raw_to_dict(r) for r in retry_rag_results]
+        if agentic_triggered:
+            debug_info["agentic_query"] = agentic_query
+            debug_info["agentic_rag_results"] = [_raw_to_dict(r) for r in agentic_rag_results]
 
         return QueryResponse(
             answer=gen_response.answer,
@@ -288,6 +326,47 @@ class MEDPipeline:
             source_type="manual",
             teacher_id=teacher_id,
         )
+
+    async def _suggest_search_query(
+        self,
+        original_query: str,
+        failed_answer: str,
+        provider: str | None = None,
+        model: str | None = None,
+    ) -> str:
+        """LLM に代替検索クエリを提案させる（Agentic 1-step）。
+
+        CRAG リトライ後も回答が否定的な場合、LLM に「どんなキーワードで
+        再検索すれば情報が見つかるか」を尋ねる。
+
+        Returns:
+            代替クエリ文字列。生成失敗時は空文字列。
+        """
+        _SUGGEST_SYSTEM = (
+            "You are a search query optimizer. "
+            "Given a question and a failed search attempt, suggest ONE alternative "
+            "search query that might find relevant documents. "
+            "Output ONLY the query string, nothing else. No explanation, no quotes."
+        )
+        _SUGGEST_PROMPT = (
+            f"Original question: {original_query}\n\n"
+            f"Previous answer (insufficient): {failed_answer[:200]}\n\n"
+            "Suggest one alternative search query to find better information:"
+        )
+        try:
+            from src.llm.gateway import LLMMessage
+            response = await self._gateway.complete(
+                [LLMMessage(role="user", content=_SUGGEST_PROMPT)],
+                system=_SUGGEST_SYSTEM,
+                provider=provider,
+                model=model,
+                max_tokens=64,
+            )
+            suggested = response.content.strip().strip('"').strip("'")
+            return suggested if len(suggested) >= 3 else ""
+        except Exception:
+            logger.debug("Agentic query suggestion failed (non-fatal)")
+            return ""
 
     async def _fetch_and_store_external(
         self,

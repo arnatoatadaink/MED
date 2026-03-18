@@ -77,7 +77,10 @@ CREATE TABLE IF NOT EXISTS documents (
     reviewed_at TEXT,
 
     -- Teacher 素性（Step 3）
-    teacher_id TEXT DEFAULT NULL
+    teacher_id TEXT DEFAULT NULL,
+
+    -- 別名・略称・通称（エイリアス）— JSON 配列 ["TinyLoRA", "13-param LoRA"]
+    aliases TEXT DEFAULT '[]'
 );
 """
 
@@ -94,6 +97,9 @@ _CREATE_INDICES_SQL = [
 # 既存 DB へのマイグレーション（列が存在しない場合のみ実行）
 _MIGRATION_ADD_TEACHER_ID = (
     "ALTER TABLE documents ADD COLUMN teacher_id TEXT DEFAULT NULL;"
+)
+_MIGRATION_ADD_ALIASES = (
+    "ALTER TABLE documents ADD COLUMN aliases TEXT DEFAULT '[]';"
 )
 
 
@@ -135,6 +141,8 @@ def _doc_to_row(doc: Document) -> dict[str, Any]:
         "reviewed_at": doc.reviewed_at.isoformat() if doc.reviewed_at else None,
         # Teacher 素性 — source.extra から取り出して専用列に保存
         "teacher_id": doc.source.teacher_id,
+        # エイリアス（JSON 配列文字列）
+        "aliases": json.dumps(doc.aliases),
     }
 
 
@@ -198,6 +206,7 @@ def _row_to_doc(row: aiosqlite.Row) -> Document:
         last_execution_success=(
             bool(d["last_execution_success"]) if d["last_execution_success"] is not None else None
         ),
+        aliases=json.loads(d["aliases"]) if d.get("aliases") else [],
         created_at=datetime.fromisoformat(d["created_at"]),
         updated_at=datetime.fromisoformat(d["updated_at"]),
         reviewed_at=(
@@ -244,12 +253,14 @@ class MetadataStore:
 
     async def _migrate(self) -> None:
         """既存 DB スキーマへの後方互換マイグレーションを実行する。"""
-        # teacher_id 列が存在しなければ追加する
         cursor = await self._db.execute("PRAGMA table_info(documents)")
         columns = {row[1] for row in await cursor.fetchall()}
         if "teacher_id" not in columns:
             await self._db.execute(_MIGRATION_ADD_TEACHER_ID)
             logger.info("MetadataStore: migrated — added teacher_id column")
+        if "aliases" not in columns:
+            await self._db.execute(_MIGRATION_ADD_ALIASES)
+            logger.info("MetadataStore: migrated — added aliases column")
 
     async def close(self) -> None:
         """DB 接続を閉じる。"""
@@ -333,6 +344,55 @@ class MetadataStore:
             "SELECT 1 FROM documents WHERE id = ? LIMIT 1", (doc_id,)
         )
         return await cursor.fetchone() is not None
+
+    # ── エイリアス操作 ──────────────────────────────────────────────────
+
+    async def update_aliases(self, doc_id: str, aliases: list[str]) -> None:
+        """ドキュメントの aliases 列を更新する。
+
+        Args:
+            doc_id:  対象ドキュメント ID。
+            aliases: 新しいエイリアスリスト（上書き）。
+        """
+        await self._db.execute(
+            "UPDATE documents SET aliases = ?, updated_at = ? WHERE id = ?",
+            (json.dumps(aliases), datetime.utcnow().isoformat(), doc_id),
+        )
+        await self._db.commit()
+        logger.debug("Updated aliases for doc=%s: %s", doc_id[:8], aliases)
+
+    async def search_by_alias(
+        self,
+        keyword: str,
+        domain: str | None = None,
+        limit: int = 10,
+    ) -> list[str]:
+        """エイリアス列にキーワードが含まれるドキュメントの ID を返す。
+
+        SQLite の LIKE を使ったシンプルな全文一致。
+        10K 件規模では十分な速度で動作する。
+
+        Args:
+            keyword: 検索キーワード（大文字小文字を区別しない）。
+            domain:  ドメインフィルタ（None = 全ドメイン）。
+            limit:   返す最大件数。
+
+        Returns:
+            マッチした doc_id のリスト。
+        """
+        kw = keyword.lower()
+        if domain:
+            cursor = await self._db.execute(
+                "SELECT id FROM documents WHERE lower(aliases) LIKE ? AND domain = ? LIMIT ?",
+                (f"%{kw}%", domain, limit),
+            )
+        else:
+            cursor = await self._db.execute(
+                "SELECT id FROM documents WHERE lower(aliases) LIKE ? LIMIT ?",
+                (f"%{kw}%", limit),
+            )
+        rows = await cursor.fetchall()
+        return [row[0] for row in rows]
 
     # ── クエリ系 ────────────────────────────────────────────────────────
 

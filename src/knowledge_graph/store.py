@@ -321,6 +321,65 @@ class KnowledgeGraphStore:
         }
 
     # ------------------------------------------------------------------
+    # エイリアス管理 (alias_of relation を活用)
+    # ------------------------------------------------------------------
+
+    def add_alias(self, canonical: str, alias: str, doc_id: str | None = None) -> None:
+        """canonical（正式名）と alias（略称・別名）を alias_of エッジで登録する。
+
+        例: add_alias("Learning to Reason in 13 Parameters", "TinyLoRA")
+        これにより "TinyLoRA" で検索したとき canonical の doc_ids が返る。
+
+        Args:
+            canonical: 正式名 / 論文タイトル / ライブラリ名。
+            alias:     通称 / 略称 / ニックネーム。
+            doc_id:    関連ドキュメント ID（省略可）。
+        """
+        self.add_entity(canonical, entity_type="concept", doc_id=doc_id)
+        self.add_entity(alias, entity_type="alias")
+        self.add_relation(alias, canonical, relation_type="alias_of", weight=1.0)
+        logger.debug("Alias registered: %r --[alias_of]--> %r", alias, canonical)
+
+    def query_by_alias(self, alias: str) -> list[str]:
+        """エイリアスに対応する canonical Entity の doc_ids を返す。
+
+        alias → canonical（alias_of エッジ）→ doc_ids の順で辿る。
+        alias が直接 doc_id を持つ場合もそれを含める。
+
+        Args:
+            alias: 検索するエイリアス文字列（大文字小文字を区別しない）。
+
+        Returns:
+            関連する doc_id のリスト（重複除去済み）。
+        """
+        # 大文字小文字を無視して一致するノードを探す
+        alias_lower = alias.lower()
+        matched_nodes = [
+            n for n in self._graph.nodes
+            if n.lower() == alias_lower
+        ]
+
+        doc_ids: list[str] = []
+        for node in matched_nodes:
+            # alias 自身の doc_ids
+            node_data = self._graph.nodes[node]
+            doc_ids.extend(node_data.get("doc_ids", []))
+
+            # alias_of エッジを辿って canonical の doc_ids も取得
+            edges = (
+                self._graph.out_edges(node, data=True)
+                if self._directed
+                else self._graph.edges(node, data=True)
+            )
+            for _src, tgt, data in edges:
+                if data.get("relation_type") == "alias_of" and self._graph.has_node(tgt):
+                    canonical_data = self._graph.nodes[tgt]
+                    doc_ids.extend(canonical_data.get("doc_ids", []))
+
+        # 重複除去・順序保持
+        return list(dict.fromkeys(doc_ids))
+
+    # ------------------------------------------------------------------
     # 永続化
     # ------------------------------------------------------------------
 
