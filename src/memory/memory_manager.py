@@ -23,6 +23,7 @@ from src.common.config import FAISSConfig, MetadataConfig, get_settings
 from src.memory.alias_extractor import AliasExtractor
 from src.memory.embedder import Embedder
 from src.memory.faiss_index import FAISSIndexManager
+from src.memory.keyword_annotator import KeywordAnnotator
 from src.memory.metadata_store import MetadataStore
 from src.memory.schema import (
     Document,
@@ -61,6 +62,7 @@ class MemoryManager:
         metadata_config: MetadataConfig | None = None,
         teacher_registry: TeacherRegistry | None = None,
         alias_extractor: AliasExtractor | None = None,
+        keyword_annotator: KeywordAnnotator | None = None,
     ) -> None:
         settings = get_settings()
         self.embedder = embedder or Embedder()
@@ -68,6 +70,8 @@ class MemoryManager:
         self.store = store or MetadataStore(metadata_config or settings.metadata)
         self.teacher_registry: TeacherRegistry | None = teacher_registry
         self.alias_extractor: AliasExtractor | None = alias_extractor
+        # KeywordAnnotator はデフォルトで有効（コストゼロのため常時使用推奨）
+        self.keyword_annotator: KeywordAnnotator = keyword_annotator or KeywordAnnotator()
         self._initialized = False
 
     # ------------------------------------------------------------------
@@ -130,6 +134,9 @@ class MemoryManager:
 
         # エイリアス抽出フック — AliasExtractor が設定されていれば aliases 列を更新
         await self._alias_extract_hook(doc)
+
+        # キーワードアノテーションフック — 常時実行（コストゼロ）
+        await self._keyword_annotate_hook(doc)
 
         logger.debug("Added doc=%s domain=%s", doc.id, domain)
         return doc.id
@@ -303,19 +310,20 @@ class MemoryManager:
         k: int = 5,
         min_score: float = -1.0,
     ) -> list[SearchResult]:
-        """FAISS ベクトル検索 + エイリアスキーワード検索のハイブリッド検索。
+        """FAISS ベクトル検索 + FTS5 全文検索 + エイリアス LIKE のハイブリッド検索。
 
-        1. FAISS ベクトル検索で意味的類似度が高い文書を取得
-        2. aliases 列に query キーワードを含む文書を追加取得
-        3. 重複を除いてマージ（エイリアスヒット文書はスコア 0.5 を付与）
+        検索レイヤー（上位から優先）:
+          1. FAISS ベクトル検索  — 意味的類似度
+          2. FTS5 BM25 全文検索 — キーワード・技術用語・aliases・keywords
+          3. aliases LIKE 検索  — FTS5 未登録のエイリアスの補完
 
-        "TinyLoRA" のように文書本文には登場しないが aliases に登録されている
-        用語を検索した場合に、FAISS だけでは取得できない文書を補完する。
+        "TinyLoRA" のように文書本文に登場しないが aliases/keywords に
+        登録されている用語も確実に取得する。
 
         Args:
             query:     検索クエリ文字列。
             domain:    検索対象ドメイン (None = 全ドメイン)。
-            k:         返す件数（FAISS 結果 + エイリアス結果の合計上限）。
+            k:         返す件数（全レイヤーの合計上限）。
             min_score: FAISS スコアフィルタ。
 
         Returns:
@@ -326,35 +334,46 @@ class MemoryManager:
         # ── 1. FAISS ベクトル検索 ──────────────────
         faiss_results = await self.search(query, domain=domain, k=k, min_score=min_score)
         seen_ids = {sr.document.id for sr in faiss_results}
+        extra_results: list[SearchResult] = []
 
-        # ── 2. エイリアスキーワード検索 ──────────────
+        # ── 2. FTS5 BM25 全文検索 ──────────────────
+        try:
+            fts_hits = await self.store.search_fts(query, domain=domain, limit=k)
+            new_fts_ids = [doc_id for doc_id, _ in fts_hits if doc_id not in seen_ids]
+            if new_fts_ids:
+                fts_docs = await self.store.get_batch(new_fts_ids[:k])
+                for doc, (_, bm25_rank) in zip(fts_docs, fts_hits):
+                    if doc is not None and doc.id not in seen_ids:
+                        # BM25 rank は負値（-1 が最高）→ 0〜0.8 のスコアに変換
+                        fts_score = max(0.0, min(0.8, 1.0 / (1.0 - bm25_rank)))
+                        extra_results.append(SearchResult(document=doc, score=fts_score, query=query))
+                        seen_ids.add(doc.id)
+        except Exception:
+            logger.debug("FTS5 search failed (non-fatal), falling back to alias search")
+
+        # ── 3. aliases LIKE 検索（FTS5 補完） ──────
         alias_doc_ids = await self.store.search_by_alias(
             keyword=query, domain=domain, limit=k
         )
-        # 単語単位で再検索（クエリが複数語なら各語を試す）
         for word in query.split():
             if len(word) >= 2:
-                extra_ids = await self.store.search_by_alias(
-                    keyword=word, domain=domain, limit=k
+                alias_doc_ids.extend(
+                    await self.store.search_by_alias(keyword=word, domain=domain, limit=k)
                 )
-                alias_doc_ids.extend(extra_ids)
-
-        # 重複除去・FAISS 結果との差分のみ取得
-        new_ids = list(dict.fromkeys(
+        new_alias_ids = list(dict.fromkeys(
             doc_id for doc_id in alias_doc_ids if doc_id not in seen_ids
         ))
+        if new_alias_ids:
+            alias_docs = await self.store.get_batch(new_alias_ids[:k])
+            for doc in alias_docs:
+                if doc is not None and doc.id not in seen_ids:
+                    extra_results.append(SearchResult(document=doc, score=0.5, query=query))
+                    seen_ids.add(doc.id)
 
-        alias_results: list[SearchResult] = []
-        if new_ids:
-            docs = await self.store.get_batch(new_ids[:k])
-            for doc in docs:
-                if doc is not None:
-                    # エイリアスヒット文書はスコア 0.5（ベクトル検索未到達だが関連あり）
-                    alias_results.append(SearchResult(document=doc, score=0.5, query=query))
-            logger.debug(
-                "search_hybrid: faiss=%d alias_new=%d for query=%r",
-                len(faiss_results), len(alias_results), query[:40],
-            )
+        logger.debug(
+            "search_hybrid: faiss=%d fts+alias=%d for query=%r",
+            len(faiss_results), len(extra_results), query[:40],
+        )
 
         # ── 3. マージ（FAISS 優先、エイリアスを末尾に追加） ──
         combined = faiss_results + alias_results
@@ -447,6 +466,22 @@ class MemoryManager:
         except Exception:
             logger.debug(
                 "AliasExtractor hook failed for doc=%s (non-fatal)", doc.id[:8]
+            )
+
+    async def _keyword_annotate_hook(self, doc: Document) -> None:
+        """キーワードアノテーションフック — LLM 不使用、コストゼロ。
+
+        KeywordAnnotator でドキュメントから技術用語を抽出し keywords 列を更新する。
+        FTS5 トリガーにより documents_fts も自動同期される。
+        失敗しても add() 全体を止めない（ベストエフォート）。
+        """
+        try:
+            keywords = self.keyword_annotator.extract(doc)
+            if keywords:
+                await self.store.update_keywords(doc.id, keywords)
+        except Exception:
+            logger.debug(
+                "KeywordAnnotator hook failed for doc=%s (non-fatal)", doc.id[:8]
             )
 
     async def _teacher_record_hook(self, doc: Document) -> None:

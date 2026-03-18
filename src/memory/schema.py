@@ -278,6 +278,12 @@ class Document(BaseModel):
     # 例: ["TinyLoRA", "13-param LoRA", "Learning to Reason in 13 Parameters"]
     aliases: list[str] = Field(default_factory=list)
 
+    # ── キーワードアノテーション ──
+    # 取り込み後に KeywordAnnotator が付与する（LLM 不使用・コストゼロ）。
+    # FTS5 インデックスに含まれ、全文キーワード検索を強化する。
+    # 例: ["RAG", "FAISS", "TinyLoRA", "fine-tuning", "13B"]
+    keywords: list[str] = Field(default_factory=list)
+
     # ── タイムスタンプ ──
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

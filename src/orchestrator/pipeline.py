@@ -396,8 +396,46 @@ class MEDPipeline:
             docs = self._chunker.chunk_results(verified, domain=domain)
 
             added_ids = await self._mm.add_batch(docs)
+
+            # ── 生結果を raw_results テーブルへ保存（FAISS とは独立） ──
+            # チャンク化前の原文・URL・スコアをそのまま保存するため、
+            # 後から原文参照・BI 集計・FAISS 非依存のキーワード検索が可能。
+            await self._store_raw_results(query, raw_results, domain, added_ids)
+
             logger.debug("External RAG: stored %d new docs", len(added_ids))
             return len(added_ids), raw_results
         except Exception:
             logger.exception("External RAG fetch failed")
             return 0, []
+
+    async def _store_raw_results(
+        self,
+        query: str,
+        raw_results: list,
+        domain: str,
+        chunked_doc_ids: list[str],
+    ) -> None:
+        """生検索結果を raw_results テーブルに保存する（ベストエフォート）。
+
+        URL を ID として使うため同一ページの重複保存は ON CONFLICT で上書きされる。
+        """
+        import hashlib
+        try:
+            for r in raw_results:
+                url = getattr(r, "url", "") or ""
+                result_id = hashlib.sha256(url.encode()).hexdigest()[:32] if url else ""
+                if not result_id:
+                    continue
+                await self._mm.store.store_raw_result(
+                    result_id=result_id,
+                    query=query,
+                    title=getattr(r, "title", ""),
+                    content=getattr(r, "content", ""),
+                    url=url,
+                    source=getattr(r, "source", ""),
+                    score=float(getattr(r, "score", 0.0)),
+                    domain=domain,
+                    doc_ids=chunked_doc_ids,
+                )
+        except Exception:
+            logger.debug("raw_results storage failed (non-fatal)")
