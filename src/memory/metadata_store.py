@@ -80,9 +80,80 @@ CREATE TABLE IF NOT EXISTS documents (
     teacher_id TEXT DEFAULT NULL,
 
     -- 別名・略称・通称（エイリアス）— JSON 配列 ["TinyLoRA", "13-param LoRA"]
-    aliases TEXT DEFAULT '[]'
+    aliases TEXT DEFAULT '[]',
+
+    -- キーワードアノテーション — JSON 配列（KeywordAnnotator が付与）
+    keywords TEXT DEFAULT '[]'
 );
 """
+
+# ── 外部検索の生結果テーブル（チャンク化前の原文を保存） ────────────
+_CREATE_RAW_RESULTS_SQL = """
+CREATE TABLE IF NOT EXISTS raw_results (
+    id          TEXT PRIMARY KEY,
+    query       TEXT NOT NULL,
+    title       TEXT,
+    content     TEXT,
+    url         TEXT,
+    source      TEXT,
+    score       REAL DEFAULT 0.0,
+    retrieved_at TEXT NOT NULL,
+    domain      TEXT DEFAULT 'general',
+    doc_ids     TEXT DEFAULT '[]'   -- JSON 配列: チャンク化後の Document ID
+);
+"""
+
+_CREATE_RAW_RESULTS_INDICES_SQL = [
+    "CREATE INDEX IF NOT EXISTS idx_raw_results_query ON raw_results(query);",
+    "CREATE INDEX IF NOT EXISTS idx_raw_results_source ON raw_results(source);",
+    "CREATE INDEX IF NOT EXISTS idx_raw_results_retrieved_at ON raw_results(retrieved_at);",
+]
+
+# ── FTS5 全文検索仮想テーブル ──────────────────────────────────────
+# documents テーブルの content / source_title / aliases / keywords を
+# BM25 ランキングで全文検索する。外部コンテンツテーブル方式は使わず
+# 独立した FTS テーブルとして管理し、トリガーで同期する。
+_CREATE_FTS_SQL = """
+CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
+    doc_id UNINDEXED,
+    body,
+    tokenize='unicode61 remove_diacritics 1'
+);
+"""
+
+# FTS5 同期トリガー（documents 行の INSERT/UPDATE/DELETE に追従）
+_CREATE_FTS_TRIGGERS_SQL = [
+    # INSERT 時: FTS に追加
+    """CREATE TRIGGER IF NOT EXISTS documents_fts_insert
+       AFTER INSERT ON documents BEGIN
+           INSERT INTO documents_fts(doc_id, body)
+           VALUES (
+               new.id,
+               COALESCE(new.content, '') || ' '
+               || COALESCE(new.source_title, '') || ' '
+               || COALESCE(new.aliases, '') || ' '
+               || COALESCE(new.keywords, '')
+           );
+       END;""",
+    # UPDATE 時: FTS の対応行を置換
+    """CREATE TRIGGER IF NOT EXISTS documents_fts_update
+       AFTER UPDATE ON documents BEGIN
+           DELETE FROM documents_fts WHERE doc_id = old.id;
+           INSERT INTO documents_fts(doc_id, body)
+           VALUES (
+               new.id,
+               COALESCE(new.content, '') || ' '
+               || COALESCE(new.source_title, '') || ' '
+               || COALESCE(new.aliases, '') || ' '
+               || COALESCE(new.keywords, '')
+           );
+       END;""",
+    # DELETE 時: FTS から削除
+    """CREATE TRIGGER IF NOT EXISTS documents_fts_delete
+       AFTER DELETE ON documents BEGIN
+           DELETE FROM documents_fts WHERE doc_id = old.id;
+       END;""",
+]
 
 _CREATE_INDICES_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_documents_domain ON documents(domain);",
@@ -100,6 +171,9 @@ _MIGRATION_ADD_TEACHER_ID = (
 )
 _MIGRATION_ADD_ALIASES = (
     "ALTER TABLE documents ADD COLUMN aliases TEXT DEFAULT '[]';"
+)
+_MIGRATION_ADD_KEYWORDS = (
+    "ALTER TABLE documents ADD COLUMN keywords TEXT DEFAULT '[]';"
 )
 
 
@@ -143,6 +217,8 @@ def _doc_to_row(doc: Document) -> dict[str, Any]:
         "teacher_id": doc.source.teacher_id,
         # エイリアス（JSON 配列文字列）
         "aliases": json.dumps(doc.aliases),
+        # キーワードアノテーション（JSON 配列文字列）
+        "keywords": json.dumps(doc.keywords if hasattr(doc, "keywords") and doc.keywords else []),
     }
 
 
@@ -207,6 +283,7 @@ def _row_to_doc(row: aiosqlite.Row) -> Document:
             bool(d["last_execution_success"]) if d["last_execution_success"] is not None else None
         ),
         aliases=json.loads(d["aliases"]) if d.get("aliases") else [],
+        keywords=json.loads(d["keywords"]) if d.get("keywords") else [],
         created_at=datetime.fromisoformat(d["created_at"]),
         updated_at=datetime.fromisoformat(d["updated_at"]),
         reviewed_at=(
@@ -245,9 +322,13 @@ class MetadataStore:
         await self._db.execute("PRAGMA journal_mode=WAL;")
         await self._db.execute("PRAGMA foreign_keys=ON;")
         await self._db.execute(_CREATE_TABLE_SQL)
+        await self._db.execute(_CREATE_RAW_RESULTS_SQL)
+        await self._db.execute(_CREATE_FTS_SQL)
         await self._migrate()  # 列追加を先に行い、その後インデックス作成
-        for idx_sql in _CREATE_INDICES_SQL:
+        for idx_sql in _CREATE_INDICES_SQL + _CREATE_RAW_RESULTS_INDICES_SQL:
             await self._db.execute(idx_sql)
+        for trigger_sql in _CREATE_FTS_TRIGGERS_SQL:
+            await self._db.execute(trigger_sql)
         await self._db.commit()
         logger.info("MetadataStore initialized: %s", self._db_path)
 
@@ -261,6 +342,9 @@ class MetadataStore:
         if "aliases" not in columns:
             await self._db.execute(_MIGRATION_ADD_ALIASES)
             logger.info("MetadataStore: migrated — added aliases column")
+        if "keywords" not in columns:
+            await self._db.execute(_MIGRATION_ADD_KEYWORDS)
+            logger.info("MetadataStore: migrated — added keywords column")
 
     async def close(self) -> None:
         """DB 接続を閉じる。"""
@@ -393,6 +477,126 @@ class MetadataStore:
             )
         rows = await cursor.fetchall()
         return [row[0] for row in rows]
+
+    async def update_keywords(self, doc_id: str, keywords: list[str]) -> None:
+        """ドキュメントの keywords 列を更新する（FTS5 トリガーにより自動同期）。"""
+        await self._db.execute(
+            "UPDATE documents SET keywords = ?, updated_at = ? WHERE id = ?",
+            (json.dumps(keywords), datetime.utcnow().isoformat(), doc_id),
+        )
+        await self._db.commit()
+        logger.debug("Updated keywords for doc=%s: %d terms", doc_id[:8], len(keywords))
+
+    async def search_fts(
+        self,
+        query: str,
+        domain: str | None = None,
+        limit: int = 10,
+    ) -> list[tuple[str, float]]:
+        """FTS5 全文検索で doc_id と BM25 スコアのリストを返す。
+
+        documents_fts は content + source_title + aliases + keywords を
+        インデックスしており、通常の LIKE 検索より高精度・高速。
+
+        Args:
+            query:  FTS5 クエリ文字列（スペース区切りで AND 検索）。
+            domain: ドメインフィルタ（None = 全ドメイン）。
+            limit:  返す最大件数。
+
+        Returns:
+            [(doc_id, bm25_score), ...] — スコアは負値（小さいほど関連度高）。
+        """
+        # FTS5 の MATCH に渡すクエリを安全にエスケープ（特殊文字を除去）
+        safe_query = " ".join(
+            word for word in query.split()
+            if word and not any(c in word for c in '"*(){}')
+        )
+        if not safe_query:
+            return []
+
+        if domain:
+            # FTS5 結果を documents テーブルの domain で絞り込む
+            cursor = await self._db.execute(
+                """
+                SELECT f.doc_id, rank
+                FROM documents_fts f
+                JOIN documents d ON d.id = f.doc_id
+                WHERE f.body MATCH ? AND d.domain = ?
+                ORDER BY rank
+                LIMIT ?
+                """,
+                (safe_query, domain, limit),
+            )
+        else:
+            cursor = await self._db.execute(
+                "SELECT doc_id, rank FROM documents_fts WHERE body MATCH ? ORDER BY rank LIMIT ?",
+                (safe_query, limit),
+            )
+        rows = await cursor.fetchall()
+        return [(row[0], float(row[1])) for row in rows]
+
+    # ── 生検索結果（raw_results） ──────────────────────────────────────
+
+    async def store_raw_result(
+        self,
+        result_id: str,
+        query: str,
+        title: str,
+        content: str,
+        url: str,
+        source: str,
+        score: float = 0.0,
+        domain: str = "general",
+        doc_ids: list[str] | None = None,
+    ) -> None:
+        """外部検索の生結果を raw_results テーブルに保存する。
+
+        チャンク化前の原文（タイトル・URL・本文）を保存するため、
+        FAISS の Document とは独立した形で検索履歴・原文参照が可能になる。
+
+        Args:
+            result_id: 生結果の一意 ID（通常は URL の SHA256 など）。
+            query:     この生結果を得たときの検索クエリ。
+            doc_ids:   チャンク化後に生成された Document の ID リスト。
+        """
+        await self._db.execute(
+            """
+            INSERT INTO raw_results (id, query, title, content, url, source, score,
+                                     retrieved_at, domain, doc_ids)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                query=excluded.query,
+                doc_ids=excluded.doc_ids,
+                retrieved_at=excluded.retrieved_at
+            """,
+            (
+                result_id, query, title, content[:10000], url, source, score,
+                datetime.utcnow().isoformat(), domain,
+                json.dumps(doc_ids or []),
+            ),
+        )
+        await self._db.commit()
+
+    async def get_raw_results_by_query(
+        self,
+        query: str,
+        limit: int = 20,
+    ) -> list[dict]:
+        """クエリに関連する生検索結果を取得する（部分一致）。"""
+        cursor = await self._db.execute(
+            "SELECT * FROM raw_results WHERE lower(query) LIKE ? ORDER BY retrieved_at DESC LIMIT ?",
+            (f"%{query.lower()}%", limit),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def get_raw_result(self, result_id: str) -> dict | None:
+        """ID で生検索結果を取得する。"""
+        cursor = await self._db.execute(
+            "SELECT * FROM raw_results WHERE id = ?", (result_id,)
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
 
     # ── クエリ系 ────────────────────────────────────────────────────────
 
