@@ -76,6 +76,37 @@ _MATH_SAMPLES = [
     ),
 ]
 
+# mtRAG 形式のマルチターン Q&A サンプル
+# 参照: MIT Press TACL 2025 — 後半ターンでの精度低下を検出するため
+# 各エントリは (turn, query, expected) のタプルリスト（会話全体で1ケース）
+_MTRAG_CONVERSATIONS: list[list[tuple[int, str, str]]] = [
+    [
+        (1, "FAISSとは何ですか？", "FAISS is Facebook AI Similarity Search, a library for dense vector search."),
+        (2, "それはどのインデックスタイプが最も速いですか？", "IndexFlatL2/IP for exact search; IVF for approximate."),
+        (3, "GPUに対応していますか？", "Yes, faiss-gpu supports GPU acceleration."),
+        (4, "先ほど述べた最も速いインデックスをGPUで使う方法は？", "Use GpuIndexFlat or faiss.index_cpu_to_gpu()."),
+    ],
+    [
+        (1, "TinyLoRAの特徴は何ですか？", "TinyLoRA trains only 8-13 parameters by freezing A and learning B."),
+        (2, "通常のLoRAと比べてどれくらいパラメータが少ないですか？", "LoRA: rank*dim*2, TinyLoRA: rank*proj=8 params."),
+        (3, "どのモデルでテストされましたか？", "Qwen2.5-7B-Instruct in the original paper."),
+        (4, "最初に説明したB行列のサイズは？", "frozen_rank(2) x projection_dim(4) = 8 parameters."),
+    ],
+]
+
+# mtRAG 用に最後のターン（前ターン参照が必要）だけを EvalSample に変換
+_MTRAG_SAMPLES: list[EvalSample] = []
+for conv in _MTRAG_CONVERSATIONS:
+    last_turn = conv[-1]
+    # metadata に会話履歴を含める
+    history = [(t, q, a) for t, q, a in conv[:-1]]
+    _MTRAG_SAMPLES.append(EvalSample(
+        query=last_turn[1],
+        expected_answer=last_turn[2],
+        domain="general",
+        metadata={"conversation_history": history, "is_mtrag": True, "turn": last_turn[0]},
+    ))
+
 
 @dataclass
 class BenchmarkReport:
@@ -111,6 +142,7 @@ _BENCHMARK_SAMPLES: dict[str, list[EvalSample]] = {
     "code_generation": _CODE_SAMPLES,
     "qa_retrieval": _QA_SAMPLES,
     "math_reasoning": _MATH_SAMPLES,
+    "mtrag": _MTRAG_SAMPLES,  # マルチターン RAG 精度テスト
 }
 
 
