@@ -1,7 +1,7 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-03-19
-> 参照元: `CLAUDE.md` / `plan.md` / `plan_think.md` / `plan_test.md` / `docs/session_progress.md` / `docs/site/dev/roadmap.md`
+> 最終更新: 2026-03-19（面接形式テスト・多ターン訓練方針追加）
+> 参照元: `CLAUDE.md` / `plan.md` / `plan_think.md` / `plan_test.md` / `plan_training_a.md` / `plan_training_b.md` / `docs/session_progress.md`
 
 ---
 
@@ -112,6 +112,57 @@
 - 🟢 GRPO 報酬関数に KG 整合性スコアを追加
 - 🟢 評価指標に Entity 精度・関係再現率を追加
 - 🟢 拡張アルゴリズム（PPO, DPO）の本番チューニング
+
+---
+
+## I. 面接形式テスト・多ターン訓練拡張
+> 📄 詳細: `plan_training_b.md`
+
+### Phase B-1: データ品質層の基盤（最優先）
+
+- 🔴 `src/training/pipeline.py` — `TrainingDataGate` クラス追加（Teacher品質 × 分散フィルタの2段ゲート）
+  - `src/memory/maturation/reviewer.py` を流用してTeacher品質スコアを取得
+  - `reward_variance > θ_v` の高分散バッチのみ訓練に通す（StarPO-S方式）
+- 🔴 `src/training/algorithms/grpo.py` — 分散ベース軌跡フィルタリング追加（StarPO-S）
+  - 上位25〜50%の高分散ロールアウトのみで更新
+  - 非対称クリッピング（良い方向強め / 悪化方向抑制）オプション追加
+- 🟡 `src/memory/maturation/difficulty_tagger.py` — 動的カーリキュラム調整
+  - 損失推移を監視して難易度配分をリアルタイム変更
+
+### Phase B-2: 評価フレームワーク拡張
+
+- 🔴 `src/training/evaluation/` — `InterviewEvaluator` クラス追加
+  - **LLM-as-an-Interviewer**: Teacherが「なぜ？」を繰り返す圧迫深掘りテストループ
+  - 測定軸: 初回回答品質 / フィードバック適応力 / フォローアップ対応力
+- 🔴 `src/training/evaluation/` — `MultiChallengeEvaluator` クラス追加
+  - 長期指示維持テスト（instruction retention / inference memory / self-coherence）
+  - 参考: Claude 3.5 Sonnet でも正解率 41.4%（目標値設定が必要）
+- 🔴 `src/training/evaluation/` — `AssumptionCorrectionEvaluator` クラス追加（MEDオリジナル）
+  - 誤前提クエリを入力し「指摘→正しい前提で回答」の2ステップを評価
+  - テストデータは `IQA-EVAL` 方式で自動生成可能
+- 🟡 `tests/unit/test_benchmark_suite.py` — 上記3評価クラスの単体テスト追加
+- 🟡 `src/training/evaluation/benchmark_suite.py` — mtRAG ベンチマーク統合
+  - 多ターンRAG精度テスト（後半ターンでの精度低下を監視）
+
+### Phase B-3: 訓練アルゴリズム拡張
+
+- 🟡 `src/training/algorithms/refuel.py` — REFUEL アルゴリズム新規実装
+  - Q値差分回帰（1モデルで多ターン最適化、Critic不要）
+  - GRPO崩壊（Echo Trap）発生時のフォールバックとして使用
+- 🟡 `src/training/rewards/composite.py` — CURIO 情報利得報酬を追加オプションとして実装
+  - `memory_utilization(0.15)` の代替/補完として FAISSの新情報量を内発的報酬に
+- 🟡 `configs/training.yaml` — アルゴリズム選択設定を追加（grpo / starpo_s / refuel / curio）
+
+### Phase B-4: 統合・モニタリング
+
+- 🟢 `src/knowledge_graph/router_bridge.py` — KGカバレッジ監視フック追加
+  - エンティティ経路の多様性スコアを計算し Echo Trap 早期検出シグナルに
+  - `多様性スコア = ユニークエンティティ数 / 総エンティティ参照数 < θ` で警告
+- 🟢 `src/memory/learning/cross_encoder.py` — Cross-Encoder疑似報酬モードを追加
+  - Teacher API を毎ステップ呼ばずに Cross-Encoder でコスト削減
+  - N ステップに1回 Teacher API で品質を補正するハイブリッド運用
+- 🟢 `src/training/evaluation/` — IQA-EVAL ペルソナ別評価自動化
+  - `src/memory/maturation/seed_builder.py` と連携してペルソナ付きテストデータを生成
 
 ---
 
