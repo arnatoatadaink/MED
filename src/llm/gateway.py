@@ -17,7 +17,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -55,9 +54,6 @@ class LLMResponse:
     output_tokens: int = 0
     latency_ms: float = 0.0
     raw: Any | None = None  # プロバイダ固有の生レスポンス
-    # Extended Thinking / CoT で得た思考テキスト
-    thinking_text: str | None = None
-    thinking_tokens: int = 0
 
 
 # ============================================================================
@@ -82,15 +78,8 @@ class BaseLLMProvider(ABC):
         model: str | None = None,
         max_tokens: int = 2048,
         temperature: float = 0.7,
-        enable_thinking: bool = False,
-        thinking_budget_tokens: int = 8000,
     ) -> LLMResponse:
-        """メッセージリストを受け取り、補完レスポンスを返す。
-
-        Args:
-            enable_thinking: Extended Thinking を有効化する（Anthropic のみ）。
-            thinking_budget_tokens: thinking ブロックの最大トークン数。
-        """
+        """メッセージリストを受け取り、補完レスポンスを返す。"""
         ...
 
     @abstractmethod

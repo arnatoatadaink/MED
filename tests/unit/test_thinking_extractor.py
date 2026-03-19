@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -16,7 +14,6 @@ from src.llm.thinking_extractor import (
     _parse_xml_section,
 )
 from src.memory.schema import KnowledgeType, ReasoningTrace, TraceMethod
-
 
 # ── ヘルパー関数テスト ────────────────────────────────────────────────────
 

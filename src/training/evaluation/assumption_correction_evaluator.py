@@ -273,7 +273,8 @@ class AssumptionCorrectionEvaluator:
         ]
         resp = await self._gateway.complete(messages, provider=self._provider)
 
-        import json, re
+        import json
+        import re
         try:
             m = re.search(r"\{.*\}", resp.content, re.DOTALL)
             if m:

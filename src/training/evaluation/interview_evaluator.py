@@ -258,7 +258,8 @@ class InterviewEvaluator:
         resp = await self._gateway.complete(messages, provider=self._provider)
 
         # JSON パース
-        import json, re
+        import json
+        import re
         report = InterviewReport(question=question)
         try:
             m = re.search(r"\{.*\}", resp.content, re.DOTALL)

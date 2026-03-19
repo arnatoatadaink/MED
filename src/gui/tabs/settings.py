@@ -455,6 +455,7 @@ async def _test_custom_provider(name: str) -> str:
 
     try:
         import time
+
         from openai import AsyncOpenAI
         client = AsyncOpenAI(base_url=base_url, api_key=api_key)
         start = time.monotonic()
@@ -558,7 +559,7 @@ def _custom_providers_table() -> str:
 _THEME_NAMES = ["MED Dark", "Soft Light", "Ocean Dark", "Monochrome", "Forest"]
 
 
-def build_tab(provider_dd: "gr.Dropdown | None" = None) -> None:
+def build_tab(provider_dd: gr.Dropdown | None = None) -> None:
     """Gradio Blocks コンテキスト内で設定タブを描画する。
 
     Args:

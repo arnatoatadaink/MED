@@ -131,7 +131,7 @@ async def query(request: QueryRequest):
         result: QueryResponse = await asyncio.wait_for(
             coro, timeout=float(request.timeout_seconds)
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning("Query timed out after %ds", request.timeout_seconds)
         raise HTTPException(
             status_code=504,

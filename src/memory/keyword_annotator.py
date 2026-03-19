@@ -77,7 +77,7 @@ class KeywordAnnotator:
         self._max_content_chars = max_content_chars
         self._max_keywords = max_keywords
 
-    def extract(self, doc: "Document") -> list[str]:
+    def extract(self, doc: Document) -> list[str]:
         """ドキュメントからキーワードリストを抽出する。
 
         Args:
@@ -140,7 +140,7 @@ class KeywordAnnotator:
 
         return keywords
 
-    def search_in_doc(self, doc: "Document", keyword: str) -> bool:
+    def search_in_doc(self, doc: Document, keyword: str) -> bool:
         """ドキュメント本文にキーワードが含まれるかを判定する（大文字小文字無視）。
 
         全文検索ではなく、特定用語のアノテーション判定に使用する。

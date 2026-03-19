@@ -21,10 +21,10 @@ import argparse
 import gradio as gr
 
 from src.gui.components.status_bar import get_status_markdown
-from src.gui.utils import get_all_provider_choices
 
 # タブモジュール
 from src.gui.tabs import chat, guide, memory, sandbox, settings, training
+from src.gui.utils import get_all_provider_choices
 
 # ────────────────────────────────────────────────────────────────
 # テーマ & CSS

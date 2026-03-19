@@ -7,6 +7,7 @@ LLM 呼び出しをスタブ化してロジックを検証する。
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import sys
 import types
 
@@ -28,9 +29,9 @@ if "pydantic_settings" not in sys.modules:
     _ps.SettingsConfigDict = lambda **kw: {}  # type: ignore[attr-defined]
     sys.modules["pydantic_settings"] = _ps
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 
 # ── ゲートウェイスタブ ────────────────────────────────────────
 
@@ -49,19 +50,19 @@ def _make_gateway(content: str = "0.8"):
 
 class TestTrainingDataGate:
     def test_high_variance_passes(self):
-        from src.training.pipeline import TrainingDataGate, GateConfig, TrainingBatch
+        from src.training.pipeline import GateConfig, TrainingBatch, TrainingDataGate
         gate = TrainingDataGate(GateConfig(variance_threshold=0.05))
         batch = TrainingBatch(prompts=["q"], responses=["a"], rewards=[0.1, 0.9])
         assert gate.filter(batch) is not None
 
     def test_low_variance_rejected(self):
-        from src.training.pipeline import TrainingDataGate, GateConfig, TrainingBatch
+        from src.training.pipeline import GateConfig, TrainingBatch, TrainingDataGate
         gate = TrainingDataGate(GateConfig(variance_threshold=0.05))
         batch = TrainingBatch(prompts=["q"], responses=["a"], rewards=[0.5, 0.51])
         assert gate.filter(batch) is None
 
     def test_low_quality_rejected(self):
-        from src.training.pipeline import TrainingDataGate, GateConfig, TrainingBatch
+        from src.training.pipeline import GateConfig, TrainingBatch, TrainingDataGate
         gate = TrainingDataGate(GateConfig(quality_threshold=0.6, variance_threshold=0.0))
         batch = TrainingBatch(
             prompts=["q"], responses=["a"],
@@ -71,14 +72,14 @@ class TestTrainingDataGate:
         assert gate.filter(batch) is None
 
     def test_no_rewards_passes_variance_check(self):
-        from src.training.pipeline import TrainingDataGate, GateConfig, TrainingBatch
+        from src.training.pipeline import GateConfig, TrainingBatch, TrainingDataGate
         gate = TrainingDataGate(GateConfig(variance_threshold=0.1))
         batch = TrainingBatch(prompts=["q"], responses=["a"], rewards=[])
         # rewards が空の場合は分散フィルタをスキップ
         assert gate.filter(batch) is not None
 
     def test_filter_batches_returns_subset(self):
-        from src.training.pipeline import TrainingDataGate, GateConfig, TrainingBatch
+        from src.training.pipeline import GateConfig, TrainingBatch, TrainingDataGate
         gate = TrainingDataGate(GateConfig(variance_threshold=0.05))
         batches = [
             TrainingBatch(prompts=["q"], responses=["a"], rewards=[0.1, 0.9]),  # pass
@@ -96,9 +97,7 @@ class TestTrainingDataGate:
 class TestGRPOStarPOS:
     def test_variance_filter_skips_low_variance(self):
         """低分散バッチはゼロロスを返してスキップされる。"""
-        try:
-            import torch
-        except ImportError:
+        if importlib.util.find_spec("torch") is None:
             pytest.skip("torch not installed")
 
         from src.training.algorithms.grpo import GRPOAlgorithm
@@ -115,9 +114,7 @@ class TestGRPOStarPOS:
 
     def test_high_variance_proceeds(self):
         """高分散バッチは通常通り loss を計算する。"""
-        try:
-            import torch
-        except ImportError:
+        if importlib.util.find_spec("torch") is None:
             pytest.skip("torch not installed")
 
         from src.training.algorithms.grpo import GRPOAlgorithm
@@ -183,7 +180,7 @@ class TestInterviewEvaluator:
         assert report.num_turns == 2
 
     def test_summary_averages(self):
-        from src.training.evaluation.interview_evaluator import InterviewEvaluator, InterviewReport
+        from src.training.evaluation.interview_evaluator import InterviewReport
         ev = self._make_evaluator()
         reports = [
             InterviewReport(question="q1", overall=0.8, initial_quality=0.8, adaptability=0.8, consistency=0.8),
@@ -208,7 +205,8 @@ class TestInterviewEvaluator:
 class TestMultiChallengeEvaluator:
     def _make_evaluator(self):
         from src.training.evaluation.multi_challenge_evaluator import (
-            MultiChallengeEvaluator, ChallengeCase,
+            ChallengeCase,
+            MultiChallengeEvaluator,
         )
         gw = _make_gateway("1")  # judge が "1" を返す = passed
         cases = [
@@ -247,7 +245,8 @@ class TestMultiChallengeEvaluator:
 
     def test_all_fail_when_judge_returns_0(self):
         from src.training.evaluation.multi_challenge_evaluator import (
-            MultiChallengeEvaluator, ChallengeCase,
+            ChallengeCase,
+            MultiChallengeEvaluator,
         )
         gw = _make_gateway("0")
         cases = [ChallengeCase(
@@ -269,7 +268,8 @@ class TestMultiChallengeEvaluator:
 
     def test_add_case(self):
         from src.training.evaluation.multi_challenge_evaluator import (
-            MultiChallengeEvaluator, ChallengeCase,
+            ChallengeCase,
+            MultiChallengeEvaluator,
         )
         gw = _make_gateway("1")
         ev = MultiChallengeEvaluator(gw, cases=[])
@@ -287,7 +287,8 @@ class TestAssumptionCorrectionEvaluator:
 
     def _make_evaluator(self, judge_response: str):
         from src.training.evaluation.assumption_correction_evaluator import (
-            AssumptionCorrectionEvaluator, AssumptionCase,
+            AssumptionCase,
+            AssumptionCorrectionEvaluator,
         )
         gw = _make_gateway(judge_response)
         cases = [
@@ -316,7 +317,8 @@ class TestAssumptionCorrectionEvaluator:
     def test_metacognition_prompt_prepended(self):
         """include_metacognition=True のとき学生へのプロンプトに確認文が含まれる。"""
         from src.training.evaluation.assumption_correction_evaluator import (
-            AssumptionCorrectionEvaluator, AssumptionCase,
+            AssumptionCase,
+            AssumptionCorrectionEvaluator,
         )
         gw = _make_gateway(self._GOOD_JUDGE)
         called_with = {}
@@ -346,7 +348,8 @@ class TestAssumptionCorrectionEvaluator:
 
     def test_add_case(self):
         from src.training.evaluation.assumption_correction_evaluator import (
-            AssumptionCorrectionEvaluator, AssumptionCase,
+            AssumptionCase,
+            AssumptionCorrectionEvaluator,
         )
         gw = _make_gateway(self._GOOD_JUDGE)
         ev = AssumptionCorrectionEvaluator(gw, cases=[])
@@ -357,7 +360,7 @@ class TestAssumptionCorrectionEvaluator:
     def test_default_cases_exist(self):
         """デフォルト5ケースが組み込まれている。"""
         from src.training.evaluation.assumption_correction_evaluator import (
-            AssumptionCorrectionEvaluator, _DEFAULT_CASES,
+            _DEFAULT_CASES,
         )
         assert len(_DEFAULT_CASES) == 5
         categories = {c.category for c in _DEFAULT_CASES}
