@@ -162,7 +162,7 @@ class MultiChallengeEvaluator:
         teacher_provider: str | None = None,
     ) -> None:
         self._gateway = gateway
-        self._cases = cases or _DEFAULT_CASES
+        self._cases = list(cases) if cases is not None else list(_DEFAULT_CASES)
         self._provider = teacher_provider
 
     def add_case(self, case: ChallengeCase) -> None:

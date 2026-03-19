@@ -170,7 +170,7 @@ class AssumptionCorrectionEvaluator:
         include_metacognition: bool = True,
     ) -> None:
         self._gateway = gateway
-        self._cases = cases or _DEFAULT_CASES
+        self._cases = list(cases) if cases is not None else list(_DEFAULT_CASES)
         self._provider = teacher_provider
         self._include_metacognition = include_metacognition
 

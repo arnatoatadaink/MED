@@ -66,3 +66,56 @@ alternatives:
     adapter_kwargs:
       rank: 4
     reward: null
+
+  # StarPO-S: Echo Trap 対策版 GRPO
+  # GRPO 崩壊（reward variance の崖）を検出したら切り替える
+  starpo_s:
+    algorithm: "grpo"
+    algorithm_kwargs:
+      clip_ratio: 0.2
+      asymmetric_clip: true      # 正 advantage を強く伸ばし、負を強く抑制
+      variance_filter: 0.08      # std < 0.08 のバッチをスキップ（上位約50%相当）
+      entropy_coef: 0.01
+    adapter: "tinylora"
+    adapter_kwargs:
+      frozen_rank: 2
+      projection_dim: 4
+      tie_factor: 7
+    reward: "composite"
+
+  # REFUEL: 長い多ターン会話特化
+  # 会話ターン数が多くなるほど GRPO より優位
+  refuel_tinylora:
+    algorithm: "refuel"
+    algorithm_kwargs:
+      margin: 0.05               # reward 差が 0.05 未満のペアはスキップ
+      temperature: 1.0
+      clip_value: 10.0
+    adapter: "tinylora"
+    adapter_kwargs:
+      frozen_rank: 2
+      projection_dim: 4
+      tie_factor: 7
+    reward: "composite"
+
+  # CURIO: 情報利得報酬付き GRPO
+  # memory_utilization(0.10) を減らして curio_coef(0.08) を加算
+  grpo_curio:
+    algorithm: "grpo"
+    algorithm_kwargs:
+      clip_ratio: 0.2
+      entropy_coef: 0.01
+    adapter: "tinylora"
+    adapter_kwargs:
+      frozen_rank: 2
+      projection_dim: 4
+      tie_factor: 7
+    reward: "composite"
+    reward_kwargs:
+      curio_coef: 0.08           # CURIO 情報利得報酬（内発的報酬）
+      weights:
+        correctness: 0.35
+        retrieval_quality: 0.20
+        exec_success: 0.20
+        efficiency: 0.10
+        memory_utilization: 0.10 # CURIO と合わせて調整（0.15→0.10）

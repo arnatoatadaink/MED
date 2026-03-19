@@ -70,6 +70,11 @@ class CompositeReward(RewardFunction):
         weights: サブ報酬の重み辞書。合計が 1.0 になること。
         provider: 優先 LLM プロバイダ。
         max_response_chars: 効率スコア計算の基準最大文字数。
+        curio_coef: CURIO 情報利得報酬の係数 (0 で無効)。
+            正の値を設定すると、metadata['new_doc_ids'] から
+            FAISSで新たに得た情報量を内発的報酬として加算する。
+            memory_utilization の代替/補完として使用。
+            推奨値: 0.05〜0.10（memory_utilization の重みを下げて調整）。
     """
 
     def __init__(
@@ -78,11 +83,13 @@ class CompositeReward(RewardFunction):
         weights: dict[str, float] | None = None,
         provider: str | None = None,
         max_response_chars: int = 2000,
+        curio_coef: float = 0.0,
     ) -> None:
         self._gateway = gateway
         self._weights = weights or dict(_DEFAULT_WEIGHTS)
         self._provider = provider
         self._max_response_chars = max_response_chars
+        self._curio_coef = curio_coef
 
         total = sum(self._weights.values())
         if abs(total - 1.0) > 1e-6:
@@ -121,6 +128,11 @@ class CompositeReward(RewardFunction):
         efficiency = self._efficiency(response)
         memory_utilization = self._memory_utilization(meta)
 
+        # CURIO: 情報利得報酬（内発的報酬）
+        # 新規取得ドキュメント数を「ユーザーについて新たに学んだ情報量」の代理指標とする
+        # metadata['new_doc_ids'] = 前ターンと比較して新たに参照したドキュメントIDリスト
+        curio_bonus = self._curio_information_gain(meta) if self._curio_coef > 0 else 0.0
+
         w = self._weights
         composite = (
             w["correctness"] * correctness
@@ -128,7 +140,11 @@ class CompositeReward(RewardFunction):
             + w["exec_success"] * exec_success
             + w["efficiency"] * efficiency
             + w["memory_utilization"] * memory_utilization
+            + self._curio_coef * curio_bonus
         )
+        # curio_coef > 0 の場合でも 0〜1 の範囲に正規化
+        if self._curio_coef > 0:
+            composite = composite / (1.0 + self._curio_coef)
 
         bd = RewardBreakdown(
             correctness=correctness,
@@ -141,9 +157,9 @@ class CompositeReward(RewardFunction):
 
         logger.debug(
             "Reward breakdown: correctness=%.2f retrieval=%.2f exec=%.2f "
-            "eff=%.2f mem=%.2f → composite=%.3f",
+            "eff=%.2f mem=%.2f curio=%.2f → composite=%.3f",
             correctness, retrieval_quality, exec_success,
-            efficiency, memory_utilization, composite,
+            efficiency, memory_utilization, curio_bonus, composite,
         )
         return bd
 
@@ -221,6 +237,44 @@ class CompositeReward(RewardFunction):
             excess_ratio = n / self._max_response_chars
             return max(0.1, 1.0 - (excess_ratio - 1.0) * 0.3)
         return 1.0
+
+    def _curio_information_gain(self, meta: dict[str, Any]) -> float:
+        """CURIO 情報利得報酬 (arXiv:2504.03206)。
+
+        新規取得ドキュメント数を情報利得の代理指標として使用する。
+        metadata['new_doc_ids'] = このターンで初めて参照したドキュメントIDリスト
+        metadata['seen_doc_ids'] = 過去ターンで参照済みのドキュメントIDセット
+
+        スコアの意味:
+            0件の新規参照 → 0.0（新しい情報を得ていない）
+            1〜3件の新規参照 → 0.5〜1.0（適度な情報利得）
+            4件以上 → 0.8（多すぎると散漫になる可能性があるためキャップ）
+        """
+        if "curio_score" in meta:
+            return float(meta["curio_score"])
+
+        new_docs = meta.get("new_doc_ids", [])
+        seen_docs = set(meta.get("seen_doc_ids", []))
+        all_docs = meta.get("context_doc_ids", [])
+
+        if new_docs:
+            # 明示的な新規ドキュメントリストがある場合
+            n_new = len(new_docs)
+        elif all_docs and seen_docs:
+            # 差分で新規を計算
+            n_new = sum(1 for d in all_docs if d not in seen_docs)
+        else:
+            # 情報なし → 中立スコア
+            return 0.3
+
+        if n_new == 0:
+            return 0.0
+        elif n_new == 1:
+            return 0.5
+        elif n_new <= 3:
+            return 1.0
+        else:
+            return 0.8  # 過剰取得にはキャップ
 
     def _memory_utilization(self, meta: dict[str, Any]) -> float:
         """FAISSメモリ活用スコア。"""
