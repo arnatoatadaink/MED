@@ -73,6 +73,24 @@ class ReviewStatus(str, Enum):
     NEEDS_UPDATE = "needs_update"
 
 
+class KnowledgeType(str, Enum):
+    """思考過程の中で識別された知識の種別。"""
+
+    FACTUAL = "factual"  # 陳腐化する事実知識 → FAISS更新対象
+    STRUCTURAL = "structural"  # 推論パターン・判断基準 → weightに焼くか思考として保存
+    PROCEDURAL = "procedural"  # 手順・アルゴリズム
+    CAUSAL = "causal"  # 因果関係
+    ANALOGICAL = "analogical"  # 類推・アナロジー
+
+
+class TraceMethod(str, Enum):
+    """思考過程の抽出方法。"""
+
+    EXTENDED_THINKING = "extended_thinking"  # Anthropic Extended Thinking API
+    COT_PROMPT = "cot_prompt"  # CoTプロンプトで引き出した（post-hoc rationalizationの可能性あり）
+    MANUAL = "manual"  # 人手アノテーション
+
+
 # ============================================================================
 # ソースメタデータ
 # ============================================================================
@@ -386,3 +404,52 @@ class TrainStepResult(BaseModel):
     grad_norm: float | None = None
     learning_rate: float | None = None
     extra_metrics: dict[str, float] = Field(default_factory=dict)
+
+
+# ============================================================================
+# 思考過程 (ReasoningTrace)
+# ============================================================================
+
+
+class ReasoningTrace(BaseModel):
+    """Teacher LLM の思考過程を保存するエンティティ。
+
+    Extended Thinking（Anthropic）または CoT プロンプトで抽出した
+    推論構造・判断基準・知識監査をSQLiteに保存する。
+
+    - raw_thinking: 生の思考テキスト（Extended Thinking の場合は thinkingブロック）
+    - knowledge_audit: 必要な知識のリスト（kind, needs_retrieval, confidence 付き）
+    - reasoning_chain: 推論ステップ（1ステップ1文）
+    - judgment_criteria: 判断基準（他クエリでも再利用可能な形）
+    - retrieval_rationale: 参照ドキュメントの選定理由
+    """
+
+    id: str = Field(default_factory=_generate_doc_id)
+
+    # 元のクエリと回答
+    query: str
+    answer: str
+
+    # 思考過程テキスト（生）
+    raw_thinking: str | None = None
+    trace_method: TraceMethod = TraceMethod.COT_PROMPT
+
+    # 構造化された思考要素
+    knowledge_audit: list[dict[str, Any]] = Field(default_factory=list)
+    reasoning_chain: list[str] = Field(default_factory=list)
+    judgment_criteria: list[str] = Field(default_factory=list)
+    retrieval_rationale: list[dict[str, Any]] = Field(default_factory=list)
+
+    # 分類
+    primary_knowledge_type: KnowledgeType = KnowledgeType.FACTUAL
+
+    # Teacher情報
+    teacher_model: str | None = None
+    teacher_provider: str | None = None
+    thinking_tokens: int = 0
+
+    # 品質
+    confidence: float = 0.5
+    doc_ids: list[str] = Field(default_factory=list)
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)

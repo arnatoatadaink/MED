@@ -32,29 +32,26 @@
 ### A-2. Teacher思考過程の抽出・保存（ReasoningTrace）
 > 📄 詳細: `plan_think.md`
 
-**Step 1: スキーマ追加**
-- 🔴 `src/memory/schema.py` — `KnowledgeType` / `TraceMethod` 列挙型を追加
-- 🔴 `src/memory/schema.py` — `ReasoningTrace` Pydantic モデルを追加
+**Step 1: スキーマ追加** ✅ **完了**
+- ✅ `src/memory/schema.py` — `KnowledgeType` / `TraceMethod` 列挙型を追加
+- ✅ `src/memory/schema.py` — `ReasoningTrace` Pydantic モデルを追加
 
-**Step 2: LLMレイヤー拡張**
-- 🔴 `src/llm/gateway.py` — `LLMResponse` に `thinking_text: str | None` / `thinking_tokens: int` を追加
-- 🔴 `src/llm/gateway.py` — `BaseLLMProvider.complete()` に `enable_thinking: bool = False` を追加
-- 🔴 `src/llm/providers/anthropic.py` — Extended Thinking API（`thinking={"type":"enabled","budget_tokens":N}`）対応
-  - 注意: Extended Thinking 有効時は `temperature=1.0` 固定（API要件）
-  - 注意: `claude-opus-4-6` 以上が必要（Haiku非対応）
+**Step 2: LLMレイヤー拡張** ✅ **完了**
+- ✅ `src/llm/gateway.py` — `LLMResponse` に `thinking_text: str | None` / `thinking_tokens: int` を追加
+- ✅ `src/llm/gateway.py` — `BaseLLMProvider.complete()` に `enable_thinking: bool = False` を追加
+- ✅ `src/llm/providers/anthropic.py` — Extended Thinking API（`thinking={"type":"enabled","budget_tokens":N}`）対応
 
-**Step 3: ストレージ**
-- 🔴 `src/memory/metadata_store.py` — `reasoning_traces` テーブル追加
-- 🔴 `src/memory/metadata_store.py` — `trace_documents`（多対多）テーブル追加
-- 🔴 `src/memory/memory_manager.py` — `save_reasoning_trace()` メソッド追加
+**Step 3: ストレージ** ✅ **完了**
+- ✅ `src/memory/metadata_store.py` — `reasoning_traces` テーブル追加
+- ✅ `src/memory/metadata_store.py` — `trace_documents`（多対多）テーブル追加
+- ✅ `src/memory/memory_manager.py` — `save_reasoning_trace()` メソッド追加
 
-**Step 4: 抽出ロジック**
-- 🔴 `src/llm/prompt_templates/reasoning_extraction.yaml` — CoT抽出プロンプト（非Anthropicプロバイダ用）
-- 🔴 `src/llm/thinking_extractor.py` — `ThinkingExtractor` クラス新規作成（プロバイダ別に抽出方式を切替）
+**Step 4: 抽出ロジック** ✅ **完了**
+- ✅ `src/llm/prompt_templates/reasoning_extraction.yaml` — CoT抽出プロンプト（非Anthropicプロバイダ用）
+- ✅ `src/llm/thinking_extractor.py` — `ThinkingExtractor` クラス新規作成（プロバイダ別に抽出方式を切替）
 
-**Step 5: テスト**
-- 🟡 `tests/unit/test_thinking_extractor.py` — Extended Thinking / CoTパース / ReasoningTrace検証
-- 🟡 `tests/unit/test_reasoning_store.py` — SQLite保存・取得・JSONシリアライズ
+**Step 5: テスト** ✅ **完了**
+- ✅ `tests/unit/test_thinking_extractor.py` — 30テスト全通過（Extended Thinking / CoTパース / SQLite CRUD）
 
 **後続フェーズ（任意）**
 - 🟢 `src/orchestrator/pipeline.py` — Teacher呼び出し後に思考過程を自動保存するフック
@@ -66,10 +63,10 @@
 ## B. CI/CD 改善
 > 📄 詳細: `plan_test.md`
 
-### B-0. 即効修正（CI 6h → 20分）
-- 🔴 `.github/workflows/ci.yml` — 各ジョブに `timeout-minutes` 追加（lint:5 / unit-tests:20 / docker-tests:30）
-- 🔴 `.github/workflows/ci.yml` — `unit-tests` ジョブの `pip install` から `sentence-transformers` を削除
-- 🔴 `.github/workflows/ci.yml` — `docker-tests` ジョブの重複 pytest ステップを削除（"Run unit tests in Docker" / "Extract coverage report"）
+### B-0. 即効修正（CI 6h → 20分） ✅ **完了**
+- ✅ `.github/workflows/ci.yml` — 各ジョブに `timeout-minutes` 追加（lint:5 / unit-tests:20 / docker-tests:30）
+- ✅ `.github/workflows/ci.yml` — `unit-tests` ジョブの `pip install` から `sentence-transformers` を削除
+- ✅ `.github/workflows/ci.yml` — `docker-tests` ジョブの重複 pytest ステップ削除済み
 
 ### B-1〜4. testmon + xdist 移行
 - 🟡 `requirements-dev.txt` — `pytest-testmon>=2.1` / `pytest-xdist>=3.5` を追記
@@ -118,40 +115,26 @@
 ## I. 面接形式テスト・多ターン訓練拡張
 > 📄 詳細: `plan_training_b.md`
 
-### Phase B-1: データ品質層の基盤（最優先）
+### Phase B-1: データ品質層の基盤 — ✅ **完了**
 
-- 🔴 `src/training/pipeline.py` — `TrainingDataGate` クラス追加（Teacher品質 × 分散フィルタの2段ゲート）
-  - `src/memory/maturation/reviewer.py` を流用してTeacher品質スコアを取得
-  - `reward_variance > θ_v` の高分散バッチのみ訓練に通す（StarPO-S方式）
-- 🔴 `src/training/algorithms/grpo.py` — 分散ベース軌跡フィルタリング追加（StarPO-S）
-  - 上位25〜50%の高分散ロールアウトのみで更新
-  - 非対称クリッピング（良い方向強め / 悪化方向抑制）オプション追加
+- ✅ `src/training/pipeline.py` — `TrainingDataGate` + `GateConfig` 追加
+- ✅ `src/training/algorithms/grpo.py` — StarPO-S 分散フィルタ + 非対称クリッピング追加
 - 🟡 `src/memory/maturation/difficulty_tagger.py` — 動的カーリキュラム調整
   - 損失推移を監視して難易度配分をリアルタイム変更
 
-### Phase B-2: 評価フレームワーク拡張
+### Phase B-2: 評価フレームワーク拡張 — ✅ **完了**
 
-- 🔴 `src/training/evaluation/` — `InterviewEvaluator` クラス追加
-  - **LLM-as-an-Interviewer**: Teacherが「なぜ？」を繰り返す圧迫深掘りテストループ
-  - 測定軸: 初回回答品質 / フィードバック適応力 / フォローアップ対応力
-- 🔴 `src/training/evaluation/` — `MultiChallengeEvaluator` クラス追加
-  - 長期指示維持テスト（instruction retention / inference memory / self-coherence）
-  - 参考: Claude 3.5 Sonnet でも正解率 41.4%（目標値設定が必要）
-- 🔴 `src/training/evaluation/` — `AssumptionCorrectionEvaluator` クラス追加（MEDオリジナル）
-  - 誤前提クエリを入力し「指摘→正しい前提で回答」の2ステップを評価
-  - テストデータは `IQA-EVAL` 方式で自動生成可能
-- 🟡 `tests/unit/test_benchmark_suite.py` — 上記3評価クラスの単体テスト追加
-- 🟡 `src/training/evaluation/benchmark_suite.py` — mtRAG ベンチマーク統合
-  - 多ターンRAG精度テスト（後半ターンでの精度低下を監視）
+- ✅ `src/training/evaluation/interview_evaluator.py` — `InterviewEvaluator` (圧迫深掘りテスト)
+- ✅ `src/training/evaluation/multi_challenge_evaluator.py` — `MultiChallengeEvaluator` (長期指示維持4カテゴリ)
+- ✅ `src/training/evaluation/assumption_correction_evaluator.py` — `AssumptionCorrectionEvaluator` (MEDオリジナル)
+- ✅ `tests/unit/test_interview_evaluators.py` — 23テスト全通過
+- ✅ `src/training/evaluation/benchmark_suite.py` — mtRAG ベンチマーク統合
 
-### Phase B-3: 訓練アルゴリズム拡張
+### Phase B-3: 訓練アルゴリズム拡張 — ✅ **完了**
 
-- 🟡 `src/training/algorithms/refuel.py` — REFUEL アルゴリズム新規実装
-  - Q値差分回帰（1モデルで多ターン最適化、Critic不要）
-  - GRPO崩壊（Echo Trap）発生時のフォールバックとして使用
-- 🟡 `src/training/rewards/composite.py` — CURIO 情報利得報酬を追加オプションとして実装
-  - `memory_utilization(0.15)` の代替/補完として FAISSの新情報量を内発的報酬に
-- 🟡 `configs/training.yaml` — アルゴリズム選択設定を追加（grpo / starpo_s / refuel / curio）
+- ✅ `src/training/algorithms/refuel.py` — REFUEL アルゴリズム (Q値差分回帰)
+- ✅ `src/training/rewards/composite.py` — CURIO 情報利得報酬 (`curio_coef` パラメータ)
+- ✅ `configs/training.yaml` — `starpo_s` / `refuel_tinylora` / `grpo_curio` プロファイル追加
 
 ### Phase B-4: 統合・モニタリング
 

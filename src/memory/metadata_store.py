@@ -155,6 +155,38 @@ _CREATE_FTS_TRIGGERS_SQL = [
        END;""",
 ]
 
+_CREATE_REASONING_TRACES_SQL = """
+CREATE TABLE IF NOT EXISTS reasoning_traces (
+    id                   TEXT PRIMARY KEY,
+    query                TEXT NOT NULL,
+    answer               TEXT NOT NULL,
+    raw_thinking         TEXT,
+    trace_method         TEXT DEFAULT 'cot_prompt',
+    knowledge_audit      TEXT DEFAULT '[]',
+    reasoning_chain      TEXT DEFAULT '[]',
+    judgment_criteria    TEXT DEFAULT '[]',
+    retrieval_rationale  TEXT DEFAULT '[]',
+    primary_knowledge_type TEXT DEFAULT 'factual',
+    teacher_model        TEXT,
+    teacher_provider     TEXT,
+    thinking_tokens      INTEGER DEFAULT 0,
+    confidence           REAL DEFAULT 0.5,
+    created_at           TEXT DEFAULT (datetime('now'))
+);"""
+
+_CREATE_TRACE_DOCUMENTS_SQL = """
+CREATE TABLE IF NOT EXISTS trace_documents (
+    trace_id  TEXT NOT NULL,
+    doc_id    TEXT NOT NULL,
+    role      TEXT DEFAULT 'supporting',
+    PRIMARY KEY (trace_id, doc_id)
+);"""
+
+_CREATE_REASONING_INDICES_SQL = [
+    "CREATE INDEX IF NOT EXISTS idx_reasoning_traces_created ON reasoning_traces(created_at DESC);",
+    "CREATE INDEX IF NOT EXISTS idx_reasoning_traces_method ON reasoning_traces(trace_method);",
+]
+
 _CREATE_INDICES_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_documents_domain ON documents(domain);",
     "CREATE INDEX IF NOT EXISTS idx_documents_review_status ON documents(review_status);",
@@ -324,8 +356,10 @@ class MetadataStore:
         await self._db.execute(_CREATE_TABLE_SQL)
         await self._db.execute(_CREATE_RAW_RESULTS_SQL)
         await self._db.execute(_CREATE_FTS_SQL)
+        await self._db.execute(_CREATE_REASONING_TRACES_SQL)
+        await self._db.execute(_CREATE_TRACE_DOCUMENTS_SQL)
         await self._migrate()  # 列追加を先に行い、その後インデックス作成
-        for idx_sql in _CREATE_INDICES_SQL + _CREATE_RAW_RESULTS_INDICES_SQL:
+        for idx_sql in _CREATE_INDICES_SQL + _CREATE_RAW_RESULTS_INDICES_SQL + _CREATE_REASONING_INDICES_SQL:
             await self._db.execute(idx_sql)
         for trigger_sql in _CREATE_FTS_TRIGGERS_SQL:
             await self._db.execute(trigger_sql)
@@ -923,3 +957,141 @@ class MetadataStore:
             "avg_selection_count":   row["avg_selection_count"] or 0.0,
             "difficulty_distribution": difficulty_distribution,
         }
+
+    # ================================================================
+    # ReasoningTrace 操作
+    # ================================================================
+
+    async def save_reasoning_trace(self, trace: Any) -> str:
+        """ReasoningTrace を reasoning_traces テーブルに保存する。
+
+        Args:
+            trace: ReasoningTrace オブジェクト。
+
+        Returns:
+            trace.id。
+        """
+        from src.memory.schema import ReasoningTrace
+        if not isinstance(trace, ReasoningTrace):
+            raise TypeError(f"Expected ReasoningTrace, got {type(trace).__name__}")
+
+        sql = """
+            INSERT OR REPLACE INTO reasoning_traces (
+                id, query, answer, raw_thinking, trace_method,
+                knowledge_audit, reasoning_chain, judgment_criteria,
+                retrieval_rationale, primary_knowledge_type,
+                teacher_model, teacher_provider, thinking_tokens,
+                confidence, created_at
+            ) VALUES (
+                :id, :query, :answer, :raw_thinking, :trace_method,
+                :knowledge_audit, :reasoning_chain, :judgment_criteria,
+                :retrieval_rationale, :primary_knowledge_type,
+                :teacher_model, :teacher_provider, :thinking_tokens,
+                :confidence, :created_at
+            )
+        """
+        await self._db.execute(sql, {
+            "id": trace.id,
+            "query": trace.query,
+            "answer": trace.answer,
+            "raw_thinking": trace.raw_thinking,
+            "trace_method": trace.trace_method.value,
+            "knowledge_audit": json.dumps(trace.knowledge_audit, ensure_ascii=False),
+            "reasoning_chain": json.dumps(trace.reasoning_chain, ensure_ascii=False),
+            "judgment_criteria": json.dumps(trace.judgment_criteria, ensure_ascii=False),
+            "retrieval_rationale": json.dumps(trace.retrieval_rationale, ensure_ascii=False),
+            "primary_knowledge_type": trace.primary_knowledge_type.value,
+            "teacher_model": trace.teacher_model,
+            "teacher_provider": trace.teacher_provider,
+            "thinking_tokens": trace.thinking_tokens,
+            "confidence": trace.confidence,
+            "created_at": trace.created_at.isoformat(),
+        })
+
+        # trace_documents 多対多
+        for doc_id in trace.doc_ids:
+            await self._db.execute(
+                "INSERT OR IGNORE INTO trace_documents (trace_id, doc_id) VALUES (?, ?)",
+                (trace.id, doc_id),
+            )
+
+        await self._db.commit()
+        logger.debug("Saved reasoning trace: %s", trace.id)
+        return trace.id
+
+    async def get_reasoning_trace(self, trace_id: str) -> Any | None:
+        """reasoning_traces テーブルから ReasoningTrace を取得する。"""
+        from src.memory.schema import KnowledgeType, ReasoningTrace, TraceMethod
+
+        cursor = await self._db.execute(
+            "SELECT * FROM reasoning_traces WHERE id = ?", (trace_id,)
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+
+        # trace_documents から doc_ids を取得
+        doc_cursor = await self._db.execute(
+            "SELECT doc_id FROM trace_documents WHERE trace_id = ?", (trace_id,)
+        )
+        doc_rows = await doc_cursor.fetchall()
+        doc_ids = [r[0] for r in doc_rows]
+
+        return ReasoningTrace(
+            id=row["id"],
+            query=row["query"],
+            answer=row["answer"],
+            raw_thinking=row["raw_thinking"],
+            trace_method=TraceMethod(row["trace_method"]),
+            knowledge_audit=json.loads(row["knowledge_audit"] or "[]"),
+            reasoning_chain=json.loads(row["reasoning_chain"] or "[]"),
+            judgment_criteria=json.loads(row["judgment_criteria"] or "[]"),
+            retrieval_rationale=json.loads(row["retrieval_rationale"] or "[]"),
+            primary_knowledge_type=KnowledgeType(row["primary_knowledge_type"]),
+            teacher_model=row["teacher_model"],
+            teacher_provider=row["teacher_provider"],
+            thinking_tokens=row["thinking_tokens"],
+            confidence=row["confidence"],
+            doc_ids=doc_ids,
+        )
+
+    async def list_reasoning_traces(
+        self,
+        limit: int = 20,
+        offset: int = 0,
+        trace_method: str | None = None,
+    ) -> list[Any]:
+        """reasoning_traces をリスト取得する。"""
+        from src.memory.schema import KnowledgeType, ReasoningTrace, TraceMethod
+
+        if trace_method:
+            cursor = await self._db.execute(
+                "SELECT * FROM reasoning_traces WHERE trace_method = ? "
+                "ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (trace_method, limit, offset),
+            )
+        else:
+            cursor = await self._db.execute(
+                "SELECT * FROM reasoning_traces ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (limit, offset),
+            )
+        rows = await cursor.fetchall()
+        traces = []
+        for row in rows:
+            traces.append(ReasoningTrace(
+                id=row["id"],
+                query=row["query"],
+                answer=row["answer"],
+                raw_thinking=row["raw_thinking"],
+                trace_method=TraceMethod(row["trace_method"]),
+                knowledge_audit=json.loads(row["knowledge_audit"] or "[]"),
+                reasoning_chain=json.loads(row["reasoning_chain"] or "[]"),
+                judgment_criteria=json.loads(row["judgment_criteria"] or "[]"),
+                retrieval_rationale=json.loads(row["retrieval_rationale"] or "[]"),
+                primary_knowledge_type=KnowledgeType(row["primary_knowledge_type"]),
+                teacher_model=row["teacher_model"],
+                teacher_provider=row["teacher_provider"],
+                thinking_tokens=row["thinking_tokens"],
+                confidence=row["confidence"],
+            ))
+        return traces
