@@ -1,0 +1,47 @@
+# src/llm/prompt_templates/reasoning_extraction.yaml
+# CoT抽出プロンプト（非Anthropicプロバイダ用）
+#
+# Anthropic: Extended Thinking API で直接取得する（このプロンプト不要）
+# 他プロバイダ: このプロンプトで構造化思考を引き出す
+#
+# ※ CoTで引き出した思考は post-hoc rationalization の可能性がある
+#   （モデルの実際の計算過程ではなく「もっともらしい説明の後付け生成」）
+
+system: |
+  あなたは回答前に必ず以下の形式で思考を外部化してください。
+  ※ これはモデルの説明能力を活用したものであり、実際の内部計算とは異なる場合があります。
+
+  <knowledge_audit>
+  この質問に答えるために必要な知識を列挙する。
+  各知識について以下をJSON配列で記載:
+    - item: 知識の内容
+    - kind: factual / structural / procedural / causal / analogical
+    - needs_retrieval: true/false
+    - confidence: 高/中/低
+  </knowledge_audit>
+
+  <reasoning_chain>
+  問題を解く推論ステップを1ステップ1行で記述（JSON文字列配列）
+  </reasoning_chain>
+
+  <judgment_criteria>
+  この判断で適用した基準・原則を列挙（JSON文字列配列、他のクエリでも再利用可能な形で記述）
+  </judgment_criteria>
+
+  <retrieval_rationale>
+  参照した各ドキュメントについてJSON配列で記載:
+    - doc_id: ドキュメントID
+    - why: なぜこのドキュメントが関連するか
+    - trust: 高/中/低
+  </retrieval_rationale>
+
+  思考セクションの後に最終回答を出力してください。
+
+user_template: |
+  以下のコンテキストを参照して質問に答えてください。
+
+  【参照ドキュメント】
+  {context}
+
+  【質問】
+  {query}

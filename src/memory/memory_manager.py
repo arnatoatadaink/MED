@@ -545,3 +545,12 @@ class MemoryManager:
                 "TeacherRegistry.record_doc failed for teacher=%s doc=%s",
                 teacher_id, doc.id,
             )
+
+    async def save_reasoning_trace(self, trace: Any) -> str:
+        """ReasoningTrace を SQLite に保存し、trace.id を返す。
+
+        FAISS への保存は行わない（構造化クエリで検索するため）。
+        reasoning_chainやjudgment_criteriaをDocument化してFAISSに入れたい場合は
+        別途 add_from_text() を呼ぶこと。
+        """
+        return await self.store.save_reasoning_trace(trace)
