@@ -12,8 +12,9 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Callable
 from datetime import datetime
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from src.conversation.schema import Session, Turn
 from src.conversation.store import ConversationStore
@@ -147,7 +148,7 @@ class ConversationManager:
         self,
         turn: Turn,
         user_id: str,
-        get_user_mm: Callable[[str], "MemoryManager"],
+        get_user_mm: Callable[[str], MemoryManager],
     ) -> str | None:
         """assistant ターンをユーザー専用 FAISS に登録する。
 

@@ -61,12 +61,13 @@ async def main(db_path: str | None = None) -> None:
         mark = "✓" if status == "created" else "—"
         print(f"  {mark} {name}: {detail}")
 
-    print(f"\nテストトークン取得例 (localhost のみ):")
+    print("\nテストトークン取得例 (localhost のみ):")
     for u in TEST_USERS:
+        uname = u["username"]
         print(
             f"  curl -X POST http://localhost:8000/auth/token/test"
             f" -H 'Content-Type: application/json'"
-            f" -d '{{\"username\": \"{u[\"username\"]}\"}}'"
+            f" -d '{{\"username\": \"{uname}\"}}'"
         )
 
 

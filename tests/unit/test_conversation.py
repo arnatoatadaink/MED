@@ -192,7 +192,6 @@ class TestConversationStore:
         import uuid
         from datetime import datetime
 
-        from src.conversation.schema import Session, Turn
 
         sid = str(uuid.uuid4())
         now = datetime.utcnow()
@@ -223,7 +222,6 @@ class TestConversationStore:
         import uuid
         from datetime import datetime
 
-        from src.conversation.schema import Session, Turn
 
         sid = str(uuid.uuid4())
         now = datetime.utcnow()

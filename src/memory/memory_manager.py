@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 
 from src.common.config import FAISSConfig, MetadataConfig, get_settings
 from src.memory.alias_extractor import AliasExtractor
