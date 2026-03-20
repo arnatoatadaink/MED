@@ -251,10 +251,13 @@ class TestResultVerifier:
                 self._total_output_tokens = 0
                 self._call_count = 0
 
+            def available_providers(self) -> list[str]:
+                return ["mock"]
+
             async def complete(self, prompt, **kwargs) -> LLMResponse:
                 return LLMResponse(content="YES", provider="mock", model="mock")
 
-        verifier = ResultVerifier(gateway=YesGateway())
+        verifier = ResultVerifier(gateway=YesGateway(), enable_llm=True)
         results = [_make_result() for _ in range(3)]
         verified = await verifier.verify(results, query="relevant query")
         assert len(verified) == 3
@@ -271,10 +274,13 @@ class TestResultVerifier:
                 self._total_output_tokens = 0
                 self._call_count = 0
 
+            def available_providers(self) -> list[str]:
+                return ["mock"]
+
             async def complete(self, prompt, **kwargs) -> LLMResponse:
                 return LLMResponse(content="NO", provider="mock", model="mock")
 
-        verifier = ResultVerifier(gateway=NoGateway())
+        verifier = ResultVerifier(gateway=NoGateway(), enable_llm=True)
         results = [_make_result() for _ in range(3)]
         verified = await verifier.verify(results, query="irrelevant")
         assert len(verified) == 0
