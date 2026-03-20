@@ -11,6 +11,7 @@ embedding:
   dim: 384
   batch_size: 64
   device: "cpu"
+  cache_dir: "data/models"
 
 gui:
   host: "0.0.0.0"

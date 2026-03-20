@@ -53,15 +53,21 @@ class Embedder:
             from sentence_transformers import SentenceTransformer
 
             kwargs: dict = {"device": self._config.device}
+
+            # cache_dir が設定されている場合はローカルフルパスを直接渡す
             if self._config.cache_dir is not None:
-                kwargs["cache_folder"] = str(self._config.cache_dir)
+                from pathlib import Path
+                local_path = Path(self._config.cache_dir) / self._config.model
+                model_name_or_path = str(local_path) if local_path.exists() else self._config.model
+            else:
+                model_name_or_path = self._config.model
 
             logger.info(
                 "Loading embedding model: %s (device=%s)",
-                self._config.model,
+                model_name_or_path,
                 self._config.device,
             )
-            self._model = SentenceTransformer(self._config.model, **kwargs)
+            self._model = SentenceTransformer(model_name_or_path, **kwargs)
             logger.info("Embedding model loaded successfully")
         except ImportError:
             logger.warning(
