@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-from src.auth.schema import User
 from src.auth.service import AuthService
 from src.auth.store import UserStore
 

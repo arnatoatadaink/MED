@@ -30,9 +30,7 @@ from src.memory.embedder import Embedder
 from src.memory.faiss_index import FAISSIndexManager
 from src.memory.memory_manager import MemoryManager
 from src.memory.metadata_store import MetadataStore
-from src.memory.schema import SearchResult
 from src.orchestrator.pipeline import MEDPipeline, QueryResponse
-
 
 # ============================================================================
 # フィクスチャ
@@ -117,9 +115,9 @@ async def pipeline():
 @pytest.fixture
 def api_client():
     """FastAPI TestClient（lifespan を mock pipeline + auth + conv で置換）。"""
-    import src.orchestrator.server as srv
     from contextlib import asynccontextmanager
 
+    import src.orchestrator.server as srv
     from src.auth.deps import set_auth_service
     from src.auth.service import AuthService
     from src.auth.store import UserStore
