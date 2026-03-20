@@ -8,6 +8,9 @@
     3. MemoryManager — add → search → delete の一貫性
     4. LLM モック統合 — gateway をモックして LLM 依存を排除
     5. エラーハンドリング — 未初期化、存在しない doc_id など
+    6. 認証エンドポイント — /auth/register / /auth/login / /auth/me
+    7. セッション・ターン — /sessions CRUD / /sessions/{id}/turns
+    8. 管理者エンドポイント — /admin/users (admin のみ)
 
 実行方法:
     pytest tests/integration/test_e2e_pipeline.py -v
@@ -113,38 +116,94 @@ async def pipeline():
 
 @pytest.fixture
 def api_client():
-    """FastAPI TestClient（lifespan を mock pipeline で置換）。"""
+    """FastAPI TestClient（lifespan を mock pipeline + auth + conv で置換）。"""
     import src.orchestrator.server as srv
     from contextlib import asynccontextmanager
 
+    from src.auth.deps import set_auth_service
+    from src.auth.service import AuthService
+    from src.auth.store import UserStore
+    from src.conversation.manager import ConversationManager
+    from src.conversation.store import ConversationStore
+
     mm = _make_memory_manager()
     gw = _make_mock_gateway("サーバー経由のモック回答")
+
+    loop = asyncio.new_event_loop()
+
+    # 認証サービス初期化（in-memory）
+    user_store = UserStore(db_path=":memory:")
+    loop.run_until_complete(user_store.initialize())
+    auth_svc = AuthService(
+        store=user_store,
+        secret_key="test-secret-key",
+        algorithm="HS256",
+        expire_days=7,
+        allow_test_token=True,
+    )
+
+    # 会話履歴管理初期化（in-memory）
+    conv_store = ConversationStore(db_path=":memory:")
+    conv_mgr = ConversationManager(
+        store=conv_store,
+        max_sessions_per_user=50,
+        context_window_tokens=2048,
+        auto_save_to_faiss=False,
+    )
+    loop.run_until_complete(conv_mgr.initialize())
+
     pl = MEDPipeline(
         memory_manager=mm,
         gateway=gw,
+        conversation_manager=conv_mgr,
         enable_external_rag=False,
         enable_sandbox=False,
     )
-
-    loop = asyncio.new_event_loop()
     loop.run_until_complete(pl.initialize())
 
-    # lifespan を差し替えて mock pipeline が使われるようにする
     @asynccontextmanager
     async def _mock_lifespan(app):
         srv._pipeline = pl
+        srv._conv_manager = conv_mgr
+        srv._auth_service_instance = auth_svc
+        set_auth_service(auth_svc)
         yield
         srv._pipeline = None
+        srv._conv_manager = None
 
     original_lifespan = srv.app.router.lifespan_context
     srv.app.router.lifespan_context = _mock_lifespan
 
-    with TestClient(srv.app, raise_server_exceptions=True) as client:
+    with TestClient(srv.app, raise_server_exceptions=False) as client:
         yield client
 
     srv.app.router.lifespan_context = original_lifespan
+    loop.run_until_complete(conv_mgr.close())
+    loop.run_until_complete(user_store.close())
     loop.run_until_complete(pl.close())
     loop.close()
+
+
+# ── 認証ヘルパー ──────────────────────────────────────
+
+
+def _register_user(client: TestClient, username: str = "alice", password: str = "password123") -> dict:
+    """ユーザーを登録してレスポンス JSON を返す。"""
+    r = client.post("/auth/register", json={"username": username, "password": password})
+    assert r.status_code == 200, f"Register failed: {r.text}"
+    return r.json()
+
+
+def _login_user(client: TestClient, username: str = "alice", password: str = "password123") -> dict:
+    """ログインしてレスポンス JSON を返す。"""
+    r = client.post("/auth/login", json={"username": username, "password": password})
+    assert r.status_code == 200, f"Login failed: {r.text}"
+    return r.json()
+
+
+def _auth_header(token: str) -> dict[str, str]:
+    """Bearer 認証ヘッダーを返す。"""
+    return {"Authorization": f"Bearer {token}"}
 
 
 # ============================================================================
@@ -451,3 +510,333 @@ class TestPipelineMemoryIntegration:
         await pipeline.add_document("統計確認用", domain="general")
         stats_after = await pipeline._mm.stats()
         assert stats_after["total_docs"] == stats_before["total_docs"] + 1
+
+
+# ============================================================================
+# 6. 認証エンドポイント
+# ============================================================================
+
+
+class TestAuthEndpoints:
+    """認証系 API エンドポイントの E2E テスト。"""
+
+    def test_register_user(self, api_client):
+        """POST /auth/register でユーザー登録し、JWT が返ること。"""
+        data = _register_user(api_client, "e2e_alice", "password123")
+        assert data["access_token"]
+        assert data["username"] == "e2e_alice"
+        assert data["user_id"]
+        assert data["token_type"] == "bearer"
+
+    def test_register_duplicate_409(self, api_client):
+        """同名ユーザーの二重登録が 409 を返すこと。"""
+        _register_user(api_client, "dup_user", "password123")
+        r = api_client.post(
+            "/auth/register",
+            json={"username": "dup_user", "password": "other_pass"},
+        )
+        assert r.status_code == 409
+
+    def test_register_short_password_422(self, api_client):
+        """短いパスワード（6文字未満）が 422 を返すこと。"""
+        r = api_client.post(
+            "/auth/register",
+            json={"username": "short_pw", "password": "abc"},
+        )
+        assert r.status_code == 422
+
+    def test_login_success(self, api_client):
+        """POST /auth/login でログインし JWT が返ること。"""
+        _register_user(api_client, "login_user", "password123")
+        data = _login_user(api_client, "login_user", "password123")
+        assert data["access_token"]
+        assert data["username"] == "login_user"
+
+    def test_login_wrong_password_401(self, api_client):
+        """パスワード不一致が 401 を返すこと。"""
+        _register_user(api_client, "wrong_pw_user", "password123")
+        r = api_client.post(
+            "/auth/login",
+            json={"username": "wrong_pw_user", "password": "bad_password"},
+        )
+        assert r.status_code == 401
+
+    def test_login_nonexistent_user_401(self, api_client):
+        """存在しないユーザーが 401 を返すこと。"""
+        r = api_client.post(
+            "/auth/login",
+            json={"username": "ghost_user", "password": "any"},
+        )
+        assert r.status_code == 401
+
+    def test_me_endpoint(self, api_client):
+        """GET /auth/me で自分のプロフィールが返ること。"""
+        reg = _register_user(api_client, "me_user", "password123")
+        r = api_client.get("/auth/me", headers=_auth_header(reg["access_token"]))
+        assert r.status_code == 200
+        data = r.json()
+        assert data["username"] == "me_user"
+        assert data["user_id"] == reg["user_id"]
+        assert data["is_active"] is True
+
+    def test_me_without_token_401(self, api_client):
+        """認証なしの GET /auth/me が 401 を返すこと。"""
+        r = api_client.get("/auth/me")
+        assert r.status_code == 401
+
+    def test_me_invalid_token_401(self, api_client):
+        """不正トークンの GET /auth/me が 401 を返すこと。"""
+        r = api_client.get("/auth/me", headers=_auth_header("invalid.token.here"))
+        assert r.status_code == 401
+
+
+# ============================================================================
+# 7. セッション・ターン エンドポイント
+# ============================================================================
+
+
+class TestSessionEndpoints:
+    """セッション管理 API エンドポイントの E2E テスト。"""
+
+    def test_create_session(self, api_client):
+        """POST /sessions でセッション作成が成功すること。"""
+        reg = _register_user(api_client, "sess_user", "password123")
+        headers = _auth_header(reg["access_token"])
+
+        r = api_client.post(
+            "/sessions",
+            json={"first_query": "Python でリストをソートするには？"},
+            headers=headers,
+        )
+        assert r.status_code == 200
+        data = r.json()
+        assert data["session_id"]
+        assert data["user_id"] == reg["user_id"]
+        assert "Python" in data["title"] or len(data["title"]) <= 21
+
+    def test_list_sessions(self, api_client):
+        """GET /sessions でセッション一覧が返ること。"""
+        reg = _register_user(api_client, "list_user", "password123")
+        headers = _auth_header(reg["access_token"])
+
+        # 3 セッション作成
+        for i in range(3):
+            api_client.post(
+                "/sessions",
+                json={"first_query": f"クエリ {i}"},
+                headers=headers,
+            )
+
+        r = api_client.get("/sessions", headers=headers)
+        assert r.status_code == 200
+        data = r.json()
+        assert len(data["sessions"]) == 3
+
+    def test_list_sessions_user_isolation(self, api_client):
+        """他ユーザーのセッションが見えないこと。"""
+        reg1 = _register_user(api_client, "iso_user1", "password123")
+        reg2 = _register_user(api_client, "iso_user2", "password123")
+
+        api_client.post(
+            "/sessions",
+            json={"first_query": "User1 のクエリ"},
+            headers=_auth_header(reg1["access_token"]),
+        )
+        api_client.post(
+            "/sessions",
+            json={"first_query": "User2 のクエリ"},
+            headers=_auth_header(reg2["access_token"]),
+        )
+
+        r1 = api_client.get("/sessions", headers=_auth_header(reg1["access_token"]))
+        r2 = api_client.get("/sessions", headers=_auth_header(reg2["access_token"]))
+        assert len(r1.json()["sessions"]) == 1
+        assert len(r2.json()["sessions"]) == 1
+
+    def test_delete_session(self, api_client):
+        """DELETE /sessions/{id} でセッション削除が成功すること。"""
+        reg = _register_user(api_client, "del_user", "password123")
+        headers = _auth_header(reg["access_token"])
+
+        cr = api_client.post(
+            "/sessions",
+            json={"first_query": "削除テスト"},
+            headers=headers,
+        )
+        sid = cr.json()["session_id"]
+
+        r = api_client.delete(f"/sessions/{sid}", headers=headers)
+        assert r.status_code == 200
+        assert r.json()["deleted"] is True
+
+        # 削除後は一覧に出ない
+        r2 = api_client.get("/sessions", headers=headers)
+        assert len(r2.json()["sessions"]) == 0
+
+    def test_delete_other_user_session_403(self, api_client):
+        """他ユーザーのセッション削除が 403 を返すこと。"""
+        reg1 = _register_user(api_client, "own_user", "password123")
+        reg2 = _register_user(api_client, "other_user", "password123")
+
+        cr = api_client.post(
+            "/sessions",
+            json={"first_query": "own session"},
+            headers=_auth_header(reg1["access_token"]),
+        )
+        sid = cr.json()["session_id"]
+
+        r = api_client.delete(
+            f"/sessions/{sid}",
+            headers=_auth_header(reg2["access_token"]),
+        )
+        assert r.status_code == 403
+
+    def test_get_turns_empty(self, api_client):
+        """新規セッションの GET /sessions/{id}/turns が空リストを返すこと。"""
+        reg = _register_user(api_client, "turns_user", "password123")
+        headers = _auth_header(reg["access_token"])
+
+        cr = api_client.post(
+            "/sessions",
+            json={"first_query": "ターンテスト"},
+            headers=headers,
+        )
+        sid = cr.json()["session_id"]
+
+        r = api_client.get(f"/sessions/{sid}/turns", headers=headers)
+        assert r.status_code == 200
+        data = r.json()
+        assert data["session_id"] == sid
+        assert data["turns"] == []
+
+    def test_sessions_without_auth_401(self, api_client):
+        """認証なしのセッション操作が 401 を返すこと。"""
+        r = api_client.get("/sessions")
+        assert r.status_code == 401
+
+        r = api_client.post("/sessions", json={"first_query": "test"})
+        assert r.status_code == 401
+
+
+# ============================================================================
+# 8. /query + session_id 統合テスト
+# ============================================================================
+
+
+class TestQueryWithSession:
+    """/query エンドポイントの認証・セッション統合テスト。"""
+
+    def test_query_without_auth_works(self, api_client):
+        """/query は認証なしでも動作すること（get_optional_user）。"""
+        r = api_client.post(
+            "/query",
+            json={"query": "認証なしクエリ", "use_rag": False},
+        )
+        assert r.status_code == 200
+        assert r.json()["answer"]
+
+    def test_query_with_auth(self, api_client):
+        """/query に Bearer トークンを付けてもエラーにならないこと。"""
+        reg = _register_user(api_client, "query_auth_user", "password123")
+        r = api_client.post(
+            "/query",
+            json={"query": "認証ありクエリ", "use_rag": False},
+            headers=_auth_header(reg["access_token"]),
+        )
+        assert r.status_code == 200
+        assert r.json()["answer"]
+
+    def test_query_with_session_id(self, api_client):
+        """/query に session_id を付けて送信してもエラーにならないこと。"""
+        reg = _register_user(api_client, "sess_query_user", "password123")
+        headers = _auth_header(reg["access_token"])
+
+        cr = api_client.post(
+            "/sessions",
+            json={"first_query": "セッション付きクエリ"},
+            headers=headers,
+        )
+        sid = cr.json()["session_id"]
+
+        r = api_client.post(
+            "/query",
+            json={
+                "query": "セッション付きクエリ",
+                "session_id": sid,
+                "use_rag": False,
+            },
+            headers=headers,
+        )
+        assert r.status_code == 200
+        data = r.json()
+        assert data["answer"]
+
+
+# ============================================================================
+# 9. 管理者エンドポイント
+# ============================================================================
+
+
+class TestAdminEndpoints:
+    """管理者専用エンドポイントの E2E テスト。"""
+
+    def test_admin_list_users(self, api_client):
+        """admin ユーザーが GET /admin/users でユーザー一覧を取得できること。"""
+        reg = _register_user(api_client, "admin_user", "password123")
+        # 直接 admin にはできないので、register with is_admin=True
+        r = api_client.post(
+            "/auth/register",
+            json={"username": "real_admin", "password": "adminpass", "is_admin": True},
+        )
+        assert r.status_code == 200
+        admin_token = r.json()["access_token"]
+
+        r = api_client.get("/admin/users", headers=_auth_header(admin_token))
+        assert r.status_code == 200
+        data = r.json()
+        assert "users" in data
+        usernames = {u["username"] for u in data["users"]}
+        assert "admin_user" in usernames
+        assert "real_admin" in usernames
+
+    def test_non_admin_cannot_list_users(self, api_client):
+        """一般ユーザーが GET /admin/users にアクセスすると 403 を返すこと。"""
+        reg = _register_user(api_client, "normal_user", "password123")
+        r = api_client.get("/admin/users", headers=_auth_header(reg["access_token"]))
+        assert r.status_code == 403
+
+    def test_admin_delete_user(self, api_client):
+        """admin が DELETE /admin/users/{id} でユーザーを削除できること。"""
+        # admin 作成
+        r = api_client.post(
+            "/auth/register",
+            json={"username": "del_admin", "password": "adminpass", "is_admin": True},
+        )
+        admin_token = r.json()["access_token"]
+
+        # 削除対象ユーザー作成
+        target = _register_user(api_client, "target_user", "password123")
+
+        r = api_client.delete(
+            f"/admin/users/{target['user_id']}",
+            headers=_auth_header(admin_token),
+        )
+        assert r.status_code == 200
+        assert r.json()["deleted"] == target["user_id"]
+
+    def test_admin_set_active(self, api_client):
+        """admin が PATCH /admin/users/{id}/activate でアクティブ状態を変更できること。"""
+        r = api_client.post(
+            "/auth/register",
+            json={"username": "act_admin", "password": "adminpass", "is_admin": True},
+        )
+        admin_token = r.json()["access_token"]
+
+        target = _register_user(api_client, "deactivate_me", "password123")
+
+        r = api_client.patch(
+            f"/admin/users/{target['user_id']}/activate?active=false",
+            headers=_auth_header(admin_token),
+        )
+        assert r.status_code == 200
+        assert r.json()["is_active"] is False

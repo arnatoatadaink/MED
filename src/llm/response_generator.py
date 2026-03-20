@@ -95,6 +95,7 @@ class ResponseGenerator:
         temperature: float = 0.7,
         provider: str | None = None,
         model: str | None = None,
+        conversation_history: list[LLMMessage] | None = None,
     ) -> GeneratedResponse:
         """クエリと検索結果から回答を生成する。
 
@@ -103,6 +104,7 @@ class ResponseGenerator:
             context_docs: FAISS 検索の SearchResult リスト。
             max_tokens: 最大出力トークン数。
             temperature: 温度パラメータ。
+            conversation_history: 会話履歴メッセージ（コンテキスト用）。
 
         Returns:
             GeneratedResponse オブジェクト。
@@ -117,8 +119,11 @@ class ResponseGenerator:
 
         messages = [
             LLMMessage(role="system", content=self._system),
-            LLMMessage(role="user", content=prompt),
         ]
+        # 会話履歴があれば system の直後に挿入
+        if conversation_history:
+            messages.extend(conversation_history)
+        messages.append(LLMMessage(role="user", content=prompt))
 
         raw: LLMResponse = await self._gateway.complete_messages(
             messages,
