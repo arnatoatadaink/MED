@@ -32,18 +32,24 @@ def is_api_alive() -> bool:
 
 
 def get_all_provider_choices() -> list[str]:
-    """llm_config.yaml からカスタムプロバイダーを含む全プロバイダーリストを返す。
+    """llm_config.yaml および llm_config.local.yaml からカスタムプロバイダーを含む全プロバイダーリストを返す。
 
     ページ初期ロード時およびカスタムプロバイダーの追加・削除後に呼び出すことで、
     チャットタブのドロップダウンを常に最新状態に保つ。
+    llm_config.local.yaml は git 管理外のローカル専用設定ファイル。
     """
-    try:
-        llm_path = _CONFIGS_DIR / "llm_config.yaml"
-        if llm_path.exists():
-            with open(llm_path, encoding="utf-8") as f:
-                cfg = yaml.safe_load(f) or {}
-            custom = [k for k in cfg.get("providers", {}) if k not in _KNOWN_PROVIDERS]
-            return _BASE_PROVIDERS + custom
-    except Exception:
-        pass
-    return list(_BASE_PROVIDERS)
+    custom: list[str] = []
+    for config_file in [
+        _CONFIGS_DIR / "llm_config.yaml",
+        _CONFIGS_DIR / "llm_config.local.yaml",
+    ]:
+        try:
+            if config_file.exists():
+                with open(config_file, encoding="utf-8") as f:
+                    cfg = yaml.safe_load(f) or {}
+                for k in cfg.get("providers", {}):
+                    if k not in _KNOWN_PROVIDERS and k not in custom:
+                        custom.append(k)
+        except Exception:
+            pass
+    return _BASE_PROVIDERS + custom

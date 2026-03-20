@@ -18,6 +18,8 @@ from src.gui.utils import get_all_provider_choices
 _PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 _CONFIGS_DIR = _PROJECT_ROOT / "configs"
 _ENV_FILE = _PROJECT_ROOT / ".env"
+# ローカル専用プロバイダー設定（git 管理外）
+_LLM_CONFIG_LOCAL_PATH = _CONFIGS_DIR / "llm_config.local.yaml"
 
 # ────────────────────────────────────────────────────────────────
 # プロバイダープリセット定義
@@ -374,10 +376,20 @@ _KNOWN_PROVIDERS = {"anthropic", "openai", "ollama", "vllm", "azure_openai", "to
 
 
 def _get_custom_providers() -> dict[str, dict]:
-    """llm_config.yaml から組み込み以外のプロバイダーを返す。"""
+    """llm_config.yaml および llm_config.local.yaml から組み込み以外のプロバイダーを返す。
+
+    各エントリーに "_local" キーを付与してどちらのファイルから来たか識別できるようにする。
+    """
+    result: dict[str, dict] = {}
     cfg = _load_yaml(_CONFIGS_DIR / "llm_config.yaml")
-    return {k: v for k, v in cfg.get("providers", {}).items()
-            if k not in _KNOWN_PROVIDERS}
+    for k, v in cfg.get("providers", {}).items():
+        if k not in _KNOWN_PROVIDERS and isinstance(v, dict):
+            result[k] = {**v, "_local": False}
+    local_cfg = _load_yaml(_LLM_CONFIG_LOCAL_PATH)
+    for k, v in local_cfg.get("providers", {}).items():
+        if k not in _KNOWN_PROVIDERS and isinstance(v, dict):
+            result[k] = {**v, "_local": True}
+    return result
 
 
 def _add_custom_provider(
@@ -387,7 +399,14 @@ def _add_custom_provider(
     default_model: str,
     api_key_env: str,
     api_key_value: str,
+    is_local: bool = False,
 ) -> str:
+    """カスタムプロバイダーを設定ファイルに追加/更新する。
+
+    Args:
+        is_local: True の場合 llm_config.local.yaml（git 管理外）に保存する。
+                  ローカルバックエンド（LM Studio / vLLM 等）はこちらを使用する。
+    """
     name = name.strip()
     if not name:
         return "❌ プロバイダー名を入力してください"
@@ -409,24 +428,30 @@ def _add_custom_provider(
     if api_key_env.strip():
         entry["api_key_env"] = api_key_env.strip()
 
-    llm_path = _CONFIGS_DIR / "llm_config.yaml"
-    cfg = _load_yaml(llm_path)
+    save_path = _LLM_CONFIG_LOCAL_PATH if is_local else _CONFIGS_DIR / "llm_config.yaml"
+    cfg = _load_yaml(save_path)
     cfg.setdefault("providers", {})[name] = entry
-    _save_yaml(llm_path, cfg)
-    return f"✅ カスタムプロバイダー「{name}」を追加/更新しました"
+    _save_yaml(save_path, cfg)
+
+    label = "ローカル専用（git管理外）" if is_local else "共有設定"
+    return f"✅ カスタムプロバイダー「{name}」を追加/更新しました（{label}）"
 
 
 def _delete_custom_provider(name: str) -> tuple[str, list[str]]:
     if not name:
         return "❌ プロバイダー名を選択してください", _custom_provider_names()
-    llm_path = _CONFIGS_DIR / "llm_config.yaml"
-    cfg = _load_yaml(llm_path)
-    providers = cfg.get("providers", {})
-    if name not in providers:
+    deleted = False
+    for path in [_CONFIGS_DIR / "llm_config.yaml", _LLM_CONFIG_LOCAL_PATH]:
+        cfg = _load_yaml(path)
+        providers = cfg.get("providers", {})
+        if name in providers:
+            del providers[name]
+            cfg["providers"] = providers
+            _save_yaml(path, cfg)
+            deleted = True
+            break
+    if not deleted:
         return f"❌ 「{name}」が見つかりません", _custom_provider_names()
-    del providers[name]
-    cfg["providers"] = providers
-    _save_yaml(llm_path, cfg)
     return f"✅ 「{name}」を削除しました", _custom_provider_names()
 
 
@@ -540,14 +565,16 @@ def _custom_providers_table() -> str:
     if not providers:
         return "_カスタムプロバイダーは登録されていません_"
     lines = [
-        "| 名前 | タイプ | ベースURL | モデル |",
-        "|------|--------|-----------|--------|",
+        "| 名前 | タイプ | ベースURL | モデル | 保存先 |",
+        "|------|--------|-----------|--------|--------|",
     ]
     for k, v in providers.items():
+        scope = "🔒 ローカル" if v.get("_local") else "📁 共有"
         lines.append(
             f"| `{k}` | `{v.get('type', '—')}` "
             f"| `{v.get('base_url', '—')}` "
-            f"| `{v.get('default_model', '—')}` |"
+            f"| `{v.get('default_model', '—')}` "
+            f"| {scope} |"
         )
     return "\n".join(lines)
 
@@ -725,6 +752,12 @@ def build_tab(provider_dd: gr.Dropdown | None = None) -> None:
                                 type="password",
                                 scale=3,
                             )
+                        cp_is_local = gr.Checkbox(
+                            label="🔒 ローカル専用（git管理外に保存）",
+                            value=True,
+                            info="ON: llm_config.local.yaml に保存（git 非追跡）。ローカルバックエンドはこちらを推奨。"
+                                 "OFF: llm_config.yaml に保存（git 追跡）。外部 API 等の共有設定向け。",
+                        )
 
                     cp_add_btn = gr.Button("追加 / 更新", variant="primary")
                     cp_add_result = gr.Markdown()
@@ -764,8 +797,8 @@ def build_tab(provider_dd: gr.Dropdown | None = None) -> None:
                         return sel_last, sel_first  # test_dd, del_dd
 
                     if provider_dd is not None:
-                        def _on_add(name, ptype, url, model, env_name, key):
-                            msg = _add_custom_provider(name, ptype, url, model, env_name, key)
+                        def _on_add(name, ptype, url, model, env_name, key, is_local):
+                            msg = _add_custom_provider(name, ptype, url, model, env_name, key, is_local)
                             names = _custom_provider_names()
                             test_upd, del_upd = _names_update(names)
                             return (
@@ -779,7 +812,7 @@ def build_tab(provider_dd: gr.Dropdown | None = None) -> None:
                         cp_add_btn.click(
                             fn=_on_add,
                             inputs=[cp_name, cp_type, cp_base_url, cp_model,
-                                    cp_env_name, cp_api_key],
+                                    cp_env_name, cp_api_key, cp_is_local],
                             outputs=[cp_add_result, cp_table, cp_test_dd, cp_del_dd, provider_dd],
                         )
 
@@ -800,8 +833,8 @@ def build_tab(provider_dd: gr.Dropdown | None = None) -> None:
                             outputs=[cp_del_result, cp_table, cp_test_dd, cp_del_dd, provider_dd],
                         )
                     else:
-                        def _on_add(name, ptype, url, model, env_name, key):
-                            msg = _add_custom_provider(name, ptype, url, model, env_name, key)
+                        def _on_add(name, ptype, url, model, env_name, key, is_local):
+                            msg = _add_custom_provider(name, ptype, url, model, env_name, key, is_local)
                             names = _custom_provider_names()
                             test_upd, del_upd = _names_update(names)
                             return msg, _custom_providers_table(), test_upd, del_upd
@@ -809,7 +842,7 @@ def build_tab(provider_dd: gr.Dropdown | None = None) -> None:
                         cp_add_btn.click(
                             fn=_on_add,
                             inputs=[cp_name, cp_type, cp_base_url, cp_model,
-                                    cp_env_name, cp_api_key],
+                                    cp_env_name, cp_api_key, cp_is_local],
                             outputs=[cp_add_result, cp_table, cp_test_dd, cp_del_dd],
                         )
 

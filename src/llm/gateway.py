@@ -105,7 +105,10 @@ class BaseLLMProvider(ABC):
 # 組み込みプロバイダーのデフォルトフォールバック順序
 _BUILTIN_PROVIDER_ORDER = ["anthropic", "openai", "ollama"]
 # llm_config.yaml から primary_provider / カスタムプロバイダーを読むパス
-_LLM_CONFIG_PATH = Path(__file__).parent.parent.parent / "configs" / "llm_config.yaml"
+_CONFIGS_DIR = Path(__file__).parent.parent.parent / "configs"
+_LLM_CONFIG_PATH = _CONFIGS_DIR / "llm_config.yaml"
+# ローカル専用設定（git 管理外）— ローカルバックエンドのプロバイダーを格納する
+_LLM_CONFIG_LOCAL_PATH = _CONFIGS_DIR / "llm_config.local.yaml"
 _KNOWN_PROVIDERS = {"anthropic", "openai", "ollama", "vllm", "azure_openai", "together"}
 
 
@@ -148,45 +151,51 @@ class LLMGateway:
         self._load_custom_providers()
 
     def _load_custom_providers(self) -> None:
-        """llm_config.yaml の providers セクションからカスタムプロバイダーを登録する。
+        """llm_config.yaml および llm_config.local.yaml からカスタムプロバイダーを登録する。
 
         組み込み名 (anthropic, openai, ollama, vllm, azure_openai, together) 以外の
         エントリーを OpenAICompatibleProvider として登録する。
         type が "openai_compatible" または未指定のものが対象。
+
+        llm_config.local.yaml は git 管理外のローカル専用設定ファイル。
+        ローカルバックエンド（LM Studio / vLLM 等）のエンドポイントはこちらに保存される。
         """
-        if not _LLM_CONFIG_PATH.exists():
-            return
-        try:
-            with open(_LLM_CONFIG_PATH, encoding="utf-8") as f:
-                cfg = yaml.safe_load(f) or {}
-            for name, conf in cfg.get("providers", {}).items():
-                if name in _KNOWN_PROVIDERS:
-                    continue
-                if not isinstance(conf, dict):
-                    continue
-                ptype = conf.get("type", "openai_compatible")
-                if ptype not in ("openai_compatible", "other"):
-                    logger.debug("Skipping custom provider %s with unsupported type %s", name, ptype)
-                    continue
-                base_url = conf.get("base_url", "")
-                if not base_url:
-                    logger.warning("Custom provider %s has no base_url; skipping", name)
-                    continue
-                from src.llm.providers.openai_compatible import OpenAICompatibleProvider
-                api_key_env = conf.get("api_key_env", "")
-                provider = OpenAICompatibleProvider(
-                    name=name,
-                    base_url=base_url,
-                    default_model=conf.get("default_model", ""),
-                    api_key_env=api_key_env,
-                )
-                self._providers[name] = provider
-                logger.info(
-                    "Loaded custom provider: %s (base_url=%s model=%s)",
-                    name, base_url, conf.get("default_model", ""),
-                )
-        except Exception:
-            logger.exception("Failed to load custom providers from %s", _LLM_CONFIG_PATH)
+        config_files = [_LLM_CONFIG_PATH, _LLM_CONFIG_LOCAL_PATH]
+        for config_path in config_files:
+            if not config_path.exists():
+                continue
+            try:
+                with open(config_path, encoding="utf-8") as f:
+                    cfg = yaml.safe_load(f) or {}
+                for name, conf in cfg.get("providers", {}).items():
+                    if name in _KNOWN_PROVIDERS:
+                        continue
+                    if not isinstance(conf, dict):
+                        continue
+                    ptype = conf.get("type", "openai_compatible")
+                    if ptype not in ("openai_compatible", "other"):
+                        logger.debug("Skipping custom provider %s with unsupported type %s", name, ptype)
+                        continue
+                    base_url = conf.get("base_url", "")
+                    if not base_url:
+                        logger.warning("Custom provider %s has no base_url; skipping", name)
+                        continue
+                    from src.llm.providers.openai_compatible import OpenAICompatibleProvider
+                    api_key_env = conf.get("api_key_env", "")
+                    provider = OpenAICompatibleProvider(
+                        name=name,
+                        base_url=base_url,
+                        default_model=conf.get("default_model", ""),
+                        api_key_env=api_key_env,
+                    )
+                    self._providers[name] = provider
+                    logger.info(
+                        "Loaded custom provider: %s (base_url=%s model=%s local=%s)",
+                        name, base_url, conf.get("default_model", ""),
+                        config_path == _LLM_CONFIG_LOCAL_PATH,
+                    )
+            except Exception:
+                logger.exception("Failed to load custom providers from %s", config_path)
 
     def register(self, provider: BaseLLMProvider) -> None:
         """カスタムプロバイダを登録する。"""
