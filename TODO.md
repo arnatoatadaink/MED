@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-03-19（面接形式テスト・多ターン訓練方針追加）
+> 最終更新: 2026-03-20（A-1 サーバーサイド会話履歴・認証実装完了）
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_think.md` / `plan_test.md` / `plan_training_a.md` / `plan_training_b.md` / `docs/session_progress.md`
 
 ---
@@ -18,14 +18,33 @@
 
 ## A. 新機能 — 今セッションで設計したもの
 
-### A-1. 会話履歴の永続化（ローカルストレージ）
-> Web利用時のユーザー利便性向上。タブを閉じても履歴が残る。
+### A-1. 会話履歴の永続化 + ユーザー管理 ✅ **完了（サーバーサイド）**
+> サーバーサイド SQLite + JWT 認証による完全実装。
 
-- 🔴 `src/gui/tabs/chat.py` — セッション開始時にローカルストレージから履歴を復元する JS を注入
-- 🔴 `src/gui/tabs/chat.py` — 各ターン後にローカルストレージへ履歴を書き込む JS を注入
-- 🟡 GradioのJavaScript APIを使った実装方式の選定（`gr.HTML` + JS or Gradio JS event）
-- 🟡 保存形式の設計（JSON: `[{role, content, timestamp, sources}]`）
-- 🟡 最大保持件数・TTLの設定（例: 最新100ターン / 30日）
+**認証モジュール（`src/auth/`）**
+- ✅ `src/auth/schema.py` — User / TokenPayload / LoginRequest / RegisterRequest / TestTokenRequest / TokenResponse
+- ✅ `src/auth/store.py` — UserStore (aiosqlite CRUD)
+- ✅ `src/auth/service.py` — AuthService (bcrypt + python-jose JWT)
+- ✅ `src/auth/deps.py` — FastAPI 依存注入（get_current_user / get_optional_user / require_localhost）
+
+**会話履歴モジュール（`src/conversation/`）**
+- ✅ `src/conversation/schema.py` — Session / Turn データクラス
+- ✅ `src/conversation/store.py` — ConversationStore (aiosqlite, CASCADE DELETE, WAL)
+- ✅ `src/conversation/manager.py` — ConversationManager (セッション上限, トークンウィンドウ, FAISS自動登録)
+
+**統合・エンドポイント**
+- ✅ `src/common/config.py` — AuthConfig / ConversationConfig 追加
+- ✅ `configs/default.yaml` — auth / conversation セクション追加
+- ✅ `src/orchestrator/pipeline.py` — user_id / session_id 統合、会話履歴コンテキスト注入
+- ✅ `src/orchestrator/server.py` — /auth/* / /sessions/* / /admin/* エンドポイント追加
+- ✅ `src/gui/tabs/chat.py` — セッション選択ドロップダウン・履歴復元 UI 追加
+- ✅ `scripts/seed_test_users.py` — テストユーザー登録スクリプト
+- ✅ `tests/unit/test_auth.py` — 認証テスト（TestRegister/Login/TestToken/JWT/UserStore）
+- ✅ `tests/unit/test_conversation.py` — 会話履歴テスト（CASCADE/トークン窓/時系列順）
+
+**残作業（ブラウザローカルストレージ、オプション）**
+- 🟡 `src/gui/tabs/chat.py` — セッション開始時にローカルストレージから履歴を復元する JS を注入（サーバーAPIで代替済みのため低優先度）
+- 🟡 GradioのJavaScript APIを使った実装方式の選定（`gr.HTML` + JS）
 
 ---
 
@@ -188,3 +207,4 @@
 | Phase 4: model_router / query_parser / error_analyzer / deduplicator | ✅ |
 | GUI: Gradio 6タブ + docs_chat | ✅ |
 | CI: GitHub Actions + ruff + pytest 862テスト | ✅ |
+| A-1: src/auth/ + src/conversation/ + JWT + セッション管理 | ✅ |
