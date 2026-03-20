@@ -75,12 +75,14 @@ async def get_current_admin(
 
 async def get_optional_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
-    svc: AuthService = Depends(get_auth_service),
 ) -> User | None:
-    """トークンがあれば検証して返す。なければ None（認証なしも許容するエンドポイント用）。"""
-    if credentials is None:
+    """トークンがあれば検証して返す。なければ None（認証なしも許容するエンドポイント用）。
+
+    AuthService 未初期化の場合は常に None を返す（テスト・起動時の互換性確保）。
+    """
+    if credentials is None or _auth_service is None:
         return None
     try:
-        return await svc.get_user_by_token(credentials.credentials)
+        return await _auth_service.get_user_by_token(credentials.credentials)
     except ValueError:
         return None

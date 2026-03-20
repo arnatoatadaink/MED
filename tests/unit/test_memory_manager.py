@@ -21,13 +21,16 @@ def _make_embedder() -> Embedder:
 
 
 def _make_manager_sync() -> tuple[MemoryManager, MetadataStore]:
+    import uuid
+
     from src.common.config import FAISSConfig, FAISSIndexConfig, MetadataConfig
 
+    # テスト間の FAISS インデックス汚染を防ぐため呼び出しごとにユニークなディレクトリを使用
     faiss_cfg = FAISSConfig(
-        base_dir="data/faiss_test",
-        domains={
-            "code": FAISSIndexConfig(dim=768),
-            "general": FAISSIndexConfig(dim=768),
+        base_dir=f"/tmp/med_faiss_unit_{uuid.uuid4().hex}",
+        indices={
+            "code": FAISSIndexConfig(dim=384),
+            "general": FAISSIndexConfig(dim=384),
         },
     )
     meta_cfg = MetadataConfig(db_path=":memory:")
@@ -105,7 +108,7 @@ class TestAdd:
     async def test_add_with_existing_embedding(self) -> None:
         mgr, _ = _make_manager_sync()
         await mgr.initialize()
-        emb = np.random.rand(768).astype(np.float32)
+        emb = np.random.rand(384).astype(np.float32)
         doc = _doc()
         doc = doc.model_copy(update={"embedding": emb})
         doc_id = await mgr.add(doc)

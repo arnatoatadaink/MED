@@ -40,9 +40,11 @@ class FailingLLM:
 
 
 def _make_manager() -> MemoryManager:
+    import uuid
+
     faiss_cfg = FAISSConfig(
-        base_dir="data/faiss_test",
-        domains={"code": FAISSIndexConfig(dim=768), "general": FAISSIndexConfig(dim=768)},
+        base_dir=f"/tmp/med_faiss_iter_{uuid.uuid4().hex}",
+        indices={"code": FAISSIndexConfig(dim=384), "general": FAISSIndexConfig(dim=384)},
     )
     meta_cfg = MetadataConfig(db_path=":memory:")
     embedder = Embedder(mock=True)

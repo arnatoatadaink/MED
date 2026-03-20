@@ -48,11 +48,13 @@ class MockGateway(LLMGateway):
 
 
 def _make_pipeline(gateway_response: str = "Test answer.") -> MEDPipeline:
+    import uuid
+
     faiss_cfg = FAISSConfig(
-        base_dir="data/faiss_test",
-        domains={
-            "code": FAISSIndexConfig(dim=768),
-            "general": FAISSIndexConfig(dim=768),
+        base_dir=f"/tmp/med_faiss_orch_{uuid.uuid4().hex}",
+        indices={
+            "code": FAISSIndexConfig(dim=384),
+            "general": FAISSIndexConfig(dim=384),
         },
     )
     meta_cfg = MetadataConfig(db_path=":memory:")

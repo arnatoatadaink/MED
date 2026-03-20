@@ -195,7 +195,7 @@ class TestDefaultValues:
     def test_embedding_config_defaults(self):
         cfg = EmbeddingConfig()
         assert cfg.model == "all-MiniLM-L6-v2"
-        assert cfg.dim == 768
+        assert cfg.dim == 384
         assert cfg.batch_size == 64
         assert cfg.device == "cpu"
         assert cfg.cache_dir is None
@@ -207,7 +207,7 @@ class TestDefaultValues:
         assert "academic" in cfg.indices
         assert "general" in cfg.indices
         for idx in cfg.indices.values():
-            assert idx.dim == 768
+            assert idx.dim == 384
             assert idx.initial_type == "Flat"
             assert idx.metric == "inner_product"
 
@@ -469,7 +469,7 @@ class TestLoadSettings:
         """YAML なしでもデフォルト値で初期化できることを確認。"""
         settings = Settings()
         assert settings.app.name == "rag-faiss-llm"
-        assert settings.embedding.dim == 768
+        assert settings.embedding.dim == 384
         assert settings.llm.anthropic.default_model == "claude-sonnet-4-20250514"
 
 
