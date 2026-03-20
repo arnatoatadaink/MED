@@ -4,7 +4,12 @@ __pycache__/
 .env
 data/faiss_indices/
 data/faiss_test*/
+data/faiss_test_e2e/
 data/metadata.db
+data/users.db
+data/conversations.db
+data/conversations.db-shm
+data/conversations.db-wal
 data/adapters/
 data/training_logs/
 .venv/
