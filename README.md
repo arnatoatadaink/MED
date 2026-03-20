@@ -1,24 +1,6 @@
 # MED — Memory Environment Distillation
 
-> RAG × FAISS × Knowledge Graph × LLM × TinyLoRA
-> Teacher モデルが FAISS メモリを育て、Student モデルに「記憶の使い方」を蒸留するシステム。
-
----
-
-## 実装状況
-
-| フェーズ | 内容 | 状態 |
-|---------|------|------|
-| Phase 1 | コア基盤（FAISS / RAG / LLM / Sandbox / Orchestrator） | ✅ 完了 |
-| Phase 1.5 | Knowledge Graph（NetworkX）+ Fusion/Rerank | ✅ 完了 |
-| Phase 2 | メモリ成熟 + SQL/BI MCP + Cross-Encoder | ✅ 完了 |
-| Phase 3 | 学習フレームワーク骨格（GRPO / PPO / DPO / TinyLoRA） | ✅ 骨格完了 |
-| Phase 4 | Graph-aware ルーティング + 運用最適化 | ✅ 完了 |
-| GUI | Gradio 6タブ構成 | ✅ 完了 |
-| テスト | unit tests 36ファイル / 1079件 pass | ✅ 完了 |
-| モデル | all-MiniLM-L6-v2 ローカル配置済み（HF Hub 不要） | ✅ 完了 |
-
-**将来対応:** GRPO/TinyLoRA 本番学習（VERL/trl 統合） / Neo4j 移行 / Docker E2E テスト
+> RAG × FAISS × LLM × TinyLoRA — Teacher モデルが FAISS メモリを育て、Student モデルに「記憶の使い方」を蒸留するシステム。
 
 ---
 
@@ -45,18 +27,26 @@
       │       │       │
       └───────┴───────┘
               │
-      ┌───────▼─────────────────────┐
-      │        MED RAG Layer         │
-      │                              │
-      │  FAISS (海馬・連想記憶)       │
-      │    ↕ KG Bridge               │
-      │  Knowledge Graph (概念地図)   │
-      │    ↕ Structured Filter       │
-      │  SQL / BI (宣言的記憶)        │
-      │                              │
-      │  外部RAG: GitHub / SO /      │
-      │          Tavily / arXiv      │
-      └──────────────┬───────────────┘
+      ┌───────▼────────────────────┐
+      │       MED RAG Layer         │
+      │                             │
+      │  ┌─────────┐               │
+      │  │  FAISS  │ ← 意味検索     │
+      │  │ (海馬)   │               │
+      │  └────┬────┘               │
+      │       │   ┌──────────────┐ │
+      │       ├──▶│ Knowledge    │ │
+      │       │   │ Graph (概念) │ │
+      │       │   └──────┬───────┘ │
+      │       │          │         │
+      │       │   ┌──────▼───────┐ │
+      │       └──▶│  SQL / BI    │ │
+      │           │ (宣言的記憶)  │ │
+      │           └──────────────┘ │
+      │                             │
+      │  外部RAG: GitHub / SO /     │
+      │          Tavily / arXiv     │
+      └──────────────┬──────────────┘
                      │
              Docker Sandbox
              (コード実行・検証)
@@ -66,9 +56,24 @@
 
 | 層 | 実装 | 役割 |
 |---|---|---|
-| 海馬（連想記憶） | FAISS + all-MiniLM-L6-v2 (384次元) | 意味検索・エピソード記憶 |
-| 概念地図（意味記憶） | Knowledge Graph (NetworkX) | Entity 間の関係・構造・ルーティング |
-| ノート（宣言的記憶） | SQLite / BI MCP | 正確な値・集計クエリ |
+| 海馬（連想記憶） | FAISS + sentence-transformers | 意味検索・エピソード記憶 |
+| 概念地図（意味記憶） | Knowledge Graph (NetworkX) | Entity 間の関係・構造 |
+| ノート（宣言的記憶） | SQLite / BI | 正確な値・集計クエリ |
+
+### 外部 RAG の動作
+
+外部 RAG は LLM に「ツールを呼ばせる」のではなく、**LLM に渡す前にパイプライン側が自動的に検索→蓄積**する。
+
+```
+クエリ受信
+  → RetrieverRouter（並列検索）
+      → GitHub / StackOverflow / Tavily / arXiv
+  → ResultVerifier（関連性フィルタ）
+  → Chunker（チャンク分割）
+  → FAISS へ蓄積（次回以降はローカル検索で高速応答）
+  → 検索結果をコンテキストとして LLM へ注入
+  → LLM が回答生成（コンテキストを読むだけ）
+```
 
 ---
 
@@ -78,7 +83,7 @@
 
 - Python 3.11+
 - Docker（Sandbox 機能を使う場合）
-- 8 GB RAM 以上推奨
+- 8 GB RAM 以上推奨（Student モデルを動かす場合は GPU 推奨）
 
 ### インストール
 
@@ -91,12 +96,12 @@ pip install -e ".[dev]"
 ### 埋め込みモデル
 
 `all-MiniLM-L6-v2` はリポジトリに同梱済み（`data/models/all-MiniLM-L6-v2/`）。
-HuggingFace Hub への接続は不要です。`configs/default.yaml` に設定済み。
+HuggingFace Hub への接続は不要。`configs/default.yaml` に設定済み。
 
 ```yaml
 embedding:
   model: "all-MiniLM-L6-v2"
-  cache_dir: "data/models"   # ローカルモデルを参照
+  cache_dir: "data/models"
 ```
 
 ### API キー設定
@@ -116,24 +121,32 @@ GITHUB_TOKEN=ghp_...       # 任意：レート制限緩和
 
 ### 使用できる AI プロバイダー
 
-| プロバイダー | 種別 | 設定 |
+| プロバイダー | 種別 | 設定方法 |
 |---|---|---|
-| Anthropic (Claude) | クラウド API | `ANTHROPIC_API_KEY` |
-| OpenAI (GPT-4o) | クラウド API | `OPENAI_API_KEY` |
-| Together.ai | クラウド API | `TOGETHER_API_KEY` |
-| Ollama | ローカル | 設定不要 (`localhost:11434`) |
-| LM Studio / vLLM / OpenAI互換 | ローカル | GUI 設定タブで登録 |
+| **Anthropic** (Claude Sonnet / Haiku) | クラウド API | `ANTHROPIC_API_KEY` |
+| **OpenAI** (GPT-4o / GPT-4o-mini) | クラウド API | `OPENAI_API_KEY` |
+| **Together.ai** (Llama / Qwen / Mixtral 等) | クラウド API | `TOGETHER_API_KEY` |
+| **Ollama** | ローカル | `http://localhost:11434`（設定不要） |
+| **LM Studio** | ローカル | GUI 設定タブ → カスタムプロバイダー |
+| **vLLM** | ローカル / サーバー | GUI 設定タブ → カスタムプロバイダー |
+| **任意の OpenAI 互換サーバー** | ローカル / クラウド | GUI 設定タブ → カスタムプロバイダー |
 
-### 使用できる外部 RAG ソース
+**カスタムプロバイダー（LM Studio / vLLM 等）の追加手順:**
+1. GUI → 設定タブ → カスタムプロバイダー
+2. 名前・エンドポイント URL（例: `http://localhost:1234/v1`）・モデル名を入力
+3. 「追加」→「🔌 接続テスト」で疎通確認
+4. チャットタブのプロバイダードロップダウンに即反映
+
+### 使用できる検索 API（外部 RAG）
 
 | ソース | 取得できる情報 | API キー |
 |---|---|---|
-| GitHub | コード・Issue・PR | 任意（なくても動作） |
-| StackOverflow | Q&A・解決策 | 不要 |
-| Tavily | Web 全般（最新情報） | 必要 |
-| arXiv | 論文・研究 | 不要 |
+| **GitHub** | コード・Issue・PR | 任意（なくても動作、レート制限あり） |
+| **StackOverflow** | Q&A・解決策 | 不要 |
+| **Tavily** | Web 全般（最新情報） | 必要（`TAVILY_API_KEY`） |
+| **arXiv** | 論文・研究 | 不要 |
 
-未設定のソースは自動スキップ。FAISS に関連ドキュメントが蓄積済みであれば外部検索なしで応答します。
+API キー未設定のソースは自動的にスキップされます。FAISS メモリにすでに関連ドキュメントが蓄積されている場合は外部検索なしで応答します。
 
 ### Docker（Sandbox）
 
@@ -149,7 +162,7 @@ docker compose up -d
 
 ```bash
 python scripts/launch_gui.py
-# → http://localhost:7860
+# → http://localhost:7860 をブラウザで開く
 ```
 
 ### タブ構成
@@ -171,6 +184,9 @@ python scripts/launch_gui.py
 | `simple` | Student モデル（軽量・高速） |
 | `teacher` | Teacher モデル（高精度） |
 
+**メモリ使用 ON** → FAISS から関連ドキュメントをコンテキストとして注入
+**外部 RAG ON** → GitHub / SO / Tavily / arXiv から検索して FAISS に蓄積
+
 ### バックエンド API のみ起動
 
 ```bash
@@ -178,24 +194,31 @@ python -m uvicorn src.orchestrator.server:app --port 8000 --reload
 ```
 
 ```bash
+# クエリ例
 curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
   -d '{"query": "Python でリストをソートするには？", "use_rag": true}'
 ```
 
-### スクリプト
+### メモリ初期化（シードデータ投入）
 
 ```bash
-# FAISS メモリにシードデータを投入（外部 RAG 経由）
+# 外部 RAG 経由で取得してシード
 python scripts/seed_memory.py --query "FAISS vector search" --domain code
 
 # JSON ファイルから直接投入
 python scripts/seed_memory.py --input-file docs.json
+```
 
-# メモリ成熟（Teacher による品質審査・難易度付与）
+### メモリ成熟
+
+```bash
 python scripts/mature_memory.py
+```
 
-# Student モデル学習
+### Student モデル学習
+
+```bash
 python scripts/train_student.py
 ```
 
@@ -205,7 +228,7 @@ python scripts/train_student.py
 
 | ファイル | 内容 |
 |---|---|
-| `configs/default.yaml` | 全体設定（埋め込み・サンドボックス等） |
+| `configs/default.yaml` | 全体設定（埋め込み次元・サンドボックス等） |
 | `configs/llm_config.yaml` | プロバイダー設定・タスク別ルーティング |
 | `configs/faiss_config.yaml` | FAISS インデックス設定（ドメイン別） |
 | `configs/retrievers.yaml` | 外部検索ソース設定 |
@@ -214,44 +237,15 @@ python scripts/train_student.py
 
 ---
 
-## ディレクトリ構成（主要部）
-
-```
-MED/
-├── src/
-│   ├── orchestrator/       # FastAPI + QueryParser + ModelRouter
-│   ├── llm/                # LLMGateway + 4プロバイダー
-│   ├── rag/                # RetrieverRouter + GitHub/SO/Tavily/arXiv
-│   ├── memory/             # FAISS + SQLite + スコアリング + 成熟管理
-│   ├── knowledge_graph/    # NetworkX KG + EntityExtractor + RouterBridge
-│   ├── retrieval/          # QueryClassifier + RRF Fusion/Rerank
-│   ├── mcp_tools/          # SQL/BI MCP ツール
-│   ├── training/           # GRPO/PPO/DPO/SFT + TinyLoRA/LoRA（骨格）
-│   ├── sandbox/            # Docker コード実行
-│   ├── gui/                # Gradio 6タブ
-│   └── common/             # Config + Logger
-├── data/
-│   ├── models/
-│   │   └── all-MiniLM-L6-v2/   # 埋め込みモデル（同梱）
-│   └── faiss_indices/           # FAISS インデックス（ドメイン別）
-├── configs/                # YAML 設定ファイル群
-├── scripts/                # seed / mature / train / launch
-└── tests/                  # unit (36ファイル / 1079件) + integration
-```
-
----
-
 ## 技術スタック
 
 | レイヤー | 技術 |
 |---|---|
 | Web GUI | Gradio |
-| API サーバー | FastAPI (非同期) |
-| 埋め込み | sentence-transformers / all-MiniLM-L6-v2 (384次元) |
-| ベクトル検索 | FAISS (IndexFlatIP → IVF 自動移行) |
-| Knowledge Graph | NetworkX (→ Neo4j: 将来) |
+| API サーバー | FastAPI |
+| 埋め込み | sentence-transformers (all-MiniLM-L6-v2, 384 次元、同梱) |
+| ベクトル検索 | FAISS |
+| Knowledge Graph | NetworkX |
 | メタデータ | SQLite (aiosqlite) |
-| Fusion / Rerank | RRF (Reciprocal Rank Fusion) |
 | コンテナ | Docker |
-| Student 学習 | GRPO + TinyLoRA 骨格実装（VERL/trl 統合: 将来） |
-| 設定 | pydantic-settings + YAML |
+| Student 学習 | VERL (GRPO) / trl / TinyLoRA |

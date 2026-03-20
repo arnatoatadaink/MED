@@ -394,18 +394,24 @@ KG訓練統合タスク（将来）:
 
 > 引き継ぎ詳細: `docs/session_progress.md` を参照 (バックエンドセッション `claude/implement-phase1-config-iIPTF` の作業記録)
 
+**完了済み（直近セッション）**
+- `all-MiniLM-L6-v2` ローカル配置 (`data/models/all-MiniLM-L6-v2/`) — HuggingFace Hub 接続不要
+- `src/memory/embedder.py` — `cache_dir` 設定時にローカルフルパスを直接渡すよう修正
+- `configs/default.yaml` — `cache_dir: data/models` 追加（オフライン埋め込み有効化）
+- unit tests: 36ファイル / 1079件 pass 確認済み
+
 **残作業 (優先度: 高)**
-- `tests/integration/` の E2E テストを実際の Docker 環境で実行・検証
-- `scripts/` 各スクリプト (`seed_memory.py`, `mature_memory.py`, `train_student.py`) の動作確認
+- `scripts/seed_memory.py` の実行確認（埋め込みモデル準備完了につき実行可能）
+- `scripts/mature_memory.py` / `scripts/train_student.py` の動作確認
 - オーケストレーターを実際に起動してエンドツーエンドの動作確認
+- `tests/integration/` の E2E テスト（Docker 環境が必要）
 
 **残作業 (優先度: 中)**
+- `data/faiss_indices/` へのシードデータ投入（目標: 10,000 docs / confidence > 0.7 / 実行成功率 > 80%）
 - Phase 3+: GRPO + TinyLoRA 本番学習パイプラインの実稼働
-- `data/faiss_indices/` へのシードデータ投入 (`scripts/seed_memory.py`)
-- メモリ品質目標: 10,000 docs / confidence > 0.7 / 実行成功率 > 80%
 
 **技術的負債**
 - `src/memory/maturation/seed_builder.py` — Teacher API 呼び出し部分はスタブ。実プロバイダー接続時に完成
-- `src/training/algorithms/` — 骨格実装のみ。VERL/trl との実際の統合が必要
+- `src/training/algorithms/` — 骨格実装のみ。VERL/trl との実際の統合が必要（HuggingFace Hub ブロック中）
 - KG 永続化: NetworkX + pickle → Neo4j 移行スクリプト未実装
-- sentence-transformers は CI 除外済み (`plan_test.md` 参照)
+- Docker E2E テスト: この環境では Docker 利用不可のため未検証
