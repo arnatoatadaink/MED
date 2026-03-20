@@ -29,7 +29,7 @@ async def check_quality(domain: str | None) -> None:
     from src.memory.metadata_store import MetadataStore
 
     settings = get_settings()
-    store = MetadataStore(settings.memory.metadata_db_path)
+    store = MetadataStore(db_path=str(settings.metadata.db_path))
     await store.initialize()
 
     metrics = QualityMetrics(store)
@@ -51,7 +51,7 @@ async def review_docs(limit: int, domain: str | None) -> None:
     from src.memory.metadata_store import MetadataStore
 
     settings = get_settings()
-    store = MetadataStore(settings.memory.metadata_db_path)
+    store = MetadataStore(db_path=str(settings.metadata.db_path))
     await store.initialize()
     gateway = LLMGateway(settings)
 
@@ -70,7 +70,7 @@ async def tag_difficulty(limit: int, domain: str | None) -> None:
     from src.memory.metadata_store import MetadataStore
 
     settings = get_settings()
-    store = MetadataStore(settings.memory.metadata_db_path)
+    store = MetadataStore(db_path=str(settings.metadata.db_path))
     await store.initialize()
     gateway = LLMGateway(settings)
 

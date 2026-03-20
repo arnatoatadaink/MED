@@ -36,8 +36,7 @@ async def run_training(
     from src.memory.maturation.seed_builder import SeedBuilder
     from src.memory.memory_manager import MemoryManager
     from src.memory.metadata_store import MetadataStore
-    from src.training.pipeline import TrainingConfig, TrainingPipeline
-    from src.training.registry import TrainingRegistry
+    from src.training.pipeline import PipelineConfig as TrainingConfig, TrainingPipeline
 
     settings = get_settings()
     gateway = LLMGateway(settings)
@@ -46,7 +45,7 @@ async def run_training(
     print("[train] Building training data from memory...")
     embedder = Embedder()
     index_manager = FAISSIndexManager()
-    metadata_store = MetadataStore(settings.memory.metadata_db_path)
+    metadata_store = MetadataStore(db_path=str(settings.metadata.db_path))
     await metadata_store.initialize()
     memory_manager = MemoryManager(index_manager, metadata_store, embedder)
 
@@ -63,22 +62,14 @@ async def run_training(
     # 学習パイプライン
     print(f"[train] Starting {algorithm.upper()}+{adapter} training ({n_steps} steps)...")
 
-    AlgoCls = TrainingRegistry.get_algorithm(algorithm)
-    AdaptCls = TrainingRegistry.get_adapter(adapter)
-
     config = TrainingConfig(
         algorithm=algorithm,
         adapter=adapter,
-        n_steps=n_steps,
+        grpo_steps=n_steps,
         batch_size=batch_size,
     )
 
-    pipeline = TrainingPipeline(
-        algorithm=AlgoCls(config),
-        adapter=AdaptCls(config),
-        gateway=gateway,
-        config=config,
-    )
+    pipeline = TrainingPipeline.from_config(config, model=None, gateway=gateway)
 
     result = await pipeline.run(training_data)
     print(f"[train] Training completed: avg_reward={result.avg_reward:.4f}")
