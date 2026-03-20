@@ -351,6 +351,40 @@ class TrainingConfig(BaseModel):
 
 
 # ============================================================================
+# 認証設定
+# ============================================================================
+
+
+class AuthConfig(BaseModel):
+    """JWT 認証設定。"""
+
+    users_db_path: Path = Path("data/users.db")
+    jwt_secret_key: str = "change-me-in-production"   # 環境変数 JWT_SECRET_KEY を推奨
+    jwt_algorithm: str = "HS256"
+    access_token_expire_days: int = 7
+    allow_test_token: bool = True       # 本番環境では False に設定
+    test_token_localhost_only: bool = True
+    allow_registration: bool = True     # False で招待制に
+
+
+# ============================================================================
+# 会話履歴設定
+# ============================================================================
+
+
+class ConversationConfig(BaseModel):
+    """会話履歴永続化設定。"""
+
+    db_path: Path = Path("data/conversations.db")
+    context_window_tokens: int = 2048   # LLM に渡すターンの最大トークン数
+    auto_save_to_faiss: bool = True     # assistant ターンをユーザー FAISS に自動登録
+    max_sessions_per_user: int = 50     # 古いセッションを自動削除する閾値
+    max_turns_per_session: int = 500
+    user_faiss_base: str = "data/faiss_indices/user_{user_id}"
+    knowledge_faiss_base: str = "data/faiss_indices/knowledge"
+
+
+# ============================================================================
 # メイン Settings — pydantic-settings で env var / .env を統合
 # ============================================================================
 
@@ -395,6 +429,8 @@ class Settings(BaseSettings):
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
     router: RouterConfig = Field(default_factory=RouterConfig)
     training: TrainingConfig = Field(default_factory=TrainingConfig)
+    auth: AuthConfig = Field(default_factory=AuthConfig)
+    conversation: ConversationConfig = Field(default_factory=ConversationConfig)
 
     @classmethod
     def settings_customise_sources(

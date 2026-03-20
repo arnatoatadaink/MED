@@ -20,8 +20,9 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+from src.conversation.manager import ConversationManager
 from src.llm.code_generator import CodeGenerator, CodeResult
-from src.llm.gateway import LLMGateway
+from src.llm.gateway import LLMGateway, LLMMessage
 from src.llm.response_generator import GeneratedResponse, ResponseGenerator
 from src.memory.iterative_retrieval import IterativeRetriever
 from src.memory.memory_manager import MemoryManager
@@ -51,6 +52,8 @@ class QueryResponse:
     input_tokens: int = 0
     output_tokens: int = 0
     debug_info: dict = field(default_factory=dict)
+    session_id: str | None = None       # 会話セッション ID
+    user_id: str = "default"            # ユーザー識別子
 
 
 class MEDPipeline:
@@ -72,6 +75,7 @@ class MEDPipeline:
         gateway: LLMGateway | None = None,
         retriever_router: RetrieverRouter | None = None,
         sandbox_manager: SandboxManager | None = None,
+        conversation_manager: ConversationManager | None = None,
         *,
         enable_external_rag: bool = True,
         enable_sandbox: bool = True,
@@ -81,6 +85,7 @@ class MEDPipeline:
         self._gateway = gateway or LLMGateway()
         self._router = retriever_router or RetrieverRouter()
         self._sandbox = sandbox_manager or SandboxManager()
+        self._conv = conversation_manager   # None = 会話履歴機能を無効化
         self._chunker = Chunker()
         self._verifier = ResultVerifier(gateway=self._gateway)
         self._response_gen = ResponseGenerator(self._gateway)
@@ -96,12 +101,16 @@ class MEDPipeline:
     async def initialize(self) -> None:
         """パイプラインを初期化する。"""
         await self._mm.initialize()
+        if self._conv is not None:
+            await self._conv.initialize()
         self._initialized = True
         logger.info("MEDPipeline initialized")
 
     async def close(self) -> None:
         """リソースを解放する。"""
         await self._mm.close()
+        if self._conv is not None:
+            await self._conv.close()
         self._initialized = False
 
     async def query(
@@ -114,6 +123,8 @@ class MEDPipeline:
         model: str | None = None,
         use_memory: bool = True,
         use_rag: bool = True,
+        session_id: str | None = None,
+        user_id: str = "default",
     ) -> QueryResponse:
         """クエリを受け取り、RAG + LLM で回答を生成する。
 
@@ -122,12 +133,24 @@ class MEDPipeline:
             domain: 検索ドメイン（None = 全ドメイン）。
             k: FAISS から取得するドキュメント数。
             run_code: 生成コードを Sandbox で実行するか。
+            session_id: 会話セッション ID（ConversationManager が有効な場合に使用）。
+            user_id: ユーザー識別子（ユーザー FAISS の選択に使用）。
 
         Returns:
             QueryResponse オブジェクト。
         """
         if not self._initialized:
             raise RuntimeError("MEDPipeline.initialize() must be called before use")
+
+        # ── Step 0: 会話履歴からコンテキストを取得 ───────
+        conv_messages: list[LLMMessage] = []
+        if self._conv is not None and session_id:
+            turns = await self._conv.get_context_turns(session_id)
+            for t in turns:
+                conv_messages.append(LLMMessage(role=t.role, content=t.content))
+            logger.debug(
+                "Conversation context: %d turns for session=%s", len(turns), session_id
+            )
 
         # ── Step 1: FAISS 検索（ハイブリッド: ベクトル + エイリアスキーワード） ──
         faiss_results: list[SearchResult] = []
@@ -150,7 +173,11 @@ class MEDPipeline:
 
         # ── Step 3: LLM レスポンス生成 ──────────────
         gen_response: GeneratedResponse = await self._response_gen.generate(
-            query, context_docs=faiss_results, provider=provider, model=model
+            query,
+            context_docs=faiss_results,
+            provider=provider,
+            model=model,
+            conversation_history=conv_messages if conv_messages else None,
         )
 
         # ── Step 3.5: CRAG リトライ ─────────────────
@@ -292,6 +319,30 @@ class MEDPipeline:
             debug_info["agentic_query"] = agentic_query
             debug_info["agentic_rag_results"] = [_raw_to_dict(r) for r in agentic_rag_results]
 
+        # ── Step N: 会話履歴にターンを保存 ──────────
+        if self._conv is not None and session_id:
+            import asyncio
+            user_turn = self._conv.make_user_turn(session_id, query)
+            assistant_turn = self._conv.make_assistant_turn(
+                session_id,
+                gen_response.answer,
+                provider=gen_response.provider,
+                model=gen_response.model,
+                input_tokens=gen_response.input_tokens,
+                output_tokens=gen_response.output_tokens,
+            )
+            await self._conv.add_turn(user_turn)
+            await self._conv.add_turn(assistant_turn)
+            # FAISS 登録は非同期でバックグラウンド実行（レスポンス遅延を防ぐ）
+            asyncio.ensure_future(
+                self._conv.save_to_user_faiss(
+                    assistant_turn, user_id, lambda uid: self._mm
+                )
+            )
+            logger.debug(
+                "Saved conversation turns for session=%s user=%s", session_id, user_id
+            )
+
         return QueryResponse(
             answer=gen_response.answer,
             query=query,
@@ -305,6 +356,8 @@ class MEDPipeline:
             input_tokens=gen_response.input_tokens,
             output_tokens=gen_response.output_tokens,
             debug_info=debug_info,
+            session_id=session_id,
+            user_id=user_id,
         )
 
     async def add_document(

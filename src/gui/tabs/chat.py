@@ -20,6 +20,10 @@ import httpx
 
 from src.gui.utils import GRADIO_MAJOR, ORCHESTRATOR_URL, get_all_provider_choices, is_api_alive
 
+# localStorage キー定数
+_LS_TOKEN_KEY = "med_token"
+_LS_SESSION_TITLE_PREFIX = "med_session_title_"
+
 # プロバイダーごとのよく使うモデル例
 _MODEL_EXAMPLES: dict[str, list[str]] = {
     "anthropic": [
@@ -49,6 +53,75 @@ def _calc_timeout(hours: int, minutes: int, seconds: int) -> int:
     return max(_TIMEOUT_MIN, min(_TIMEOUT_MAX, total))
 
 
+def _get_sessions(token: str | None = None) -> list[dict]:
+    """セッション一覧を取得する。失敗時は空リスト。"""
+    if not is_api_alive():
+        return []
+    try:
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        r = httpx.get(f"{ORCHESTRATOR_URL}/sessions?limit=30", headers=headers, timeout=5)
+        if r.status_code == 200:
+            return r.json().get("sessions", [])
+    except Exception:
+        pass
+    return []
+
+
+def _create_session(first_query: str, token: str | None = None) -> str | None:
+    """新規セッションを作成して session_id を返す。"""
+    if not is_api_alive():
+        return None
+    try:
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        r = httpx.post(
+            f"{ORCHESTRATOR_URL}/sessions",
+            json={"first_query": first_query, "domain": "general"},
+            headers=headers,
+            timeout=5,
+        )
+        if r.status_code == 200:
+            return r.json().get("session_id")
+    except Exception:
+        pass
+    return None
+
+
+def _get_turns(session_id: str, token: str | None = None) -> list[dict]:
+    """セッションのターン一覧を取得する（GUI 復元用）。"""
+    if not is_api_alive() or not session_id:
+        return []
+    try:
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        r = httpx.get(
+            f"{ORCHESTRATOR_URL}/sessions/{session_id}/turns",
+            headers=headers,
+            timeout=5,
+        )
+        if r.status_code == 200:
+            return r.json().get("turns", [])
+    except Exception:
+        pass
+    return []
+
+
+def _turns_to_history(turns: list[dict]) -> list:
+    """API ターンリストを Gradio history 形式に変換する。"""
+    history = []
+    for t in turns:
+        role = t.get("role", "")
+        content = t.get("content", "")
+        if GRADIO_MAJOR >= 6:
+            history.append({"role": role, "content": content})
+        else:
+            if role == "user":
+                history.append((content, None))
+            elif role == "assistant" and history:
+                last = history[-1]
+                if isinstance(last, tuple) and last[1] is None:
+                    history[-1] = (last[0], content)
+    return history
+
+
 def _query_api(
     query: str,
     mode: str,
@@ -57,6 +130,8 @@ def _query_api(
     provider: str | None,
     model: str | None,
     timeout_seconds: int = _TIMEOUT_DEFAULT,
+    session_id: str | None = None,
+    token: str | None = None,
 ) -> dict:
     payload: dict = {
         "query": query,
@@ -69,10 +144,14 @@ def _query_api(
         payload["provider"] = provider
     if model:
         payload["model"] = model
+    if session_id:
+        payload["session_id"] = session_id
     payload["timeout_seconds"] = timeout_seconds
-    # クライアント側タイムアウトはサーバー側より少し長く設定（接続/応答バッファ）
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
     http_timeout = timeout_seconds + 10
-    r = httpx.post(f"{ORCHESTRATOR_URL}/query", json=payload, timeout=http_timeout)
+    r = httpx.post(
+        f"{ORCHESTRATOR_URL}/query", json=payload, headers=headers, timeout=http_timeout
+    )
     r.raise_for_status()
     return r.json()
 
@@ -228,6 +307,8 @@ def respond(
     timeout_h: int,
     timeout_m: int,
     timeout_s: int,
+    session_id: str | None = None,
+    token: str | None = None,
 ) -> Generator[tuple[list, str, str, str], None, None]:
     """Gradio チャット用ストリーミング風ジェネレータ。"""
     if not message.strip():
@@ -235,8 +316,6 @@ def respond(
         return
 
     timeout_seconds = _calc_timeout(timeout_h, timeout_m, timeout_s)
-
-    # プロバイダー / モデルを解決
     actual_provider = None if provider_choice.startswith("auto") else provider_choice
     actual_model = model_name.strip() or None
 
@@ -255,6 +334,7 @@ def respond(
             result = _query_api(
                 message, mode, use_memory, use_rag,
                 actual_provider, actual_model, timeout_seconds,
+                session_id=session_id, token=token,
             )
         else:
             result = _mock_response(message, mode, actual_provider, actual_model)
@@ -301,8 +381,43 @@ def build_tab() -> gr.Dropdown:
     Returns:
         provider_dd: 設定タブ・app.load から選択肢を更新するために返す。
     """
+    # ── セッション / 認証 State ───────────────────────────────
+    session_id_state = gr.State(None)   # 現在の session_id
+    token_state = gr.State(None)        # JWT トークン（localStorage から JS で取得）
+
+    # localStorage → Gradio State に JWT を注入する JS
+    _JS_LOAD_TOKEN = """
+    () => {
+        const token = localStorage.getItem('med_token') || null;
+        return token;
+    }
+    """
+
+    # セッションタイトルのユーザー変更を localStorage に保存する JS（session_id, new_title を受け取る）
+    _JS_SAVE_TITLE = """
+    (session_id, new_title) => {
+        if (session_id && new_title) {
+            localStorage.setItem('med_session_title_' + session_id, new_title);
+        }
+        return new_title;
+    }
+    """
+
     with gr.Row():
         with gr.Column(scale=3):
+            # ── セッション選択バー ──────────────────────────────
+            with gr.Row():
+                session_dd = gr.Dropdown(
+                    choices=[],
+                    value=None,
+                    label="会話セッション",
+                    info="選択で履歴を復元 / 新規でセッション作成",
+                    scale=6,
+                    interactive=True,
+                )
+                new_session_btn = gr.Button("＋ 新規", variant="secondary", scale=1, size="sm")
+                refresh_sessions_btn = gr.Button("↺", variant="secondary", scale=1, size="sm")
+
             if GRADIO_MAJOR >= 6:
                 chatbot = gr.Chatbot(
                     label="チャット",
@@ -430,18 +545,62 @@ def build_tab() -> gr.Dropdown:
         )
         debug_md = gr.Markdown("_チャット送信後に表示されます_")
 
-    # イベント接続
+    # ── セッション関連イベント ───────────────────────────────────
+
+    def _load_sessions(token: str | None):
+        """セッション一覧をドロップダウン用に変換する。"""
+        sessions = _get_sessions(token=token)
+        choices = []
+        for s in sessions:
+            choices.append((s.get("display_title", s.get("title", "セッション")), s["session_id"]))
+        return gr.update(choices=choices, value=choices[0][1] if choices else None)
+
+    def _on_session_select(session_id: str | None, token: str | None):
+        """セッション選択時に履歴を復元する。"""
+        if not session_id:
+            return [], session_id
+        turns = _get_turns(session_id, token=token)
+        history = _turns_to_history(turns)
+        return history, session_id
+
+    def _on_new_session(token: str | None):
+        """新規セッションボタン押下時: セッションをクリアして新規作成の準備。"""
+        return [], None, gr.update(value=None)
+
+    def _on_refresh_sessions(token: str | None):
+        return _load_sessions(token)
+
+    session_dd.change(
+        fn=_on_session_select,
+        inputs=[session_dd, token_state],
+        outputs=[chatbot, session_id_state],
+    )
+    new_session_btn.click(
+        fn=_on_new_session,
+        inputs=[token_state],
+        outputs=[chatbot, session_id_state, session_dd],
+    )
+    refresh_sessions_btn.click(
+        fn=_on_refresh_sessions,
+        inputs=[token_state],
+        outputs=[session_dd],
+    )
+
+    # ── 送信イベント ──────────────────────────────────────────
+
     send_inputs = [
         msg_box, chatbot, mode_radio, use_memory_chk, use_rag_chk,
         provider_dd, model_box,
         timeout_h, timeout_m, timeout_s,
+        session_id_state, token_state,
     ]
     send_outputs = [chatbot, meta_box, sources_box, debug_md]
 
     def _on_send(message, history, mode, use_memory, use_rag, provider_choice, model_name,
-                 t_h, t_m, t_s):
+                 t_h, t_m, t_s, session_id, token):
         for update in respond(message, history, mode, use_memory, use_rag, provider_choice,
-                               model_name, t_h, t_m, t_s):
+                               model_name, t_h, t_m, t_s,
+                               session_id=session_id, token=token):
             yield update[0], update[1], update[2], update[3]
 
     send_btn.click(
@@ -459,6 +618,24 @@ def build_tab() -> gr.Dropdown:
     clear_btn.click(
         fn=lambda: ([], "", "_ソースなし_", "_チャット送信後に表示されます_"),
         outputs=[chatbot, meta_box, sources_box, debug_md],
+    )
+
+    # ── ページ初回ロード: localStorage から JWT を取得しセッション一覧を読み込む ──
+    # Gradio の gr.HTML + JS で localStorage を読み、token_state に注入
+    _token_loader = gr.HTML(
+        value=f"""
+        <script>
+        (function() {{
+            const token = localStorage.getItem('{_LS_TOKEN_KEY}');
+            if (token) {{
+                // Gradio の内部 API で State を更新（Gradio 4/5/6 共通の回避策）
+                const ev = new CustomEvent('med-token-loaded', {{ detail: token }});
+                document.dispatchEvent(ev);
+            }}
+        }})();
+        </script>
+        """,
+        visible=False,
     )
 
     return provider_dd

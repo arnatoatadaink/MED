@@ -18,3 +18,21 @@ gui:
   share: false
   debug: false
   orchestrator_url: "http://localhost:8000"
+
+auth:
+  users_db_path: "data/users.db"
+  jwt_secret_key: "change-me-in-production"  # 本番: 環境変数 JWT_SECRET_KEY で上書き
+  jwt_algorithm: "HS256"
+  access_token_expire_days: 7
+  allow_test_token: true         # 本番環境では false に設定
+  test_token_localhost_only: true
+  allow_registration: true
+
+conversation:
+  db_path: "data/conversations.db"
+  context_window_tokens: 2048
+  auto_save_to_faiss: true
+  max_sessions_per_user: 50
+  max_turns_per_session: 500
+  user_faiss_base: "data/faiss_indices/user_{user_id}"
+  knowledge_faiss_base: "data/faiss_indices/knowledge"
