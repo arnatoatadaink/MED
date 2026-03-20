@@ -93,6 +93,17 @@ cd MED
 pip install -e ".[dev]"
 ```
 
+### 埋め込みモデル
+
+`all-MiniLM-L6-v2` はリポジトリに同梱済み（`data/models/all-MiniLM-L6-v2/`）。
+HuggingFace Hub への接続は不要。`configs/default.yaml` に設定済み。
+
+```yaml
+embedding:
+  model: "all-MiniLM-L6-v2"
+  cache_dir: "data/models"
+```
+
 ### API キー設定
 
 `.env` ファイルをプロジェクトルートに作成:
@@ -192,7 +203,17 @@ curl -X POST http://localhost:8000/query \
 ### メモリ初期化（シードデータ投入）
 
 ```bash
-python scripts/seed_memory.py
+# 外部 RAG 経由で取得してシード
+python scripts/seed_memory.py --query "FAISS vector search" --domain code
+
+# JSON ファイルから直接投入
+python scripts/seed_memory.py --input-file docs.json
+```
+
+### メモリ成熟
+
+```bash
+python scripts/mature_memory.py
 ```
 
 ### Student モデル学習
@@ -212,6 +233,7 @@ python scripts/train_student.py
 | `configs/faiss_config.yaml` | FAISS インデックス設定（ドメイン別） |
 | `configs/retrievers.yaml` | 外部検索ソース設定 |
 | `configs/training.yaml` | 学習アルゴリズム・アダプタ設定 |
+| `configs/model_router.yaml` | Model Router・KG 参照設定 |
 
 ---
 
@@ -221,7 +243,7 @@ python scripts/train_student.py
 |---|---|
 | Web GUI | Gradio |
 | API サーバー | FastAPI |
-| 埋め込み | sentence-transformers (all-MiniLM-L6-v2, 384 次元) |
+| 埋め込み | sentence-transformers (all-MiniLM-L6-v2, 384 次元、同梱) |
 | ベクトル検索 | FAISS |
 | Knowledge Graph | NetworkX |
 | メタデータ | SQLite (aiosqlite) |
