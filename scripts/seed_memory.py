@@ -35,7 +35,7 @@ async def seed_from_query(query: str, domain: str, top_k: int, dry_run: bool) ->
     gateway = LLMGateway(settings)
     embedder = Embedder()
     index_manager = FAISSIndexManager()
-    metadata_store = MetadataStore(settings.memory.metadata_db_path)
+    metadata_store = MetadataStore(db_path=str(settings.metadata.db_path))
     await metadata_store.initialize()
     memory_manager = MemoryManager(index_manager, metadata_store, embedder)
     retriever = RetrieverRouter(settings, gateway)
@@ -93,7 +93,7 @@ async def seed_from_file(input_file: str, domain: str, dry_run: bool) -> int:
     settings = get_settings()
     embedder = Embedder()
     index_manager = FAISSIndexManager()
-    metadata_store = MetadataStore(settings.memory.metadata_db_path)
+    metadata_store = MetadataStore(db_path=str(settings.metadata.db_path))
     await metadata_store.initialize()
     memory_manager = MemoryManager(index_manager, metadata_store, embedder)
 
