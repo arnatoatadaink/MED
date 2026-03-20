@@ -2,9 +2,10 @@ __pycache__/
 *.pyc
 *.pyo
 .env
-data/faiss_indices/*.index
+data/faiss_indices/
+data/faiss_test*/
 data/metadata.db
-data/adapters/*.bin
+data/adapters/
 data/training_logs/
 .venv/
 venv/
