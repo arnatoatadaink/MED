@@ -392,19 +392,52 @@ KG訓練統合タスク（将来）:
 
 ### 次セッションへの引き継ぎ事項
 
-> 引き継ぎ詳細: `docs/session_progress.md` を参照 (バックエンドセッション `claude/implement-phase1-config-iIPTF` の作業記録)
+**作業ブランチ**: `claude/gradio-web-gui-1J0AJ`（main からの PR マージ済み）
 
 **完了済み（直近セッション）**
 - `all-MiniLM-L6-v2` ローカル配置 (`data/models/all-MiniLM-L6-v2/`) — HuggingFace Hub 接続不要
+  - `1_Pooling/config.json` を追加（Pooling.__init__ エラー修正）
 - `src/memory/embedder.py` — `cache_dir` 設定時にローカルフルパスを直接渡すよう修正
 - `configs/default.yaml` — `cache_dir: data/models` 追加（オフライン埋め込み有効化）
+- カスタムプロバイダーのローカル隠蔽対応
+  - `configs/llm_config.local.yaml`（git 管理外）にローカルプロバイダーを分離
+  - `src/llm/gateway.py` — llm_config.yaml と llm_config.local.yaml の両方をロード
+  - `src/gui/tabs/settings.py` — 「🔒 ローカル専用」チェックボックス追加（デフォルト ON）
+  - `src/gui/utils.py` — ドロップダウンに両ファイルのプロバイダーを反映
+- `pytest-testmon` 導入・動作確認済み（ローカル開発用、CI では使用しない）
+- `.gitignore` 更新（llm_config.local.yaml / .testmondata 系を除外）
 - unit tests: 36ファイル / 1079件 pass 確認済み
 
-**残作業 (優先度: 高)**
-- `scripts/seed_memory.py` の実行確認（埋め込みモデル準備完了につき実行可能）
-- `scripts/mature_memory.py` / `scripts/train_student.py` の動作確認
-- オーケストレーターを実際に起動してエンドツーエンドの動作確認
-- `tests/integration/` の E2E テスト（Docker 環境が必要）
+**WSL2 ローカルで最初にやること**
+```bash
+git checkout claude/gradio-web-gui-1J0AJ
+git pull origin claude/gradio-web-gui-1J0AJ
+pip install -e ".[dev]"
+pip install pytest-testmon          # 差分テスト用（任意）
+python -m pytest tests/unit/ --testmon-noselect -q --tb=no  # ベースライン記録
+```
+
+**.env に設定するキー（ローカルでの実行に必要）**
+```
+ANTHROPIC_API_KEY=...   # seed_builder / mature / KG抽出 に必要
+OPENAI_API_KEY=...      # 代替 Teacher として使用可
+TAVILY_API_KEY=...      # 外部RAG（任意）
+GITHUB_TOKEN=...        # 外部RAG（任意・レート制限緩和）
+```
+
+**残作業 (優先度: 高 — ローカルで実施)**
+- `scripts/seed_memory.py` の実行（埋め込みモデル・ローカル環境準備完了）
+  ```bash
+  python scripts/seed_memory.py --query "FAISS vector search" --domain code --dry-run
+  python scripts/seed_memory.py --query "FAISS vector search" --domain code
+  ```
+- `scripts/mature_memory.py` の動作確認
+- オーケストレーター起動 + E2E 動作確認
+  ```bash
+  python -m uvicorn src.orchestrator.server:app --port 8000 --reload
+  python scripts/launch_gui.py
+  ```
+- `tests/integration/` の E2E テスト（Docker 必要）
 
 **残作業 (優先度: 中)**
 - `data/faiss_indices/` へのシードデータ投入（目標: 10,000 docs / confidence > 0.7 / 実行成功率 > 80%）
@@ -412,6 +445,11 @@ KG訓練統合タスク（将来）:
 
 **技術的負債**
 - `src/memory/maturation/seed_builder.py` — Teacher API 呼び出し部分はスタブ。実プロバイダー接続時に完成
-- `src/training/algorithms/` — 骨格実装のみ。VERL/trl との実際の統合が必要（HuggingFace Hub ブロック中）
+- `src/training/algorithms/` — 骨格実装のみ。VERL/trl との実際の統合が必要
 - KG 永続化: NetworkX + pickle → Neo4j 移行スクリプト未実装
-- Docker E2E テスト: この環境では Docker 利用不可のため未検証
+- Docker E2E テスト: Docker 環境が必要
+
+**ローカルモデルを Teacher にする場合の注意**
+- データ構造・スキーマへの破壊的影響なし
+- KG Entity 抽出とメモリ品質審査はモデル精度依存（高影響）
+- `teacher_registry.py` の EWMA が信頼度を自動追跡・調整する
