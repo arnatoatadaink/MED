@@ -24,3 +24,6 @@ wandb/
 *.dylib
 docs/build/
 configs/llm_config.local.yaml
+.testmondata
+.testmondata-shm
+.testmondata-wal
