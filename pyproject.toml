@@ -83,7 +83,11 @@ ignore = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+filterwarnings = [
+    "ignore::pytest.PytestUnhandledThreadExceptionWarning",
+]
 markers = [
     "docker: mark test as requiring a running Docker daemon",
     "slow: mark test as slow (may take several seconds)",
@@ -93,3 +97,8 @@ markers = [
 python_version = "3.11"
 strict = true
 ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "pytest-testmon (>=2.2.0,<3.0.0)"
+]

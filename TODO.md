@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-03-20（A-1 サーバーサイド会話履歴・認証実装完了）
+> 最終更新: 2026-03-22（Docker統合テスト全通過・testmon導入・pytest警告修正）
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_think.md` / `plan_test.md` / `plan_training_a.md` / `plan_training_b.md` / `docs/session_progress.md`
 
 ---
@@ -88,8 +88,10 @@
 - ✅ `.github/workflows/ci.yml` — `docker-tests` ジョブの重複 pytest ステップ削除済み
 
 ### B-1〜4. testmon + xdist 移行
-- 🟡 `requirements-dev.txt` — `pytest-testmon>=2.1` / `pytest-xdist>=3.5` を追記
-- 🟡 `Dockerfile.test` — sentence-transformers 除外 + testmon/xdist 入り軽量イメージに修正
+- ✅ `pyproject.toml` — `pytest-testmon>=2.2` を dev dependency に追加（poetry add 済み）
+- ✅ `pyproject.toml` — `asyncio_default_fixture_loop_scope` / `filterwarnings` 追加（Event loop is closed 警告修正）
+- ✅ testmon ローカル動作確認済み（変更なし→0件/0.13s、embedder変更→68件/12s）
+- 🟡 `Dockerfile.test` — testmon/xdist 入り軽量イメージに修正
 - 🟡 `docker-compose.test.yml` — `.testmondata` ボリュームマウント設定
 - 🟡 `.github/workflows/test.yml` — testmon差分収集 → xdist並列実行ワークフロー作成
 - 🟡 `.github/workflows/test-full.yml` — 週次フルラン + `.testmondata` 再生成ワークフロー作成
@@ -102,7 +104,9 @@
   ```bash
   cd MED && uvicorn src.orchestrator.server:app --reload
   ```
-- 🔴 `tests/integration/` に Docker ベースの E2E テストを追加・実行
+- ✅ `tests/integration/` Docker ベースの E2E テスト全通過（Docker内: 1096件 / ローカル: 1096件）
+  - `test_docker_sandbox.py` — 17 passed（コンテナ実行・セキュリティ・タイムアウト・並行実行）
+  - `test_e2e_pipeline.py` — 49 passed（CRUD / FastAPI / 認証 / セッション / 管理者）
 - 🟡 `scripts/seed_memory.py` — 動作確認（初期ドキュメントのFAISS投入）
 - 🟡 `scripts/mature_memory.py` — 動作確認（Teacher品質審査パイプライン）
 - 🟡 `scripts/train_student.py` — 動作確認（GRPO + TinyLoRA骨格）
@@ -206,5 +210,8 @@
 | Phase 3: training 骨格（base / algorithms / adapters / rewards） | ✅ 骨格 |
 | Phase 4: model_router / query_parser / error_analyzer / deduplicator | ✅ |
 | GUI: Gradio 6タブ + docs_chat | ✅ |
-| CI: GitHub Actions + ruff + pytest 862テスト | ✅ |
+| CI: GitHub Actions + ruff + pytest 1096テスト (unit 1030 + integration 66) | ✅ |
 | A-1: src/auth/ + src/conversation/ + JWT + セッション管理 | ✅ |
+| Docker統合テスト: sandbox 17件 + E2E pipeline 49件 全通過 | ✅ |
+| testmon: pytest-testmon 2.2.0 導入・ベースライン記録済み | ✅ |
+| pytest警告修正: asyncio loop_scope + filterwarnings 設定 | ✅ |
