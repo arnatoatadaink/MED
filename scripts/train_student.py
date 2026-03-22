@@ -27,53 +27,48 @@ async def run_training(
     n_steps: int,
     batch_size: int,
     domain: str | None,
+    topic: str,
     dry_run: bool,
 ) -> None:
     from src.common.config import get_settings
     from src.llm.gateway import LLMGateway
     from src.memory.embedder import Embedder
-    from src.memory.faiss_index import FAISSIndexManager
     from src.memory.maturation.seed_builder import SeedBuilder
     from src.memory.memory_manager import MemoryManager
-    from src.memory.metadata_store import MetadataStore
-    from src.training.pipeline import PipelineConfig as TrainingConfig, TrainingPipeline
 
     settings = get_settings()
     gateway = LLMGateway(settings)
 
-    # Seed データ生成
-    print("[train] Building training data from memory...")
+    # メモリマネージャ初期化
     embedder = Embedder()
-    index_manager = FAISSIndexManager()
-    metadata_store = MetadataStore(db_path=str(settings.metadata.db_path))
-    await metadata_store.initialize()
-    memory_manager = MemoryManager(index_manager, metadata_store, embedder)
+    mm = MemoryManager(embedder=embedder)
+    await mm.initialize()
 
-    builder = SeedBuilder(gateway, memory_manager)
-    training_data = await builder.build_dataset(n_samples=n_steps * batch_size, domain=domain)
-    print(f"[train] Generated {len(training_data)} training examples")
+    # Seed データ生成（Teacher API 呼び出し）
+    n_samples = min(n_steps * batch_size, 50)  # コスト制御: 最大50サンプル
+    print(f"[train] Building {n_samples} training samples via SeedBuilder...")
+    print(f"[train] Topic: {topic!r}, Domain: {domain or 'general'}")
+
+    builder = SeedBuilder(gateway, mm)
+    result = await builder.build(
+        topic=topic,
+        domain=domain or "general",
+        n_samples=n_samples,
+    )
+    print(f"[train] Generated {result.docs_created} docs, {result.docs_failed} failed")
 
     if dry_run:
         print("[train] Dry run: skipping actual training")
-        for i, sample in enumerate(training_data[:3]):
-            print(f"  [{i}] {sample.get('prompt', '')[:80]}...")
+        print(f"[train] Doc IDs: {result.doc_ids[:5]}{'...' if len(result.doc_ids) > 5 else ''}")
+        await mm.close()
         return
 
-    # 学習パイプライン
+    # 学習パイプライン（骨格 — 実モデルが必要）
     print(f"[train] Starting {algorithm.upper()}+{adapter} training ({n_steps} steps)...")
+    print("[train] NOTE: Full training requires Student model (Qwen2.5-7B) + GPU.")
+    print("[train] Training pipeline skeleton is ready but actual model loading is not yet implemented.")
 
-    config = TrainingConfig(
-        algorithm=algorithm,
-        adapter=adapter,
-        grpo_steps=n_steps,
-        batch_size=batch_size,
-    )
-
-    pipeline = TrainingPipeline.from_config(config, model=None, gateway=gateway)
-
-    result = await pipeline.run(training_data)
-    print(f"[train] Training completed: avg_reward={result.avg_reward:.4f}")
-    print(f"[train] Adapter saved to: {result.adapter_path or 'N/A'}")
+    await mm.close()
 
 
 def main() -> None:
@@ -85,6 +80,8 @@ def main() -> None:
     parser.add_argument("--steps", type=int, default=100, dest="n_steps")
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--domain", type=str, default=None)
+    parser.add_argument("--topic", type=str, default="Python programming",
+                        help="Topic for seed data generation")
     parser.add_argument("--dry-run", action="store_true", help="Generate data only, no training")
     args = parser.parse_args()
 
@@ -94,6 +91,7 @@ def main() -> None:
         n_steps=args.n_steps,
         batch_size=args.batch_size,
         domain=args.domain,
+        topic=args.topic,
         dry_run=args.dry_run,
     ))
 
