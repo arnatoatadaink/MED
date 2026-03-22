@@ -23,45 +23,47 @@ sys.path.insert(0, str(_ROOT))
 
 async def seed_from_query(query: str, domain: str, top_k: int, dry_run: bool) -> int:
     """1クエリ分のシードを実行し、投入件数を返す。"""
-    from src.common.config import get_settings
-    from src.llm.gateway import LLMGateway
     from src.memory.embedder import Embedder
-    from src.memory.faiss_index import FAISSIndexManager
     from src.memory.memory_manager import MemoryManager
-    from src.memory.metadata_store import MetadataStore
+    from src.memory.schema import Document, Domain, SourceMeta, SourceType
     from src.rag.retriever import RetrieverRouter
 
-    settings = get_settings()
-    gateway = LLMGateway(settings)
-    embedder = Embedder()
-    index_manager = FAISSIndexManager()
-    metadata_store = MetadataStore(db_path=str(settings.metadata.db_path))
-    await metadata_store.initialize()
-    memory_manager = MemoryManager(index_manager, metadata_store, embedder)
-    retriever = RetrieverRouter(settings, gateway)
+    retriever = RetrieverRouter()
 
     print(f"[seed] Retrieving for: {query!r} (domain={domain}, top_k={top_k})")
-    results = await retriever.retrieve(query, domain=domain, top_k=top_k)
+    results = await retriever.search(query, max_results=top_k)
     print(f"[seed] Retrieved {len(results)} docs")
 
     if dry_run:
-        for i, r in enumerate(results[:3]):
-            print(f"  [{i}] {r.content[:80]}...")
+        for i, r in enumerate(results[:5]):
+            print(f"  [{i}] ({r.source}) {r.content[:100]}...")
         return len(results)
+
+    embedder = Embedder()
+    mm = MemoryManager(embedder=embedder)
+    await mm.initialize()
+
+    # source 名 → SourceType マッピング
+    _SOURCE_MAP = {s.value: s for s in SourceType}
 
     count = 0
     for result in results:
         try:
-            await memory_manager.add(
+            doc = Document(
                 content=result.content,
-                domain=domain,
-                source=result.source,
-                source_url=getattr(result, "url", ""),
+                domain=Domain(domain),
+                source=SourceMeta(
+                    source_type=_SOURCE_MAP.get(result.source, SourceType.MANUAL),
+                    url=result.url,
+                    title=result.title,
+                ),
             )
+            await mm.add(doc)
             count += 1
         except Exception as e:
             print(f"  [warn] Failed to add doc: {e}", file=sys.stderr)
 
+    await mm.close()
     print(f"[seed] Added {count}/{len(results)} docs to FAISS memory")
     return count
 
@@ -71,11 +73,9 @@ async def seed_from_file(input_file: str, domain: str, dry_run: bool) -> int:
 
     JSON 形式: [{"content": "...", "source": "...", "domain": "..."}, ...]
     """
-    from src.common.config import get_settings
     from src.memory.embedder import Embedder
-    from src.memory.faiss_index import FAISSIndexManager
     from src.memory.memory_manager import MemoryManager
-    from src.memory.metadata_store import MetadataStore
+    from src.memory.schema import Document, Domain, SourceMeta, SourceType
 
     path = Path(input_file)
     if not path.exists():
@@ -87,29 +87,34 @@ async def seed_from_file(input_file: str, domain: str, dry_run: bool) -> int:
 
     print(f"[seed] Loaded {len(docs)} docs from {input_file}")
     if dry_run:
-        print(f"[seed] Dry run: would add {len(docs)} docs")
+        for i, d in enumerate(docs[:5]):
+            print(f"  [{i}] {d.get('content', '')[:100]}...")
         return len(docs)
 
-    settings = get_settings()
     embedder = Embedder()
-    index_manager = FAISSIndexManager()
-    metadata_store = MetadataStore(db_path=str(settings.metadata.db_path))
-    await metadata_store.initialize()
-    memory_manager = MemoryManager(index_manager, metadata_store, embedder)
+    mm = MemoryManager(embedder=embedder)
+    await mm.initialize()
+
+    _SOURCE_MAP = {s.value: s for s in SourceType}
 
     count = 0
-    for doc in docs:
+    for d in docs:
         try:
-            await memory_manager.add(
-                content=doc["content"],
-                domain=doc.get("domain", domain),
-                source=doc.get("source", "file"),
-                source_url=doc.get("url", ""),
+            doc = Document(
+                content=d["content"],
+                domain=Domain(d.get("domain", domain)),
+                source=SourceMeta(
+                    source_type=_SOURCE_MAP.get(d.get("source", "manual"), SourceType.MANUAL),
+                    url=d.get("url", ""),
+                    title=d.get("title", ""),
+                ),
             )
+            await mm.add(doc)
             count += 1
         except Exception as e:
             print(f"  [warn] {e}", file=sys.stderr)
 
+    await mm.close()
     print(f"[seed] Seeded {count}/{len(docs)} docs")
     return count
 
