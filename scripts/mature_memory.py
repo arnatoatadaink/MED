@@ -76,17 +76,22 @@ async def tag_difficulty(limit: int, domain: str | None) -> None:
 
     tagger = DifficultyTagger(gateway)
 
-    docs = await store.get_untagged(limit=limit)
-    if not docs:
+    # difficulty が NULL のドキュメントを取得
+    docs = await store.get_unreviewed(domain=domain, limit=limit)
+    untagged = [d for d in docs if d.difficulty is None]
+    if not untagged:
         print("[mature] No untagged documents found")
         return
 
-    print(f"[mature] Tagging {len(docs)} documents...")
+    print(f"[mature] Tagging {len(untagged)} documents...")
     count = 0
-    for doc in docs:
-        result = await tagger.tag(doc)
-        await store.update_difficulty(doc.id, result.difficulty.value)
-        count += 1
+    for doc in untagged:
+        try:
+            level = await tagger.tag(doc)
+            await store.update_quality(doc.id, difficulty=level.value)
+            count += 1
+        except Exception as e:
+            print(f"  [warn] Failed to tag {doc.id[:8]}: {e}", file=sys.stderr)
 
     print(f"[mature] Tagged {count} documents")
 
