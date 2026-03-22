@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-03-22（Docker統合テスト全通過・testmon導入・pytest警告修正）
+> 最終更新: 2026-03-22（C. 動作確認完了 — オーケストレーター+3スクリプト修正・E2E通過）
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_think.md` / `plan_test.md` / `plan_training_a.md` / `plan_training_b.md` / `docs/session_progress.md`
 
 ---
@@ -100,16 +100,15 @@
 
 ## C. 動作確認・統合テスト
 
-- 🔴 オーケストレーターを実際に起動してエンドツーエンドの動作確認
-  ```bash
-  cd MED && uvicorn src.orchestrator.server:app --reload
-  ```
+- ✅ オーケストレーター起動 E2E 動作確認完了
+  - `/health` / `/stats` / `/auth/*` / `/sessions/*` / `/add` / `/query` 全正常
+  - Haiku でのクエリ応答・FAISSコンテキスト付き回答生成を確認
 - ✅ `tests/integration/` Docker ベースの E2E テスト全通過（Docker内: 1096件 / ローカル: 1096件）
   - `test_docker_sandbox.py` — 17 passed（コンテナ実行・セキュリティ・タイムアウト・並行実行）
   - `test_e2e_pipeline.py` — 49 passed（CRUD / FastAPI / 認証 / セッション / 管理者）
-- 🟡 `scripts/seed_memory.py` — 動作確認（初期ドキュメントのFAISS投入）
-- 🟡 `scripts/mature_memory.py` — 動作確認（Teacher品質審査パイプライン）
-- 🟡 `scripts/train_student.py` — 動作確認（GRPO + TinyLoRA骨格）
+- ✅ `scripts/seed_memory.py` — 修正・動作確認完了（RetrieverRouter/Document/SourceMeta API修正）
+- ✅ `scripts/mature_memory.py` — 修正・動作確認完了（--check/--review/--tag-difficulty 全正常）
+- ✅ `scripts/train_student.py` — 修正・動作確認完了（SeedBuilder.build() API修正、dry-run成功）
 
 ---
 
@@ -215,3 +214,4 @@
 | Docker統合テスト: sandbox 17件 + E2E pipeline 49件 全通過 | ✅ |
 | testmon: pytest-testmon 2.2.0 導入・ベースライン記録済み | ✅ |
 | pytest警告修正: asyncio loop_scope + filterwarnings 設定 | ✅ |
+| C. 動作確認: オーケストレーター + seed/mature/train スクリプト修正・E2E通過 | ✅ |
