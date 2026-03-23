@@ -191,10 +191,16 @@
 - ✅ Git 連携（スナップショットタグに `git:<hash>` / `docs:<件数>` 自動付与）
 - ✅ `.gitignore` に `.restic/` 追加
 
+### 復元検証・バッチ作成 — ✅ **完了**
+
+- ✅ `restic restore` ローカル復元テスト（スナップショット → /tmp 展開 → ファイル一致確認）
+- ✅ NAS 災害復旧フロー検証（NAS → rsync → ローカルリポジトリ再構築 → restore → ファイル一致）
+- ✅ `poetry_run_backup.bat` — Windows からバックアップ実行（WSL経由）
+- ✅ `poetry_run_restore_from_nas.bat` — NAS災害復旧バッチ
+- ✅ `.gitignore` に `poetry_run_*.bat` / `scripts/claude_commit.sh` 追加
+
 ### 残作業
 
-- 🟡 復元手順の検証（NAS → ローカル → `--restore` の E2E テスト）
-- 🟡 Windows バッチラッパー（`poetry_run_backup.bat` 等）
 - 🟢 定期バックアップ（cron / タスクスケジューラ）
 - 🟢 保持ポリシー設定（`restic forget --keep-last 10 --keep-daily 7 --keep-weekly 4 --prune`）
 - 🟢 バックアップ整合性チェック（`restic check`）の定期実行
@@ -236,4 +242,4 @@
 | testmon: pytest-testmon 2.2.0 導入・ベースライン記録済み | ✅ |
 | pytest警告修正: asyncio loop_scope + filterwarnings 設定 | ✅ |
 | C. 動作確認: オーケストレーター + seed/mature/train スクリプト修正・E2E通過 | ✅ |
-| J. データ世代管理: restic ローカル + NAS rsync + backup_data.sh 自動化 | ✅ 基盤 |
+| J. データ世代管理: restic + NAS + backup/restore検証 + Windows bat | ✅ |

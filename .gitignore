@@ -29,3 +29,5 @@ configs/llm_config.local.yaml
 .testmondata-wal
 HANDOFF_*.md
 .restic/
+poetry_run_*.bat
+scripts/claude_commit.sh
