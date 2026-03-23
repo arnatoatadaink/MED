@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-03-22（C. 動作確認完了 — オーケストレーター+3スクリプト修正・E2E通過）
+> 最終更新: 2026-03-23（J. データ世代管理 restic+NAS 構築完了）
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_think.md` / `plan_test.md` / `plan_training_a.md` / `plan_training_b.md` / `docs/session_progress.md`
 
 ---
@@ -180,6 +180,27 @@
 
 ---
 
+## J. データ世代管理（restic + NAS）
+> 📄 詳細: `plan_data.md`
+
+### 基盤構築 — ✅ **完了**
+
+- ✅ restic ローカルリポジトリ初期化（`.restic/repo/`、暗号化済み）
+- ✅ `scripts/backup_data.sh` — バックアップ自動化スクリプト（backup / list / restore / NAS sync）
+- ✅ NAS 同期（rsync + SMB互換フラグ `--no-perms --no-owner --no-group --no-times`）
+- ✅ Git 連携（スナップショットタグに `git:<hash>` / `docs:<件数>` 自動付与）
+- ✅ `.gitignore` に `.restic/` 追加
+
+### 残作業
+
+- 🟡 復元手順の検証（NAS → ローカル → `--restore` の E2E テスト）
+- 🟡 Windows バッチラッパー（`poetry_run_backup.bat` 等）
+- 🟢 定期バックアップ（cron / タスクスケジューラ）
+- 🟢 保持ポリシー設定（`restic forget --keep-last 10 --keep-daily 7 --keep-weekly 4 --prune`）
+- 🟢 バックアップ整合性チェック（`restic check`）の定期実行
+
+---
+
 ## G. インフラ移行（将来フェーズ）
 
 - 🟢 SQLite → PostgreSQL 移行スクリプト
@@ -215,3 +236,4 @@
 | testmon: pytest-testmon 2.2.0 導入・ベースライン記録済み | ✅ |
 | pytest警告修正: asyncio loop_scope + filterwarnings 設定 | ✅ |
 | C. 動作確認: オーケストレーター + seed/mature/train スクリプト修正・E2E通過 | ✅ |
+| J. データ世代管理: restic ローカル + NAS rsync + backup_data.sh 自動化 | ✅ 基盤 |

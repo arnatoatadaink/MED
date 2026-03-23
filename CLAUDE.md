@@ -339,7 +339,8 @@ KG訓練統合タスク（将来）:
 
 プロジェクトルートの `docs/` に詳細計画書を配置:
 - `docs/project_plan_v4.md` — 正式計画書(本版)
-- `plan.md` — Knowledge Graph統合計画（★ 新規）
+- `plan.md` — Knowledge Graph統合計画
+- `plan_data.md` — データ世代管理計画（restic + NAS）
 
 参照アーキテクチャ・論文:
 - GraphRAG (Microsoft, 2024) — Vector + KG統合の基本設計
