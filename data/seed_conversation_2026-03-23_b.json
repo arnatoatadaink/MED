@@ -1,0 +1,32 @@
+[
+  {
+    "content": "restic is a file backup tool with snapshot-based versioning, encryption, and deduplication. Key commands map to Git concepts: restic init (git init), restic backup (git add+commit), restic snapshots (git log), restic restore (git checkout), restic diff (git diff), restic forget+prune (git gc). Unlike Git which tracks file-level diffs, restic uses chunk-level deduplication (several KB to MB), making it efficient for binary files like FAISS indices and SQLite databases. Snapshots can be tagged (--tag) for metadata like git commit hashes or document counts. Password-based encryption is mandatory. Restic repositories can be local, S3, SFTP, or other backends.",
+    "domain": "code",
+    "source": "conversation",
+    "title": "restic backup tool: commands, concepts, and Git analogies"
+  },
+  {
+    "content": "SMB (Server Message Block) network shares on WSL2 have critical limitations: (1) fsync is not supported - restic init/backup directly on SMB mount fails with 'sync: input/output error'. (2) Unix permissions (chmod/chgrp/chown) are not supported - rsync fails with 'chgrp: Operation not permitted' and 'mkstemp: Operation not permitted'. (3) Temp file creation patterns used by rsync fail. Solution: use rsync with SMB-compatible flags: --no-perms --no-owner --no-group --no-times --delete. Alternative: use cp -r. Architecture pattern: always operate on local filesystem, then sync to NAS as a secondary copy.",
+    "domain": "code",
+    "source": "conversation",
+    "title": "WSL2 SMB mount limitations: fsync, permissions, rsync workarounds"
+  },
+  {
+    "content": "For ML/AI projects with large binary data (FAISS indices, SQLite DBs, model weights), Git-based solutions have drawbacks: Git LFS requires Git server support and per-file tracking, DVC adds Git dependency and remote configuration complexity. restic + rsync to NAS provides a simpler alternative: local restic repository for versioned snapshots with deduplication, rsync to NAS for offsite backup. Benefits: no Git integration required, works with any filesystem, built-in encryption, efficient binary deduplication. The two-stage approach (local restic → rsync to NAS) avoids fsync issues on network filesystems. Git commit hashes can be embedded as snapshot tags for traceability.",
+    "domain": "code",
+    "source": "conversation",
+    "title": "Data versioning for ML projects: restic+NAS vs Git LFS vs DVC"
+  },
+  {
+    "content": "WSL2 can access Windows mapped network drives via drvfs mount: 'sudo mount -t drvfs Z: /mnt/z'. The Z: drive must first be mapped in Windows (net use Z: \\\\server\\share). UNC paths (\\\\server\\share) are Windows network path notation using backslashes. WSL2 drvfs mounts inherit SMB limitations: no fsync, no Unix permissions, no symlinks. For automation, mount commands can be placed in /etc/fstab or wrapper scripts. The mount persists only for the WSL session; remounting is needed after WSL restart.",
+    "domain": "code",
+    "source": "conversation",
+    "title": "WSL2 NAS access: drvfs mount, UNC paths, and limitations"
+  },
+  {
+    "content": "Shell scripts created on Windows or edited in mixed CRLF/LF environments will fail on Linux/WSL2 with errors like '$\\r: command not found' or 'set: pipefail: invalid option name'. The fix is: sed -i 's/\\r$//' script.sh (removes carriage returns). Prevention: add .gitattributes with '* text=auto eol=lf' to normalize line endings in Git, or configure editors to use LF. In WSL2 + Windows shared directories, this is a recurring issue because Windows tools default to CRLF while bash requires LF.",
+    "domain": "code",
+    "source": "conversation",
+    "title": "CRLF line ending issues in WSL2: diagnosis and fix"
+  }
+]

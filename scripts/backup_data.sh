@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# scripts/backup_data.sh — data/ の restic バックアップ + NAS同期
+# scripts/backup_data.sh — data/ の restic バックアップ + NAS同期 + B2クラウド同期
 #
 # 使い方:
-#   bash scripts/backup_data.sh                    # バックアップ + NAS同期
-#   bash scripts/backup_data.sh --local-only       # NAS同期なし
+#   bash scripts/backup_data.sh                    # バックアップ + NAS + B2
+#   bash scripts/backup_data.sh --local-only       # NAS/B2同期なし
+#   bash scripts/backup_data.sh --no-cloud         # B2同期なし（ローカル+NASのみ）
 #   bash scripts/backup_data.sh --tag "milestone"  # カスタムタグ追加
-#   bash scripts/backup_data.sh --list             # スナップショット一覧
+#   bash scripts/backup_data.sh --list             # スナップショット一覧（ローカル）
+#   bash scripts/backup_data.sh --list-cloud       # スナップショット一覧（B2）
 #   bash scripts/backup_data.sh --restore latest   # 最新を data/ に復元
 
 set -euo pipefail
@@ -13,30 +15,56 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RESTIC_REPO="$PROJECT_ROOT/.restic/repo"
 RESTIC_PASSWORD_FILE="$PROJECT_ROOT/.restic/password.txt"
+CLOUD_ENV="$PROJECT_ROOT/.restic/cloud.env"
 BACKUP_SOURCE="$PROJECT_ROOT/data"
 NAS_TARGET="/mnt/z/med-backup"
+B2_BUCKET="b2:med-backup-005a1b2c3d4e5f0"
 
 export RESTIC_REPOSITORY="$RESTIC_REPO"
 export RESTIC_PASSWORD_FILE
 
+# B2 認証情報の読み込み
+load_cloud_env() {
+    if [[ -f "$CLOUD_ENV" ]]; then
+        # shellcheck disable=SC1090
+        source "$CLOUD_ENV"
+        export B2_ACCOUNT_ID B2_ACCOUNT_KEY
+        return 0
+    else
+        echo "[backup] WARNING: $CLOUD_ENV not found. Cloud sync disabled."
+        return 1
+    fi
+}
+
 # --- 引数解析 ---
 LOCAL_ONLY=false
+NO_CLOUD=false
 CUSTOM_TAG=""
-MODE="backup"  # backup | list | restore
+MODE="backup"  # backup | list | list-cloud | restore
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --local-only) LOCAL_ONLY=true; shift ;;
+        --no-cloud) NO_CLOUD=true; shift ;;
         --tag) CUSTOM_TAG="$2"; shift 2 ;;
         --list) MODE="list"; shift ;;
+        --list-cloud) MODE="list-cloud"; shift ;;
         --restore) MODE="restore"; RESTORE_TARGET="${2:-latest}"; shift 2 ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
 
-# --- スナップショット一覧 ---
+# --- スナップショット一覧（ローカル） ---
 if [[ "$MODE" == "list" ]]; then
     restic snapshots
+    exit 0
+fi
+
+# --- スナップショット一覧（B2） ---
+if [[ "$MODE" == "list-cloud" ]]; then
+    if load_cloud_env; then
+        restic -r "$B2_BUCKET" --password-file "$RESTIC_PASSWORD_FILE" snapshots
+    fi
     exit 0
 fi
 
@@ -73,20 +101,34 @@ echo "[backup] Local backup complete."
 
 # --- NAS 同期 ---
 if [[ "$LOCAL_ONLY" == "true" ]]; then
-    echo "[backup] --local-only: skipping NAS sync."
+    echo "[backup] --local-only: skipping NAS and cloud sync."
     exit 0
 fi
 
 if [[ ! -d "$NAS_TARGET" ]] && ! mkdir -p "$NAS_TARGET" 2>/dev/null; then
-    echo "[backup] WARNING: NAS target $NAS_TARGET not accessible. Skipping sync."
+    echo "[backup] WARNING: NAS target $NAS_TARGET not accessible. Skipping NAS sync."
     echo "[backup] Mount NAS first: sudo mount -t drvfs Z: /mnt/z"
-    exit 0
+else
+    echo "[backup] Syncing to NAS: $NAS_TARGET ..."
+    rsync -av --no-perms --no-owner --no-group --no-times --delete \
+        "$RESTIC_REPO/" "$NAS_TARGET/"
+    echo "[backup] NAS sync complete."
 fi
 
-echo "[backup] Syncing to NAS: $NAS_TARGET ..."
-rsync -av --no-perms --no-owner --no-group --no-times --delete \
-    "$RESTIC_REPO/" "$NAS_TARGET/"
+# --- B2 クラウド同期 ---
+if [[ "$NO_CLOUD" == "true" ]]; then
+    echo "[backup] --no-cloud: skipping B2 sync."
+else
+    if load_cloud_env; then
+        echo "[backup] Syncing to B2: $B2_BUCKET ..."
+        restic -r "$B2_BUCKET" --password-file "$RESTIC_PASSWORD_FILE" \
+            copy --from-repo "$RESTIC_REPO" --from-password-file "$RESTIC_PASSWORD_FILE" \
+            2>&1 || {
+            echo "[backup] WARNING: B2 sync failed. Local backup is safe."
+        }
+        echo "[backup] B2 sync complete."
+    fi
+fi
 
-echo "[backup] NAS sync complete."
-echo "[backup] Done. Snapshots:"
+echo "[backup] Done. Local snapshots:"
 restic snapshots --latest 3
