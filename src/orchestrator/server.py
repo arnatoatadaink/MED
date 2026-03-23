@@ -123,6 +123,7 @@ class QueryRequest(BaseModel):
     model: str | None = None
     timeout_seconds: int = Field(default=300, ge=5, le=86400)
     session_id: str | None = None   # 会話セッション ID
+    crag_strategies: list[str] | None = None  # CRAG 戦略リスト
 
 
 class QueryResponseModel(BaseModel):
@@ -260,6 +261,8 @@ async def query(
             use_rag=request.use_rag,
             session_id=request.session_id,
             user_id=user_id,
+            timeout=float(request.timeout_seconds),
+            crag_strategies=request.crag_strategies,
         )
         result: QueryResponse = await asyncio.wait_for(
             coro, timeout=float(request.timeout_seconds)
@@ -287,6 +290,21 @@ async def query(
         debug_info=result.debug_info,
         session_id=result.session_id,
     )
+
+
+@app.get("/crag/strategies")
+async def crag_strategies():
+    """CRAG 戦略の一覧と利用可否を返す。"""
+    if _pipeline is None:
+        raise HTTPException(status_code=503, detail="Pipeline not initialized")
+    from src.rag.query_rewriter import QueryRewriter
+    available = _pipeline.rewriter.available_strategies()
+    return {
+        "strategies": [
+            {"key": k, "label": QueryRewriter.STRATEGIES.get(k, k), "available": v}
+            for k, v in available.items()
+        ]
+    }
 
 
 @app.post("/add", response_model=AddDocumentResponse)

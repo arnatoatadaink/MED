@@ -32,6 +32,7 @@ class AnthropicProvider(BaseLLMProvider):
         temperature: float = 0.7,
         enable_thinking: bool = False,
         thinking_budget_tokens: int = 8000,
+        timeout: float | None = None,
     ) -> LLMResponse:
         try:
             import anthropic

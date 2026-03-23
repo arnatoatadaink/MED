@@ -96,6 +96,7 @@ class ResponseGenerator:
         provider: str | None = None,
         model: str | None = None,
         conversation_history: list[LLMMessage] | None = None,
+        timeout: float | None = None,
     ) -> GeneratedResponse:
         """クエリと検索結果から回答を生成する。
 
@@ -131,6 +132,7 @@ class ResponseGenerator:
             model=model,
             max_tokens=max_tokens,
             temperature=temperature,
+            timeout=timeout,
         )
 
         logger.debug(

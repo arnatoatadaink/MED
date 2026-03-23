@@ -29,6 +29,7 @@ from src.memory.memory_manager import MemoryManager
 from src.memory.schema import SearchResult
 from src.rag.chunker import Chunker
 from src.rag.query_expander import QueryExpander
+from src.rag.query_rewriter import QueryRewriter
 from src.rag.retriever import RetrieverRouter
 from src.rag.verifier import ResultVerifier
 from src.sandbox.manager import SandboxManager
@@ -92,6 +93,7 @@ class MEDPipeline:
         self._code_gen = CodeGenerator(self._gateway)
         self._iterative = IterativeRetriever(self._mm, self._mm.embedder)
         self._expander = QueryExpander()
+        self._rewriter = QueryRewriter(gateway=self._gateway)
 
         self._enable_rag = enable_external_rag
         self._enable_sandbox = enable_sandbox
@@ -101,6 +103,7 @@ class MEDPipeline:
     async def initialize(self) -> None:
         """パイプラインを初期化する。"""
         await self._mm.initialize()
+        await self._rewriter.initialize()
         if self._conv is not None:
             await self._conv.initialize()
         self._initialized = True
@@ -112,6 +115,11 @@ class MEDPipeline:
         if self._conv is not None:
             await self._conv.close()
         self._initialized = False
+
+    @property
+    def rewriter(self) -> QueryRewriter:
+        """QueryRewriter インスタンスを返す（GUI から利用可否を取得するため）。"""
+        return self._rewriter
 
     async def query(
         self,
@@ -125,6 +133,8 @@ class MEDPipeline:
         use_rag: bool = True,
         session_id: str | None = None,
         user_id: str = "default",
+        timeout: float | None = None,
+        crag_strategies: list[str] | None = None,
     ) -> QueryResponse:
         """クエリを受け取り、RAG + LLM で回答を生成する。
 
@@ -178,6 +188,7 @@ class MEDPipeline:
             provider=provider,
             model=model,
             conversation_history=conv_messages if conv_messages else None,
+            timeout=timeout,
         )
 
         # ── Step 3.5: CRAG リトライ ─────────────────
@@ -188,26 +199,53 @@ class MEDPipeline:
         expanded_queries: list[str] = []
         retry_faiss_results: list[SearchResult] = []
         retry_rag_results: list = []
+        rewriter_details: list[dict] = []   # デバッグ用: 各戦略の結果
 
         if use_rag and self._enable_rag:
+            # ── CRAG 戦略によるクエリ生成 ──
+            # crag_strategies が指定されている場合、QueryRewriter で追加クエリを生成
+            active_strategies = crag_strategies or []
+            rewriter_queries: list[str] = []
+
+            # モデルベース戦略 (flan_t5_rewrite, qwen_rewrite, llm_rewrite)
+            model_strategies = [s for s in active_strategies if s != "rule_expand"]
+            if model_strategies:
+                rw_results = await self._rewriter.rewrite(query, strategies=model_strategies)
+                for rr in rw_results:
+                    detail = {
+                        "strategy": rr.strategy,
+                        "queries": rr.rewritten_queries,
+                        "error": rr.error,
+                    }
+                    rewriter_details.append(detail)
+                    rewriter_queries.extend(rr.rewritten_queries)
+
+            # ルールベース展開 (常に実行 or rule_expand が指定されている場合)
             expanded = self._expander.expand(query)
-            new_queries = [q for q in expanded if q != query]
+            rule_new_queries = [q for q in expanded if q != query]
+
+            # 全戦略のクエリを統合（重複除去）
+            all_new_queries = list(dict.fromkeys(rule_new_queries + rewriter_queries))
 
             is_negative = self._expander.is_negative(gen_response.answer)
             min_faiss = self._expander.crag_min_faiss
             is_sparse = min_faiss > 0 and len(faiss_results) < min_faiss
-            should_retry = bool(new_queries) and (is_negative or is_sparse)
+
+            # リトライ判定: ルールベースの新クエリ or モデルベースの新クエリがある場合
+            should_retry = bool(all_new_queries) and (is_negative or is_sparse)
 
             if should_retry:
                 retry_triggered = True
-                expanded_queries = expanded
+                expanded_queries = [query] + all_new_queries
                 trigger_reason = "negative_signal" if is_negative else "sparse_faiss"
                 logger.info(
-                    "CRAG retry triggered (reason=%s, faiss_count=%d) for query=%r → %s",
-                    trigger_reason, len(faiss_results), query[:60], expanded_queries,
+                    "CRAG retry triggered (reason=%s, strategies=%s, faiss_count=%d) "
+                    "for query=%r → %s",
+                    trigger_reason, active_strategies, len(faiss_results),
+                    query[:60], expanded_queries,
                 )
                 # 展開クエリごとに外部 RAG を追加取得
-                for sub_q in new_queries:
+                for sub_q in all_new_queries:
                     _, sub_raw = await self._fetch_and_store_external(
                         sub_q,
                         domain=domain or "general",
@@ -221,7 +259,8 @@ class MEDPipeline:
 
                 # LLM を再実行
                 gen_response = await self._response_gen.generate(
-                    query, context_docs=retry_faiss_results, provider=provider, model=model
+                    query, context_docs=retry_faiss_results, provider=provider, model=model,
+                    timeout=timeout,
                 )
                 logger.debug(
                     "CRAG retry complete: faiss=%d docs, rag_new=%d docs",
@@ -255,7 +294,8 @@ class MEDPipeline:
                 )
                 agentic_faiss = await self._mm.search_hybrid(query, domain=domain, k=k)
                 gen_response = await self._response_gen.generate(
-                    query, context_docs=agentic_faiss, provider=provider, model=model
+                    query, context_docs=agentic_faiss, provider=provider, model=model,
+                    timeout=timeout,
                 )
                 logger.debug(
                     "Agentic retry complete: new_faiss=%d new_rag=%d",
@@ -315,6 +355,8 @@ class MEDPipeline:
             debug_info["expanded_queries"] = expanded_queries
             debug_info["retry_faiss_results"] = [_sr_to_dict(sr) for sr in retry_faiss_results]
             debug_info["retry_rag_results"] = [_raw_to_dict(r) for r in retry_rag_results]
+            debug_info["crag_strategies"] = crag_strategies or []
+            debug_info["rewriter_details"] = rewriter_details
         if agentic_triggered:
             debug_info["agentic_query"] = agentic_query
             debug_info["agentic_rag_results"] = [_raw_to_dict(r) for r in agentic_rag_results]

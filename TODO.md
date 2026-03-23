@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-03-23（J. データ世代管理 restic+NAS 構築完了）
+> 最終更新: 2026-03-24（K. CRAG Query Rewriter + タイムアウト伝播）
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_think.md` / `plan_test.md` / `plan_training_a.md` / `plan_training_b.md` / `docs/session_progress.md`
 
 ---
@@ -207,6 +207,32 @@
 
 ---
 
+## K. CRAG Query Rewriter + タイムアウト伝播
+
+### CRAG 多戦略 Query Rewriter — ✅ **完了**
+
+- ✅ `src/rag/query_rewriter.py` — QueryRewriter (4戦略: rule_expand / flan_t5_rewrite / qwen_rewrite / llm_rewrite)
+- ✅ `data/models/flan-t5-small/` — HuggingFace Hub 経由 DL 済み (77MB)
+- ✅ `data/models/Qwen2.5-0.5B-Instruct/` — HuggingFace Hub 経由 DL 済み (494MB)
+- ✅ `src/orchestrator/pipeline.py` — `crag_strategies` パラメータ追加、CRAG リトライ時にモデルベース戦略併用
+- ✅ `src/orchestrator/server.py` — `QueryRequest.crag_strategies` + `/crag/strategies` エンドポイント
+- ✅ `src/gui/tabs/chat.py` — CRAG 戦略チェックボックス (4個、モデル未配置は非活性)
+- ✅ デバッグ情報に各戦略の結果を表示
+
+### タイムアウト伝播 — ✅ **完了**
+
+- ✅ GUI → FastAPI → Pipeline → ResponseGenerator → Gateway → Provider の全チェーンで `timeout` パラメータ伝播
+- ✅ 全 5 プロバイダー (anthropic / openai / ollama / openai_compatible / vllm_student) に `timeout` 追加
+- ✅ カスタムプロバイダー (LM Studio) のフォールバック修正: ビルトインプロバイダーへの自動フォールバック
+
+### 残作業
+
+- 🟡 FLAN-T5-small / Qwen2.5-0.5B を検索クエリ生成タスクで RL fine-tune
+- 🟡 CRAG カスケード戦略: 安い順に試して十分なら打ち切る最適化
+- 🟢 doc2query-T5 インデックス時クエリ生成の検討
+
+---
+
 ## G. インフラ移行（将来フェーズ）
 
 - 🟢 SQLite → PostgreSQL 移行スクリプト
@@ -243,3 +269,5 @@
 | pytest警告修正: asyncio loop_scope + filterwarnings 設定 | ✅ |
 | C. 動作確認: オーケストレーター + seed/mature/train スクリプト修正・E2E通過 | ✅ |
 | J. データ世代管理: restic + NAS + backup/restore検証 + Windows bat | ✅ |
+| K. CRAG Query Rewriter: 4戦略 + FLAN-T5/Qwen DL + GUI チェックボックス | ✅ |
+| K. タイムアウト伝播: GUI→FastAPI→Pipeline→Gateway→全5プロバイダー | ✅ |

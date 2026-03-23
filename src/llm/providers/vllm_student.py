@@ -39,15 +39,18 @@ class VLLMStudentProvider(BaseLLMProvider):
         model: str | None = None,
         max_tokens: int = 2048,
         temperature: float = 0.7,
+        timeout: float | None = None,
     ) -> LLMResponse:
         try:
             from openai import AsyncOpenAI
         except ImportError:
             raise RuntimeError("openai package not installed. Run: pip install openai")
 
+        effective_timeout = timeout if timeout is not None else 120.0
         client = AsyncOpenAI(
             api_key="not-needed",  # vLLM は API キー不要
             base_url=self._vllm_base_url,
+            timeout=effective_timeout,
         )
         model_name = model or self._settings.training.student_model.name
 

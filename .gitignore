@@ -12,6 +12,8 @@ data/conversations.db-shm
 data/conversations.db-wal
 data/adapters/
 data/training_logs/
+data/models/flan-t5-small/
+data/models/Qwen2.5-0.5B-Instruct/
 .venv/
 venv/
 dist/

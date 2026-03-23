@@ -1,0 +1,32 @@
+[
+  {
+    "title": "RAG向けクエリリライトモデル: 専用小型モデルの選択肢",
+    "content": "RAG向けに質問文から検索クエリを生成する専用モデルとアプローチ:\n\n1. doc2query-T5 (castorini): ドキュメントから想定クエリを生成する逆方向モデル。インデックス時に使用が主だがクエリ拡張にも応用可能。\n2. InPars (Inquisitive Parrots): LLMで合成クエリを生成しretriever fine-tuningに使用。\n3. HyDE (Hypothetical Document Embeddings): クエリから仮想回答文書をLLMで生成→埋め込みに変換して検索。\n4. FLAN-T5-small/base fine-tune: 約80Mパラメータ、クエリ書き換えタスクでfine-tuneすると最も実用的。極めて高速。\n5. Qwen2.5-0.5B RL fine-tune: 約500Mパラメータ、Teacherが生成した良質クエリを報酬シグナルにRL fine-tune。\n6. E5-mistral / GTE-Qwen2: instruction-aware embeddingで 'query: ...' プレフィックスだけで検索特化。\n7. Rewrite-Retrieve-Read (RRR): Ma et al., 2023。LLMでクエリ書き換え→検索→読解の3段パイプライン。書き換え部分だけ小モデルに蒸留するのが一般的。",
+    "domain": "academic",
+    "tags": ["query-rewrite", "RAG", "CRAG", "FLAN-T5", "HyDE", "doc2query"]
+  },
+  {
+    "title": "CRAG実装パターン: 検索品質改善の段階的アプローチ",
+    "content": "Corrective RAG (CRAG) の実装パターン:\n\n基本フロー: 検索→LLM生成→品質判定→(不十分なら)クエリ展開→再検索→再生成\n\nトリガー条件:\n- LLM回答にネガティブシグナル(「見つかりません」等)が含まれる\n- FAISS結果が閾値未満(sparse)\n\n改善戦略の選択肢:\n1. QueryExpander (ルールベース): 正規表現パターンで複合クエリを分解。コスト0、即時実行。\n2. FLAN-T5-small Query Rewriter: 専用小型モデルでクエリを書き換え。推論コスト極小。\n3. Qwen2.5-0.5B RL Rewriter: RLでfine-tuneした小型モデル。Teacherの検索クエリを報酬に学習。\n4. LLM Rewrite (Teacher): 大モデルに代替クエリを提案させる。高精度だがコスト大。\n5. Agentic 1-step: CRAG後も不十分なら、LLMに検索クエリ最適化を依頼。\n\nこれらは排他ではなく組み合わせ可能。安い順に試すカスケード戦略が効率的。",
+    "domain": "code",
+    "tags": ["CRAG", "query-expansion", "cascade", "RAG"]
+  },
+  {
+    "title": "小型Query Rewriterモデルのダウンロードとローカル配置",
+    "content": "Query Rewriter用小型モデルのダウンロード方法:\n\n対象モデル:\n- google/flan-t5-small (77MB): seq2seq、クエリ書き換えタスクに最適\n- Qwen/Qwen2.5-0.5B-Instruct (494MB): instruction-tuned、RL fine-tune用ベース\n\nダウンロード方法:\n1. HuggingFace Hub経由 (WSL/Linux): `from huggingface_hub import snapshot_download; snapshot_download('google/flan-t5-small', local_dir='data/models/flan-t5-small')`\n2. 手動ダウンロード: HuggingFaceサイトからファイルを個別DL → data/models/ に配置\n\n配置先: data/models/{model-name}/\n設定: configs/default.yaml の cache_dir パラメータでモデルキャッシュディレクトリを指定\n\n注意: sentence-transformers (all-MiniLM-L6-v2) と同様、ローカル配置すればオフライン環境でも利用可能。",
+    "domain": "code",
+    "tags": ["huggingface", "model-download", "FLAN-T5", "Qwen", "local-model"]
+  },
+  {
+    "title": "タイムアウト伝播チェーン: GUI→FastAPI→Pipeline→Gateway→Provider",
+    "content": "LLMプロバイダーへのタイムアウト伝播の実装パターン:\n\nGUI(httpx timeout) → FastAPI(asyncio.wait_for) → pipeline.query(timeout) → response_gen.generate(timeout) → gateway.complete_messages(timeout) → provider.complete(timeout) → AsyncOpenAI(timeout=N)\n\n各レイヤーでのtimeout引数追加:\n- BaseLLMProvider.complete(): timeout: float | None = None\n- LLMGateway.complete() / complete_messages(): timeout伝播\n- ResponseGenerator.generate(): timeout伝播\n- MEDPipeline.query(): timeout伝播(CRAG/Agentic含む全generate呼び出し)\n- server.py: float(request.timeout_seconds) をpipeline.queryへ渡す\n\nOpenAI互換プロバイダーではAsyncOpenAI(timeout=effective_timeout)でHTTPクライアントレベルのタイムアウトを制御。デフォルト600秒。YAMLのtimeout設定も読み込む。",
+    "domain": "code",
+    "tags": ["timeout", "propagation", "FastAPI", "OpenAI", "LLM-provider"]
+  },
+  {
+    "title": "LM Studio カスタムプロバイダー接続: WSL2からのアクセス方法",
+    "content": "LM Studioをカスタムプロバイダーとして使用する際の注意点:\n\n1. WSL2からWindowsホストへの接続: ホスト名解決が失敗するため、IPアドレスを直接指定する (例: 192.168.2.104:52624)\n2. LM Studio設定: 'Serve on Local Network' を有効にする必要あり\n3. OpenAI互換API: /v1/chat/completions エンドポイントを使用\n4. APIキー: 不要 (api_key_env: '' で設定)\n5. タイムアウト: 大型モデル(235Bパラメータ等)は推論に数分以上かかるため、timeout設定を600秒以上に\n6. 設定ファイル: configs/llm_config.local.yaml (git管理外) にカスタムプロバイダーを定義\n7. フォールバック: カスタムプロバイダーが失敗した場合、ビルトインプロバイダー(anthropic/openai等)にフォールバックする仕組みが必要\n\nllm_config.local.yaml例:\n  providers:\n    lmstudio:\n      type: openai_compatible\n      base_url: http://192.168.2.104:52624/v1\n      default_model: qwen3-235b-a22b-abliterated-i1\n      timeout: 600",
+    "domain": "code",
+    "tags": ["LM-Studio", "WSL2", "custom-provider", "OpenAI-compatible"]
+  }
+]

@@ -83,12 +83,14 @@ class BaseLLMProvider(ABC):
         temperature: float = 0.7,
         enable_thinking: bool = False,
         thinking_budget_tokens: int = 8000,
+        timeout: float | None = None,
     ) -> LLMResponse:
         """メッセージリストを受け取り、補完レスポンスを返す。
 
         Args:
             enable_thinking: Extended Thinking を有効化する（Anthropic のみ）。
             thinking_budget_tokens: thinking ブロックの最大トークン数。
+            timeout: リクエストタイムアウト秒数（None = プロバイダデフォルト）。
         """
         ...
 
@@ -187,6 +189,7 @@ class LLMGateway:
                         base_url=base_url,
                         default_model=conf.get("default_model", ""),
                         api_key_env=api_key_env,
+                        timeout=float(conf.get("timeout", 600)),
                     )
                     self._providers[name] = provider
                     logger.info(
@@ -211,6 +214,7 @@ class LLMGateway:
         model: str | None = None,
         max_tokens: int = 2048,
         temperature: float = 0.7,
+        timeout: float | None = None,
     ) -> LLMResponse:
         """テキストプロンプトを送り、補完を返す。
 
@@ -235,6 +239,7 @@ class LLMGateway:
             model=model,
             max_tokens=max_tokens,
             temperature=temperature,
+            timeout=timeout,
         )
 
     async def complete_messages(
@@ -245,6 +250,7 @@ class LLMGateway:
         model: str | None = None,
         max_tokens: int = 2048,
         temperature: float = 0.7,
+        timeout: float | None = None,
     ) -> LLMResponse:
         """メッセージリストを送り、補完を返す。
 
@@ -269,6 +275,7 @@ class LLMGateway:
                     model=model,
                     max_tokens=max_tokens,
                     temperature=temperature,
+                    timeout=timeout,
                 )
                 response.latency_ms = (time.monotonic() - start) * 1000
 
@@ -313,8 +320,8 @@ class LLMGateway:
             pass
 
         if primary and primary not in _BUILTIN_PROVIDER_ORDER:
-            # カスタムプロバイダーが primary の場合はそれのみ試す
-            return [primary]
+            # カスタムプロバイダーが primary の場合も組み込みへフォールバック
+            return [primary] + list(_BUILTIN_PROVIDER_ORDER)
         if primary:
             # 組み込みプロバイダーが primary の場合は先頭に置いてフォールバック
             order = [primary] + [p for p in _BUILTIN_PROVIDER_ORDER if p != primary]

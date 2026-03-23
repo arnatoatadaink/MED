@@ -122,6 +122,25 @@ def _turns_to_history(turns: list[dict]) -> list:
     return history
 
 
+def _get_crag_strategies() -> list[dict]:
+    """サーバーから CRAG 戦略一覧を取得する。"""
+    if not is_api_alive():
+        # フォールバック: デフォルト値
+        return [
+            {"key": "rule_expand", "label": "ルールベース展開", "available": True},
+            {"key": "flan_t5_rewrite", "label": "FLAN-T5 Query Rewrite", "available": False},
+            {"key": "qwen_rewrite", "label": "Qwen2.5-0.5B Query Rewrite", "available": False},
+            {"key": "llm_rewrite", "label": "Teacher LLM Rewrite", "available": False},
+        ]
+    try:
+        r = httpx.get(f"{ORCHESTRATOR_URL}/crag/strategies", timeout=5)
+        if r.status_code == 200:
+            return r.json().get("strategies", [])
+    except Exception:
+        pass
+    return [{"key": "rule_expand", "label": "ルールベース展開", "available": True}]
+
+
 def _query_api(
     query: str,
     mode: str,
@@ -132,6 +151,7 @@ def _query_api(
     timeout_seconds: int = _TIMEOUT_DEFAULT,
     session_id: str | None = None,
     token: str | None = None,
+    crag_strategies: list[str] | None = None,
 ) -> dict:
     payload: dict = {
         "query": query,
@@ -147,6 +167,8 @@ def _query_api(
     if session_id:
         payload["session_id"] = session_id
     payload["timeout_seconds"] = timeout_seconds
+    if crag_strategies:
+        payload["crag_strategies"] = crag_strategies
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     http_timeout = timeout_seconds + 10
     r = httpx.post(
@@ -265,9 +287,24 @@ def _build_debug_md(debug_info: dict | None) -> str:
     # ── 5. CRAG リトライ（発生時のみ） ─────────────
     if debug_info.get("retry_triggered"):
         expanded = debug_info.get("expanded_queries", [])
+        strategies_used = debug_info.get("crag_strategies", [])
+        rewriter_details = debug_info.get("rewriter_details", [])
         lines.append("---")
         lines.append("### ♻️ CRAG リトライ発生")
+        if strategies_used:
+            lines.append(f"**使用戦略**: {', '.join(f'`{s}`' for s in strategies_used)}")
         lines.append(f"**展開クエリ**: {' / '.join(f'`{q}`' for q in expanded)}")
+        # 各戦略の詳細
+        for rd in rewriter_details:
+            strat = rd.get("strategy", "?")
+            queries = rd.get("queries", [])
+            err = rd.get("error")
+            if err:
+                lines.append(f"- `{strat}`: _エラー: {err}_")
+            elif queries:
+                lines.append(f"- `{strat}`: {' / '.join(f'`{q}`' for q in queries)}")
+            else:
+                lines.append(f"- `{strat}`: _生成なし_")
         lines.append("")
         lines.append("#### 5a. リトライ後 FAISS 検索結果")
         lines.extend(_fmt_faiss_results(
@@ -307,6 +344,10 @@ def respond(
     timeout_h: int,
     timeout_m: int,
     timeout_s: int,
+    crag_rule: bool = True,
+    crag_flan: bool = False,
+    crag_qwen: bool = False,
+    crag_llm: bool = False,
     session_id: str | None = None,
     token: str | None = None,
 ) -> Generator[tuple[list, str, str, str], None, None]:
@@ -318,6 +359,17 @@ def respond(
     timeout_seconds = _calc_timeout(timeout_h, timeout_m, timeout_s)
     actual_provider = None if provider_choice.startswith("auto") else provider_choice
     actual_model = model_name.strip() or None
+
+    # CRAG 戦略をチェックボックスから構築
+    crag_strategies: list[str] = []
+    if crag_rule:
+        crag_strategies.append("rule_expand")
+    if crag_flan:
+        crag_strategies.append("flan_t5_rewrite")
+    if crag_qwen:
+        crag_strategies.append("qwen_rewrite")
+    if crag_llm:
+        crag_strategies.append("llm_rewrite")
 
     # 即座に「思考中…」を表示
     if GRADIO_MAJOR >= 6:
@@ -335,6 +387,7 @@ def respond(
                 message, mode, use_memory, use_rag,
                 actual_provider, actual_model, timeout_seconds,
                 session_id=session_id, token=token,
+                crag_strategies=crag_strategies if crag_strategies else None,
             )
         else:
             result = _mock_response(message, mode, actual_provider, actual_model)
@@ -531,6 +584,34 @@ def build_tab() -> gr.Dropdown:
                     outputs=[timeout_display],
                 )
 
+            gr.Markdown("#### CRAG 戦略")
+            gr.Markdown(
+                "_検索品質が低い場合のリトライ時に使用するクエリ書き換え戦略。_  \n"
+                "_複数選択可。モデル未配置の戦略は効果なし。_",
+            )
+            _strats = _get_crag_strategies()
+            _strat_map = {s["key"]: s for s in _strats}
+            crag_rule_chk = gr.Checkbox(
+                value=True,
+                label=_strat_map.get("rule_expand", {}).get("label", "ルールベース展開"),
+                interactive=True,
+            )
+            crag_flan_chk = gr.Checkbox(
+                value=False,
+                label=_strat_map.get("flan_t5_rewrite", {}).get("label", "FLAN-T5 Rewrite"),
+                interactive=_strat_map.get("flan_t5_rewrite", {}).get("available", False),
+            )
+            crag_qwen_chk = gr.Checkbox(
+                value=False,
+                label=_strat_map.get("qwen_rewrite", {}).get("label", "Qwen2.5-0.5B Rewrite"),
+                interactive=_strat_map.get("qwen_rewrite", {}).get("available", False),
+            )
+            crag_llm_chk = gr.Checkbox(
+                value=False,
+                label=_strat_map.get("llm_rewrite", {}).get("label", "Teacher LLM Rewrite"),
+                interactive=_strat_map.get("llm_rewrite", {}).get("available", False),
+            )
+
             gr.Markdown("### レスポンス情報")
             meta_box = gr.Markdown("_送信後に表示_")
 
@@ -592,14 +673,18 @@ def build_tab() -> gr.Dropdown:
         msg_box, chatbot, mode_radio, use_memory_chk, use_rag_chk,
         provider_dd, model_box,
         timeout_h, timeout_m, timeout_s,
+        crag_rule_chk, crag_flan_chk, crag_qwen_chk, crag_llm_chk,
         session_id_state, token_state,
     ]
     send_outputs = [chatbot, meta_box, sources_box, debug_md]
 
     def _on_send(message, history, mode, use_memory, use_rag, provider_choice, model_name,
-                 t_h, t_m, t_s, session_id, token):
+                 t_h, t_m, t_s, crag_rule, crag_flan, crag_qwen, crag_llm,
+                 session_id, token):
         for update in respond(message, history, mode, use_memory, use_rag, provider_choice,
                                model_name, t_h, t_m, t_s,
+                               crag_rule=crag_rule, crag_flan=crag_flan,
+                               crag_qwen=crag_qwen, crag_llm=crag_llm,
                                session_id=session_id, token=token):
             yield update[0], update[1], update[2], update[3]
 

@@ -31,6 +31,7 @@ class OllamaProvider(BaseLLMProvider):
         model: str | None = None,
         max_tokens: int = 2048,
         temperature: float = 0.7,
+        timeout: float | None = None,
     ) -> LLMResponse:
         try:
             import httpx

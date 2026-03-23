@@ -99,6 +99,7 @@ MED/
 │   │   │   ├── tavily.py
 │   │   │   └── arxiv.py
 │   │   ├── verifier.py             # LLMベース裏どり
+│   │   ├── query_rewriter.py       # CRAG用 Query Rewriter (FLAN-T5/Qwen/LLM)
 │   │   └── chunker.py
 │   │
 │   ├── memory/                     # FAISSメモリ
@@ -229,6 +230,7 @@ MED/
 | Knowledge Graph | NetworkX (Phase 1.5) → Neo4j (Phase 2+) |
 | メタデータ | SQLite (aiosqlite) |
 | SQL/BI | SQLite → PostgreSQL (将来) |
+| CRAG Query Rewrite | FLAN-T5-small / Qwen2.5-0.5B-Instruct |
 | Fusion/Rerank | RRF (Reciprocal Rank Fusion) |
 | コンテナ | docker-py |
 | 設定 | pydantic-settings + YAML |

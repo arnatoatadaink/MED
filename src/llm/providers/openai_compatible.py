@@ -40,10 +40,12 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         default_model: str,
         api_key: str = "",
         api_key_env: str = "",
+        timeout: float = 600.0,
     ) -> None:
         self._name = name
         self._base_url = base_url.rstrip("/")
         self._default_model = default_model
+        self._timeout = timeout
         # APIキー解決: 直接値 → 環境変数 → ダミー値 (ローカル用)
         if api_key:
             self._api_key = api_key
@@ -70,13 +72,22 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         model: str | None = None,
         max_tokens: int = 2048,
         temperature: float = 0.7,
+        enable_thinking: bool = False,
+        thinking_budget_tokens: int = 8000,
+        timeout: float | None = None,
     ) -> LLMResponse:
         try:
             from openai import AsyncOpenAI
         except ImportError:
             raise RuntimeError("openai package not installed. Run: pip install openai")
 
-        client = AsyncOpenAI(base_url=self._base_url, api_key=self._api_key)
+        # リクエスト単位の timeout が指定されていればそちらを優先、なければコンストラクタ値
+        effective_timeout = timeout if timeout is not None else self._timeout
+        client = AsyncOpenAI(
+            base_url=self._base_url,
+            api_key=self._api_key,
+            timeout=effective_timeout,
+        )
         model_name = model or self._default_model
 
         oai_messages = [{"role": m.role, "content": m.content} for m in messages]

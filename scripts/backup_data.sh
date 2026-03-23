@@ -1,14 +1,22 @@
 #!/usr/bin/env bash
 # scripts/backup_data.sh — data/ の restic バックアップ + NAS同期 + B2クラウド同期
 #
-# 使い方:
+# バックアップ:
 #   bash scripts/backup_data.sh                    # バックアップ + NAS + B2
 #   bash scripts/backup_data.sh --local-only       # NAS/B2同期なし
 #   bash scripts/backup_data.sh --no-cloud         # B2同期なし（ローカル+NASのみ）
 #   bash scripts/backup_data.sh --tag "milestone"  # カスタムタグ追加
+#
+# 一覧:
 #   bash scripts/backup_data.sh --list             # スナップショット一覧（ローカル）
-#   bash scripts/backup_data.sh --list-cloud       # スナップショット一覧（B2）
-#   bash scripts/backup_data.sh --restore latest   # 最新を data/ に復元
+#   bash scripts/backup_data.sh --list --from nas   # スナップショット一覧（NAS）
+#   bash scripts/backup_data.sh --list --from cloud # スナップショット一覧（B2）
+#
+# 復元:
+#   bash scripts/backup_data.sh --restore latest                   # ローカルから data/ へ
+#   bash scripts/backup_data.sh --restore latest --from nas        # NASから data/ へ
+#   bash scripts/backup_data.sh --restore latest --from cloud      # B2から data/ へ
+#   bash scripts/backup_data.sh --restore latest --from cloud --to nas  # B2からNASへ
 
 set -euo pipefail
 
@@ -18,6 +26,7 @@ RESTIC_PASSWORD_FILE="$PROJECT_ROOT/.restic/password.txt"
 CLOUD_ENV="$PROJECT_ROOT/.restic/cloud.env"
 BACKUP_SOURCE="$PROJECT_ROOT/data"
 NAS_TARGET="/mnt/z/med-backup"
+NAS_REPO_TMP="/tmp/restic-nas-repo"
 B2_BUCKET="b2:med-backup-005a1b2c3d4e5f0"
 
 export RESTIC_REPOSITORY="$RESTIC_REPO"
@@ -31,48 +40,114 @@ load_cloud_env() {
         export B2_ACCOUNT_ID B2_ACCOUNT_KEY
         return 0
     else
-        echo "[backup] WARNING: $CLOUD_ENV not found. Cloud sync disabled."
+        echo "[backup] ERROR: $CLOUD_ENV not found."
         return 1
     fi
+}
+
+# NAS をローカル一時ディレクトリにコピー（NAS上で直接resticは使えないため）
+prepare_nas_repo() {
+    if [[ ! -d "$NAS_TARGET" ]]; then
+        echo "[backup] ERROR: NAS not accessible at $NAS_TARGET"
+        echo "[backup] Mount NAS first: sudo mount -t drvfs Z: /mnt/z"
+        return 1
+    fi
+    echo "[backup] Copying NAS repo to local temp..."
+    mkdir -p "$NAS_REPO_TMP"
+    rsync -a --no-perms --no-owner --no-group --no-times \
+        "$NAS_TARGET/" "$NAS_REPO_TMP/"
+    echo "[backup] NAS repo ready at $NAS_REPO_TMP"
+}
+
+# 復元元のリポジトリパスを解決
+resolve_repo() {
+    local from="$1"
+    case "$from" in
+        local)  echo "$RESTIC_REPO" ;;
+        nas)    echo "$NAS_REPO_TMP" ;;
+        cloud)  echo "$B2_BUCKET" ;;
+        *)      echo "[backup] ERROR: unknown --from value: $from"; exit 1 ;;
+    esac
 }
 
 # --- 引数解析 ---
 LOCAL_ONLY=false
 NO_CLOUD=false
 CUSTOM_TAG=""
-MODE="backup"  # backup | list | list-cloud | restore
+MODE="backup"  # backup | list | restore
+FROM="local"
+TO="local"     # local | nas
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --local-only) LOCAL_ONLY=true; shift ;;
-        --no-cloud) NO_CLOUD=true; shift ;;
-        --tag) CUSTOM_TAG="$2"; shift 2 ;;
-        --list) MODE="list"; shift ;;
-        --list-cloud) MODE="list-cloud"; shift ;;
-        --restore) MODE="restore"; RESTORE_TARGET="${2:-latest}"; shift 2 ;;
-        *) echo "Unknown option: $1"; exit 1 ;;
+        --no-cloud)   NO_CLOUD=true; shift ;;
+        --tag)        CUSTOM_TAG="$2"; shift 2 ;;
+        --list)       MODE="list"; shift ;;
+        --list-cloud) MODE="list"; FROM="cloud"; shift ;;  # 後方互換
+        --restore)    MODE="restore"; RESTORE_TARGET="${2:-latest}"; shift 2 ;;
+        --from)       FROM="$2"; shift 2 ;;
+        --to)         TO="$2"; shift 2 ;;
+        *)            echo "Unknown option: $1"; exit 1 ;;
     esac
 done
 
-# --- スナップショット一覧（ローカル） ---
+# --- スナップショット一覧 ---
 if [[ "$MODE" == "list" ]]; then
-    restic snapshots
-    exit 0
-fi
-
-# --- スナップショット一覧（B2） ---
-if [[ "$MODE" == "list-cloud" ]]; then
-    if load_cloud_env; then
-        restic -r "$B2_BUCKET" --password-file "$RESTIC_PASSWORD_FILE" snapshots
-    fi
+    case "$FROM" in
+        local)
+            restic snapshots
+            ;;
+        nas)
+            prepare_nas_repo
+            restic -r "$NAS_REPO_TMP" --password-file "$RESTIC_PASSWORD_FILE" snapshots
+            rm -rf "$NAS_REPO_TMP"
+            ;;
+        cloud)
+            if load_cloud_env; then
+                restic -r "$B2_BUCKET" --password-file "$RESTIC_PASSWORD_FILE" snapshots
+            fi
+            ;;
+    esac
     exit 0
 fi
 
 # --- 復元 ---
 if [[ "$MODE" == "restore" ]]; then
-    echo "[backup] Restoring snapshot '$RESTORE_TARGET' to $BACKUP_SOURCE ..."
-    restic restore "$RESTORE_TARGET" --target "$PROJECT_ROOT"
-    echo "[backup] Restore complete."
+    # 復元先の決定
+    if [[ "$TO" == "nas" ]]; then
+        RESTORE_DIR="$NAS_TARGET/restored"
+        mkdir -p "$RESTORE_DIR" 2>/dev/null || {
+            echo "[backup] ERROR: Cannot create $RESTORE_DIR. Is NAS mounted?"
+            exit 1
+        }
+    else
+        RESTORE_DIR="$PROJECT_ROOT"
+    fi
+
+    echo "[backup] Restore: from=$FROM, snapshot=$RESTORE_TARGET, to=$RESTORE_DIR"
+
+    case "$FROM" in
+        local)
+            restic restore "$RESTORE_TARGET" --target "$RESTORE_DIR"
+            ;;
+        nas)
+            prepare_nas_repo
+            restic -r "$NAS_REPO_TMP" --password-file "$RESTIC_PASSWORD_FILE" \
+                restore "$RESTORE_TARGET" --target "$RESTORE_DIR"
+            rm -rf "$NAS_REPO_TMP"
+            ;;
+        cloud)
+            if load_cloud_env; then
+                restic -r "$B2_BUCKET" --password-file "$RESTIC_PASSWORD_FILE" \
+                    restore "$RESTORE_TARGET" --target "$RESTORE_DIR"
+            else
+                exit 1
+            fi
+            ;;
+    esac
+
+    echo "[backup] Restore complete: $RESTORE_DIR"
     exit 0
 fi
 
