@@ -29,6 +29,7 @@ try:
 except ImportError:
     torch = None  # type: ignore[assignment]
 
+from src.memory.maturation.difficulty_tagger import CurriculumConfig, CurriculumController
 from src.training.base import (
     ParameterAdapter,
     RewardFunction,
@@ -186,6 +187,10 @@ class PipelineConfig:
     save_interval: int = 200
     eval_interval: int = 100
 
+    # 動的カリキュラム
+    use_curriculum: bool = False
+    curriculum_config: CurriculumConfig = field(default_factory=CurriculumConfig)
+
     # ログ
     run_name: str = "med_training"
     use_wandb: bool = False
@@ -231,6 +236,11 @@ class TrainingPipeline:
         )
         self._sft_algorithm: TrainingAlgorithm | None = None
         self._step = 0
+
+        # 動的カリキュラム
+        self._curriculum: CurriculumController | None = None
+        if config.use_curriculum:
+            self._curriculum = CurriculumController(config=config.curriculum_config)
 
     @classmethod
     def from_config(
@@ -372,10 +382,24 @@ class TrainingPipeline:
         batches: list[TrainingBatch],
         optimizer: Any,
     ) -> None:
-        """Stage 2: GRPO + TinyLoRA 本学習。"""
+        """Stage 2: GRPO + TinyLoRA 本学習。
+
+        動的カリキュラムが有効な場合、各ステップの損失・報酬を
+        CurriculumController に記録し、難易度配分をリアルタイム調整する。
+        """
         log.info("Stage 2: GRPO (%d steps)", self._config.grpo_steps)
+
+        # 難易度別バッチ索引を構築（カリキュラム有効時）
+        difficulty_buckets = self._build_difficulty_buckets(batches)
+
         for i in range(self._config.grpo_steps):
-            batch = batches[i % len(batches)]
+            # カリキュラムに基づくバッチ選択
+            if self._curriculum and difficulty_buckets:
+                batch = self._select_curriculum_batch(
+                    difficulty_buckets, batches, i,
+                )
+            else:
+                batch = batches[i % len(batches)]
 
             # 報酬計算
             batch = await self._reward_fn.compute_batch(batch)
@@ -388,19 +412,95 @@ class TrainingPipeline:
             self._step += 1
 
             rewards = batch.rewards or [0.0]
+            reward_mean = statistics.mean(rewards)
             step_result = TrainingStep(
                 step=self._step,
                 loss=loss.item(),
-                reward_mean=statistics.mean(rewards),
+                reward_mean=reward_mean,
                 reward_std=statistics.stdev(rewards) if len(rewards) > 1 else 0.0,
                 algorithm=self._algorithm.name,
                 adapter=self._adapter.name,
             )
             self._logger.log_step(step_result)
 
+            # カリキュラム更新
+            if self._curriculum:
+                self._curriculum.record_step(
+                    loss=loss.item(), reward_mean=reward_mean,
+                )
+
             # 定期チェックポイント
             if self._step % self._config.save_interval == 0:
                 self._save_checkpoint(self._step)
+
+        # カリキュラム終了時のログ
+        if self._curriculum:
+            log.info(
+                "Curriculum summary: %d adjustments in %d steps, final dist=%s",
+                self._curriculum.adjustment_count,
+                self._curriculum.step_count,
+                self._curriculum.get_distribution(),
+            )
+
+    def _build_difficulty_buckets(
+        self, batches: list[TrainingBatch],
+    ) -> dict[str, list[int]]:
+        """バッチを難易度レベル別にグループ化する。
+
+        Returns:
+            {difficulty_level: [batch_index, ...]} の辞書。
+            metadata に difficulty がないバッチは "intermediate" に分類。
+        """
+        from src.memory.schema import DifficultyLevel
+
+        buckets: dict[str, list[int]] = {lv.value: [] for lv in DifficultyLevel}
+        for idx, batch in enumerate(batches):
+            level = "intermediate"  # デフォルト
+            if batch.metadata:
+                for m in batch.metadata:
+                    if "difficulty" in m:
+                        level = m["difficulty"]
+                        break
+            if level not in buckets:
+                level = "intermediate"
+            buckets[level].append(idx)
+
+        # 空のバケットを除去
+        return {k: v for k, v in buckets.items() if v}
+
+    def _select_curriculum_batch(
+        self,
+        buckets: dict[str, list[int]],
+        batches: list[TrainingBatch],
+        step: int,
+    ) -> TrainingBatch:
+        """カリキュラム配分に基づいてバッチを選択する。
+
+        配分の最も高い難易度レベルから優先的に選択する。
+        該当バケットが空の場合はフォールバック。
+        """
+        import random
+
+        assert self._curriculum is not None
+        dist = self._curriculum.get_distribution()
+
+        # 配分に基づく加重選択
+        levels = list(dist.keys())
+        weights = [dist[lv] for lv in levels]
+        chosen_level = random.choices(levels, weights=weights, k=1)[0]
+
+        bucket_key = chosen_level.value
+        if bucket_key in buckets:
+            idx = buckets[bucket_key][step % len(buckets[bucket_key])]
+            return batches[idx]
+
+        # フォールバック: 任意のバケットから選択
+        all_indices = [i for indices in buckets.values() for i in indices]
+        if all_indices:
+            idx = all_indices[step % len(all_indices)]
+            return batches[idx]
+
+        return batches[step % len(batches)]
 
     async def _stage_eval(self, batches: list[TrainingBatch]) -> float:
         """Stage 3: 評価ステップ。"""

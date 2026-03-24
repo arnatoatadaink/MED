@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-03-24（K. CRAG Query Rewriter + タイムアウト伝播）
+> 最終更新: 2026-03-24（I-B1. 動的カリキュラム調整 + K. CRAG Query Rewriter）
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_think.md` / `plan_test.md` / `plan_training_a.md` / `plan_training_b.md` / `docs/session_progress.md`
 
 ---
@@ -141,8 +141,10 @@
 
 - ✅ `src/training/pipeline.py` — `TrainingDataGate` + `GateConfig` 追加
 - ✅ `src/training/algorithms/grpo.py` — StarPO-S 分散フィルタ + 非対称クリッピング追加
-- 🟡 `src/memory/maturation/difficulty_tagger.py` — 動的カーリキュラム調整
-  - 損失推移を監視して難易度配分をリアルタイム変更
+- ✅ `src/memory/maturation/difficulty_tagger.py` — 動的カリキュラム調整 (CurriculumController)
+  - CurriculumConfig / CurriculumController: 損失移動平均 → 難易度配分シフト
+  - `src/training/pipeline.py` — _stage_grpo() にカリキュラム統合 (use_curriculum フラグ)
+  - `tests/unit/test_curriculum_controller.py` — 27テスト全通過
 
 ### Phase B-2: 評価フレームワーク拡張 — ✅ **完了**
 
