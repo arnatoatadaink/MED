@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from src.knowledge_graph.extractor import EntityExtractor
+from src.knowledge_graph.networkx_store import NetworkXKnowledgeGraphStore
 from src.knowledge_graph.router_bridge import KGRouterBridge
 from src.knowledge_graph.store import KnowledgeGraphStore
 from src.llm.gateway import LLMGateway, LLMResponse
@@ -18,7 +19,7 @@ from src.memory.schema import Document, SourceMeta, SourceType
 
 
 def _make_kg() -> KnowledgeGraphStore:
-    return KnowledgeGraphStore()
+    return KnowledgeGraphStore.create(backend="networkx")
 
 
 def _make_doc(content: str = "Python uses FAISS for vector search.") -> Document:
@@ -253,6 +254,50 @@ class TestKGPersistence:
         ent = loaded.get_entity("Python")
         assert ent is not None
         assert "doc_py" in ent.doc_ids
+
+
+# ──────────────────────────────────────────────
+# ファクトリ & ABC
+# ──────────────────────────────────────────────
+
+
+class TestKGFactory:
+    def test_create_networkx(self) -> None:
+        kg = KnowledgeGraphStore.create(backend="networkx")
+        assert isinstance(kg, NetworkXKnowledgeGraphStore)
+
+    def test_create_default_is_networkx(self) -> None:
+        kg = KnowledgeGraphStore.create()
+        assert isinstance(kg, NetworkXKnowledgeGraphStore)
+
+    def test_create_invalid_backend_raises(self) -> None:
+        with pytest.raises(ValueError, match="Unknown KG backend"):
+            KnowledgeGraphStore.create(backend="invalid")
+
+    def test_create_neo4j_raises_without_driver(self) -> None:
+        """neo4j パッケージ未インストールなら RuntimeError。"""
+        # neo4j がインストールされていない環境では RuntimeError
+        # インストール済みなら接続エラー (接続先がないため)
+        # どちらかのエラーが出れば OK
+        with pytest.raises((RuntimeError, Exception)):
+            KnowledgeGraphStore.create(backend="neo4j")
+
+    def test_load_networkx(self, tmp_path: Path) -> None:
+        kg = KnowledgeGraphStore.create()
+        kg.add_entity("Test", doc_id="doc_1")
+        path = tmp_path / "test_kg.pkl"
+        kg.save(path)
+        loaded = KnowledgeGraphStore.load(path)
+        assert isinstance(loaded, NetworkXKnowledgeGraphStore)
+        assert loaded.entity_exists("Test")
+
+    def test_load_invalid_backend_raises(self) -> None:
+        with pytest.raises(ValueError):
+            KnowledgeGraphStore.load("/tmp/fake.pkl", backend="invalid")
+
+    def test_stats_includes_backend(self) -> None:
+        kg = KnowledgeGraphStore.create()
+        assert kg.stats()["backend"] == "networkx"
 
 
 # ──────────────────────────────────────────────

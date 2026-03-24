@@ -126,7 +126,9 @@ MED/
 │   │       └── quality_metrics.py
 │   │
 │   ├── knowledge_graph/            # ★ KG統合（plan.md由来）
-│   │   ├── store.py                # KnowledgeGraphStore (NetworkX → Neo4j)
+│   │   ├── store.py                # KnowledgeGraphStore ABC + データクラス + ファクトリ
+│   │   ├── networkx_store.py       # NetworkXKnowledgeGraphStore (Phase 1.5)
+│   │   ├── neo4j_store.py          # Neo4jKnowledgeGraphStore (Phase 2+)
 │   │   ├── extractor.py            # EntityExtractor (Teacher API使用)
 │   │   └── router_bridge.py        # ModelRouter連携
 │   │
@@ -370,7 +372,7 @@ KG訓練統合タスク（将来）:
 | **Phase 1** | `src/llm/response_generator.py` + `code_generator.py` | ✅ 完了 |
 | **Phase 1** | `src/sandbox/` (manager / executor / security / retry) | ✅ 完了 |
 | **Phase 1** | `src/orchestrator/` (server / pipeline / query_parser) | ✅ 完了 |
-| **Phase 1.5** | `src/knowledge_graph/store.py` (NetworkX KG) | ✅ 完了 |
+| **Phase 1.5** | `src/knowledge_graph/store.py` (ABC) + `networkx_store.py` + `neo4j_store.py` | ✅ 完了 |
 | **Phase 1.5** | `src/knowledge_graph/extractor.py` (Teacher API) | ✅ 完了 |
 | **Phase 1.5** | `src/knowledge_graph/router_bridge.py` | ✅ 完了 |
 | **Phase 1.5** | `src/retrieval/query_classifier.py` | ✅ 完了 |

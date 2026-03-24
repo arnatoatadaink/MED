@@ -37,3 +37,11 @@ conversation:
   max_turns_per_session: 500
   user_faiss_base: "data/faiss_indices/user_{user_id}"
   knowledge_faiss_base: "data/faiss_indices/knowledge"
+
+knowledge_graph:
+  backend: "networkx"              # "networkx" (default) or "neo4j"
+  # Neo4j 設定（backend: neo4j 時のみ使用）
+  neo4j:
+    uri: "bolt://localhost:7687"
+    auth: ["neo4j", "neo4j"]
+    database: "neo4j"

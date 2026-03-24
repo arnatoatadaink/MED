@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-03-24（I-B1. 動的カリキュラム調整 + K. CRAG Query Rewriter）
+> 最終更新: 2026-03-24（D. KG ABC化 + Neo4j バックエンド + K/I-B1 完了）
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_think.md` / `plan_test.md` / `plan_training_a.md` / `plan_training_b.md` / `docs/session_progress.md`
 
 ---
@@ -115,10 +115,21 @@
 ## D. Knowledge Graph フェーズ2（永続化）
 > 📄 詳細: `plan.md` Phase 2
 
-- 🟡 `src/knowledge_graph/` — NetworkX → Neo4j 移行スクリプト作成
+### ABC化 + Neo4j バックエンド — ✅ **完了**
+
+- ✅ `src/knowledge_graph/store.py` — ABC化 (KnowledgeGraphStore base + `create()` factory + `load()`)
+- ✅ `src/knowledge_graph/networkx_store.py` — NetworkX 実装を分離
+- ✅ `src/knowledge_graph/neo4j_store.py` — Neo4j バックエンド (Cypher クエリ、APOC フォールバック)
+- ✅ `configs/default.yaml` — `knowledge_graph.backend` 設定追加
+- ✅ `tests/unit/test_knowledge_graph.py` — ファクトリテスト 7件追加、既存 33件 全通過
+- ✅ 呼び出し側 (extractor.py / router_bridge.py / model_router.py) 変更なし
+
+### 残作業
+
 - 🟡 `pyproject.toml` — `neo4j>=5.0` を optional dependency として追加
+- 🟡 Neo4j 統合テスト (Docker + Neo4j コンテナ)
+- 🟡 NetworkX → Neo4j データ移行スクリプト (`migration.py`)
 - 🟢 KGスキーマの MED 特化設計（汎用 vs MED特化 Entity型の決定）
-- 🟢 Neo4j 統合テスト追加
 
 ---
 
