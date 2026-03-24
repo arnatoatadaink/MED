@@ -301,6 +301,70 @@ class TestKGFactory:
 
 
 # ──────────────────────────────────────────────
+# 移行 (JSON ラウンドトリップ — Docker 不要)
+# ──────────────────────────────────────────────
+
+
+class TestMigrationRoundtrip:
+    def test_json_roundtrip(self, tmp_path: Path) -> None:
+        """NetworkX → JSON → NetworkX のラウンドトリップ。"""
+        import json
+
+        from src.knowledge_graph.migration import import_json_to_networkx
+
+        # 元データ
+        kg = KnowledgeGraphStore.create()
+        kg.add_entity("Python", entity_type="language", doc_id="doc_py")
+        kg.add_entity("FAISS", entity_type="library", doc_id="doc_faiss")
+        kg.add_relation("Python", "FAISS", relation_type="uses", weight=0.9)
+
+        # JSON エクスポート
+        json_data = {
+            "backend": "neo4j",
+            "entities": [
+                {"name": e.name, "entity_type": e.entity_type,
+                 "doc_ids": e.doc_ids, "properties": e.properties}
+                for e in kg.all_entities()
+            ],
+            "relations": [
+                {"source": r.source, "target": r.target,
+                 "relation_type": r.relation_type, "weight": r.weight,
+                 "properties": r.properties}
+                for e in kg.all_entities() for r in kg.get_relations(e.name)
+            ],
+        }
+        json_path = tmp_path / "kg.json"
+        with open(json_path, "w") as f:
+            json.dump(json_data, f)
+
+        # JSON → NetworkX
+        pickle_path = tmp_path / "restored.pkl"
+        result = import_json_to_networkx(json_path, pickle_path)
+        assert result["entities"] == 2
+        assert result["relations"] == 1
+
+        restored = NetworkXKnowledgeGraphStore.load(pickle_path)
+        assert restored.entity_exists("Python")
+        assert restored.entity_exists("FAISS")
+        assert restored.relation_count == 1
+
+    def test_migration_dry_run(self, tmp_path: Path) -> None:
+        """dry-run は読み込みのみで Neo4j 不要。"""
+        from src.knowledge_graph.migration import migrate_networkx_to_neo4j
+
+        kg = KnowledgeGraphStore.create()
+        kg.add_entity("A", doc_id="d1")
+        kg.add_entity("B", doc_id="d2")
+        kg.add_relation("A", "B", relation_type="uses")
+        pickle_path = tmp_path / "test.pkl"
+        kg.save(pickle_path)
+
+        result = migrate_networkx_to_neo4j(pickle_path, dry_run=True)
+        assert result["entities"] == 2
+        assert result["relations"] == 1
+
+
+# ──────────────────────────────────────────────
 # EntityExtractor
 # ──────────────────────────────────────────────
 

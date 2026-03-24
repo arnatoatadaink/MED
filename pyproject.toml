@@ -33,6 +33,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+neo4j = [
+    "neo4j>=5.0.0",
+]
 training = [
     # Student学習 (Phase 3)
     "torch>=2.2.0",

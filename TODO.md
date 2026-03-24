@@ -124,11 +124,15 @@
 - ✅ `tests/unit/test_knowledge_graph.py` — ファクトリテスト 7件追加、既存 33件 全通過
 - ✅ 呼び出し側 (extractor.py / router_bridge.py / model_router.py) 変更なし
 
+### 追加完了
+
+- ✅ `pyproject.toml` — `neo4j>=5.0` を optional dependency として追加
+- ✅ `src/knowledge_graph/migration.py` — NetworkX↔Neo4j↔JSON 双方向移行
+- ✅ `tests/integration/test_neo4j_kg.py` — Neo4j 統合テスト (Docker + testcontainers)
+- ✅ `tests/unit/test_knowledge_graph.py` — JSON ラウンドトリップ + dry-run テスト追加
+
 ### 残作業
 
-- 🟡 `pyproject.toml` — `neo4j>=5.0` を optional dependency として追加
-- 🟡 Neo4j 統合テスト (Docker + Neo4j コンテナ)
-- 🟡 NetworkX → Neo4j データ移行スクリプト (`migration.py`)
 - 🟢 KGスキーマの MED 特化設計（汎用 vs MED特化 Entity型の決定）
 
 ---
