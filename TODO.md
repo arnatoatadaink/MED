@@ -229,8 +229,12 @@
 
 ### 残作業
 
-- 🟡 FLAN-T5-small / Qwen2.5-0.5B を検索クエリ生成タスクで RL fine-tune
-- 🟡 CRAG カスケード戦略: 安い順に試して十分なら打ち切る最適化
+- ✅ CRAG カスケード戦略: 安い順に試して十分なら打ち切り（実装済み）
+- ✅ `scripts/generate_query_rewrite_data.py` — Teacher LLM で訓練データ生成
+- ✅ `scripts/train_query_rewriter.py` — FLAN-T5 / Qwen SFT fine-tune スクリプト
+- ✅ `src/rag/query_rewriter.py` — fine-tune 済みモデル (*-crag/) 自動検出
+- 🟡 訓練データ生成実行 + SFT 実行 (Teacher API キー必要)
+- 🟡 RL fine-tune (GRPO報酬 = FAISS検索品質スコア) の実装
 - 🟢 doc2query-T5 インデックス時クエリ生成の検討
 
 ---

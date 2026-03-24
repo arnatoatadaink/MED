@@ -101,14 +101,27 @@ class QueryRewriter:
         self._initialized = False
 
     async def initialize(self) -> None:
-        """利用可能なモデルを検出する（ロードは遅延）。"""
-        self._flan_t5_available = (self._model_dir / "flan-t5-small").exists()
-        self._qwen_available = (self._model_dir / "Qwen2.5-0.5B-Instruct").exists()
+        """利用可能なモデルを検出する（ロードは遅延）。
+
+        fine-tune 済みモデル (*-crag/) があればそちらを優先する。
+        """
+        # FLAN-T5: fine-tune 済み → ベースの順で検出
+        self._flan_t5_path = self._model_dir / "flan-t5-small-crag"
+        if not self._flan_t5_path.exists():
+            self._flan_t5_path = self._model_dir / "flan-t5-small"
+        self._flan_t5_available = self._flan_t5_path.exists()
+
+        # Qwen: fine-tune 済み → ベースの順で検出
+        self._qwen_path = self._model_dir / "Qwen2.5-0.5B-Instruct-crag"
+        if not self._qwen_path.exists():
+            self._qwen_path = self._model_dir / "Qwen2.5-0.5B-Instruct"
+        self._qwen_available = self._qwen_path.exists()
+
         self._initialized = True
         logger.info(
-            "QueryRewriter initialized: flan_t5=%s, qwen=%s, llm=%s",
-            self._flan_t5_available,
-            self._qwen_available,
+            "QueryRewriter initialized: flan_t5=%s (%s), qwen=%s (%s), llm=%s",
+            self._flan_t5_available, self._flan_t5_path.name,
+            self._qwen_available, self._qwen_path.name,
             self._gateway is not None,
         )
 
@@ -429,28 +442,28 @@ class QueryRewriter:
     # ── モデルロード (lazy) ──────────────────────────────────────
 
     def _load_flan_t5(self):
-        """FLAN-T5-small をロードする（初回のみ）。"""
+        """FLAN-T5 をロードする（初回のみ）。fine-tune 済みがあれば優先。"""
         if self._flan_t5_model is not None:
             return self._flan_t5_model, self._flan_t5_tokenizer
 
         from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
-        model_path = str(self._model_dir / "flan-t5-small")
-        logger.info("Loading FLAN-T5-small from %s", model_path)
+        model_path = str(getattr(self, "_flan_t5_path", self._model_dir / "flan-t5-small"))
+        logger.info("Loading FLAN-T5 from %s", model_path)
         self._flan_t5_tokenizer = AutoTokenizer.from_pretrained(model_path)
         self._flan_t5_model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
         self._flan_t5_model.eval()
         return self._flan_t5_model, self._flan_t5_tokenizer
 
     def _load_qwen(self):
-        """Qwen2.5-0.5B-Instruct をロードする（初回のみ）。"""
+        """Qwen をロードする（初回のみ）。fine-tune 済みがあれば優先。"""
         if self._qwen_model is not None:
             return self._qwen_model, self._qwen_tokenizer
 
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
-        model_path = str(self._model_dir / "Qwen2.5-0.5B-Instruct")
-        logger.info("Loading Qwen2.5-0.5B-Instruct from %s", model_path)
+        model_path = str(getattr(self, "_qwen_path", self._model_dir / "Qwen2.5-0.5B-Instruct"))
+        logger.info("Loading Qwen from %s", model_path)
         self._qwen_tokenizer = AutoTokenizer.from_pretrained(model_path)
         self._qwen_model = AutoModelForCausalLM.from_pretrained(
             model_path,

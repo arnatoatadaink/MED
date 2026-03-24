@@ -13,7 +13,10 @@ data/conversations.db-wal
 data/adapters/
 data/training_logs/
 data/models/flan-t5-small/
+data/models/flan-t5-small-crag/
 data/models/Qwen2.5-0.5B-Instruct/
+data/models/Qwen2.5-0.5B-Instruct-crag/
+data/training/
 .venv/
 venv/
 dist/
