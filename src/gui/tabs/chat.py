@@ -152,6 +152,7 @@ def _query_api(
     session_id: str | None = None,
     token: str | None = None,
     crag_strategies: list[str] | None = None,
+    crag_mode: str = "cascade",
 ) -> dict:
     payload: dict = {
         "query": query,
@@ -169,6 +170,7 @@ def _query_api(
     payload["timeout_seconds"] = timeout_seconds
     if crag_strategies:
         payload["crag_strategies"] = crag_strategies
+        payload["crag_mode"] = crag_mode
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     http_timeout = timeout_seconds + 10
     r = httpx.post(
@@ -291,8 +293,9 @@ def _build_debug_md(debug_info: dict | None) -> str:
         rewriter_details = debug_info.get("rewriter_details", [])
         lines.append("---")
         lines.append("### ♻️ CRAG リトライ発生")
+        crag_mode_used = debug_info.get("crag_mode", "parallel")
         if strategies_used:
-            lines.append(f"**使用戦略**: {', '.join(f'`{s}`' for s in strategies_used)}")
+            lines.append(f"**使用戦略**: {', '.join(f'`{s}`' for s in strategies_used)} ({crag_mode_used})")
         lines.append(f"**展開クエリ**: {' / '.join(f'`{q}`' for q in expanded)}")
         # 各戦略の詳細
         for rd in rewriter_details:
@@ -344,6 +347,7 @@ def respond(
     timeout_h: int,
     timeout_m: int,
     timeout_s: int,
+    crag_mode: str = "cascade",
     crag_rule: bool = True,
     crag_flan: bool = False,
     crag_qwen: bool = False,
@@ -388,6 +392,7 @@ def respond(
                 actual_provider, actual_model, timeout_seconds,
                 session_id=session_id, token=token,
                 crag_strategies=crag_strategies if crag_strategies else None,
+                crag_mode=crag_mode,
             )
         else:
             result = _mock_response(message, mode, actual_provider, actual_model)
@@ -585,8 +590,13 @@ def build_tab() -> gr.Dropdown:
                 )
 
             gr.Markdown("#### CRAG 戦略")
+            crag_mode_radio = gr.Radio(
+                choices=["cascade", "parallel"],
+                value="cascade",
+                label="実行モード",
+                info="cascade: 安い順に試し成功で停止 / parallel: 全戦略を実行",
+            )
             gr.Markdown(
-                "_検索品質が低い場合のリトライ時に使用するクエリ書き換え戦略。_  \n"
                 "_複数選択可。モデル未配置の戦略は効果なし。_",
             )
             _strats = _get_crag_strategies()
@@ -673,16 +683,18 @@ def build_tab() -> gr.Dropdown:
         msg_box, chatbot, mode_radio, use_memory_chk, use_rag_chk,
         provider_dd, model_box,
         timeout_h, timeout_m, timeout_s,
+        crag_mode_radio,
         crag_rule_chk, crag_flan_chk, crag_qwen_chk, crag_llm_chk,
         session_id_state, token_state,
     ]
     send_outputs = [chatbot, meta_box, sources_box, debug_md]
 
     def _on_send(message, history, mode, use_memory, use_rag, provider_choice, model_name,
-                 t_h, t_m, t_s, crag_rule, crag_flan, crag_qwen, crag_llm,
+                 t_h, t_m, t_s, crag_mode, crag_rule, crag_flan, crag_qwen, crag_llm,
                  session_id, token):
         for update in respond(message, history, mode, use_memory, use_rag, provider_choice,
                                model_name, t_h, t_m, t_s,
+                               crag_mode=crag_mode,
                                crag_rule=crag_rule, crag_flan=crag_flan,
                                crag_qwen=crag_qwen, crag_llm=crag_llm,
                                session_id=session_id, token=token):

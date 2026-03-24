@@ -124,6 +124,7 @@ class QueryRequest(BaseModel):
     timeout_seconds: int = Field(default=300, ge=5, le=86400)
     session_id: str | None = None   # 会話セッション ID
     crag_strategies: list[str] | None = None  # CRAG 戦略リスト
+    crag_mode: str = "cascade"  # "cascade" or "parallel"
 
 
 class QueryResponseModel(BaseModel):
@@ -263,6 +264,7 @@ async def query(
             user_id=user_id,
             timeout=float(request.timeout_seconds),
             crag_strategies=request.crag_strategies,
+            crag_mode=request.crag_mode,
         )
         result: QueryResponse = await asyncio.wait_for(
             coro, timeout=float(request.timeout_seconds)

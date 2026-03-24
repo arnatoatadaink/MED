@@ -135,6 +135,7 @@ class MEDPipeline:
         user_id: str = "default",
         timeout: float | None = None,
         crag_strategies: list[str] | None = None,
+        crag_mode: str = "cascade",
     ) -> QueryResponse:
         """クエリを受け取り、RAG + LLM で回答を生成する。
 
@@ -207,10 +208,11 @@ class MEDPipeline:
             active_strategies = crag_strategies or []
             rewriter_queries: list[str] = []
 
-            # モデルベース戦略 (flan_t5_rewrite, qwen_rewrite, llm_rewrite)
-            model_strategies = [s for s in active_strategies if s != "rule_expand"]
-            if model_strategies:
-                rw_results = await self._rewriter.rewrite(query, strategies=model_strategies)
+            # QueryRewriter で全戦略を実行（cascade/parallel はモード指定に従う）
+            if active_strategies:
+                rw_results = await self._rewriter.rewrite(
+                    query, strategies=active_strategies, mode=crag_mode,
+                )
                 for rr in rw_results:
                     detail = {
                         "strategy": rr.strategy,
@@ -220,12 +222,15 @@ class MEDPipeline:
                     rewriter_details.append(detail)
                     rewriter_queries.extend(rr.rewritten_queries)
 
-            # ルールベース展開 (常に実行 or rule_expand が指定されている場合)
-            expanded = self._expander.expand(query)
-            rule_new_queries = [q for q in expanded if q != query]
+            # rule_expand が戦略に含まれない場合もフォールバック展開を試みる
+            if "rule_expand" not in active_strategies:
+                expanded = self._expander.expand(query)
+                rule_new_queries = [q for q in expanded if q != query]
+            else:
+                rule_new_queries = []  # rule_expand は rewriter 経由で実行済み
 
             # 全戦略のクエリを統合（重複除去）
-            all_new_queries = list(dict.fromkeys(rule_new_queries + rewriter_queries))
+            all_new_queries = list(dict.fromkeys(rewriter_queries + rule_new_queries))
 
             is_negative = self._expander.is_negative(gen_response.answer)
             min_faiss = self._expander.crag_min_faiss
@@ -356,6 +361,7 @@ class MEDPipeline:
             debug_info["retry_faiss_results"] = [_sr_to_dict(sr) for sr in retry_faiss_results]
             debug_info["retry_rag_results"] = [_raw_to_dict(r) for r in retry_rag_results]
             debug_info["crag_strategies"] = crag_strategies or []
+            debug_info["crag_mode"] = crag_mode
             debug_info["rewriter_details"] = rewriter_details
         if agentic_triggered:
             debug_info["agentic_query"] = agentic_query
