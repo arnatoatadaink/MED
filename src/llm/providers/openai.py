@@ -28,7 +28,7 @@ class OpenAIProvider(BaseLLMProvider):
         messages: list[LLMMessage],
         *,
         model: str | None = None,
-        max_tokens: int = 2048,
+        max_tokens: int = 4096,
         temperature: float = 0.7,
         timeout: float | None = None,
     ) -> LLMResponse:

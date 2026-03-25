@@ -1,0 +1,65 @@
+# MED Project — Seed Questions for Teacher Maturation
+# Lines starting with # are comments
+# One question per line
+
+# === FAISS / Vector Search ===
+How to use FAISS for similarity search in Python?
+What is the difference between IndexFlatIP and IndexIVFFlat in FAISS?
+How to implement Product Quantization (PQ) with FAISS?
+FAISS GPU acceleration with CUDA examples
+How to migrate from IndexFlatIP to IndexIVFPQ in FAISS?
+FAISS batch search performance optimization techniques
+
+# === RAG (Retrieval Augmented Generation) ===
+How to implement RAG (Retrieval Augmented Generation) from scratch?
+What is Corrective RAG and how does it improve retrieval quality?
+HyDE (Hypothetical Document Embeddings) implementation in Python
+Reciprocal Rank Fusion (RRF) algorithm for combining search results
+Self-RAG: adaptive retrieval routing implementation
+GraphRAG: combining knowledge graphs with vector search
+
+# === Embedding / Reranking ===
+How to use sentence-transformers for text embedding?
+Cross-encoder reranker implementation for document reranking
+Learning to Rank (LTR) with linear models for search
+all-MiniLM-L6-v2 vs UniXcoder embedding model comparison
+Bi-encoder vs cross-encoder trade-offs for retrieval
+
+# === Knowledge Graph ===
+How to build a knowledge graph with NetworkX in Python?
+Entity extraction from text using LLM APIs
+Neo4j Cypher query examples for graph traversal
+Knowledge graph entity linking and relation extraction
+NetworkX to Neo4j migration strategies
+
+# === LLM Fine-tuning / Training ===
+What is LoRA and how to fine-tune with PEFT?
+TinyLoRA: efficient fine-tuning with minimal parameters
+GRPO vs PPO for RLHF training comparison
+Knowledge distillation for small language models
+SFT (Supervised Fine-Tuning) with Hugging Face Transformers
+DPO (Direct Preference Optimization) implementation guide
+Curriculum learning for model training difficulty scheduling
+VERL framework for reinforcement learning from human feedback
+
+# === Infrastructure ===
+Docker sandbox for safe code execution in Python
+FastAPI async endpoint implementation patterns
+aiosqlite async database operations in Python
+Gradio multi-tab interface with state management
+LM Studio API integration with OpenAI compatible endpoints
+vLLM server setup for local LLM inference
+
+# === Python / ML Patterns ===
+Python asyncio patterns for concurrent API calls
+PyTorch training loop with mixed precision
+Pydantic settings management with YAML config
+pytest fixtures and async test patterns
+Python dataclass and Pydantic model best practices
+
+# === Advanced RAG Topics ===
+Iterative retrieval with multi-hop reasoning
+Memory consolidation patterns for RAG systems
+Query expansion and rewriting for search systems
+Agentic RAG: LLM-driven retrieval loop implementation
+Chunk size optimization for RAG document splitting

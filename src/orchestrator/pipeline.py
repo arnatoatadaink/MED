@@ -31,6 +31,7 @@ from src.rag.chunker import Chunker
 from src.rag.query_expander import QueryExpander
 from src.rag.query_rewriter import QueryRewriter
 from src.rag.retriever import RetrieverRouter
+from src.rag.url_fetcher import URLFetcher
 from src.rag.verifier import ResultVerifier
 from src.sandbox.manager import SandboxManager
 
@@ -94,6 +95,7 @@ class MEDPipeline:
         self._iterative = IterativeRetriever(self._mm, self._mm.embedder)
         self._expander = QueryExpander()
         self._rewriter = QueryRewriter(gateway=self._gateway)
+        self._url_fetcher = URLFetcher()
 
         self._enable_rag = enable_external_rag
         self._enable_sandbox = enable_sandbox
@@ -175,6 +177,24 @@ class MEDPipeline:
 
         logger.debug("FAISS: %d results for query=%r", len(faiss_results), query[:50])
 
+        # ── Step 1.5: URL 直接取得 ──────────────────
+        url_results: list = []
+        extracted_urls = self._expander.extract_urls(query)
+        if extracted_urls:
+            url_results = await self._url_fetcher.fetch_urls(extracted_urls)
+            if url_results:
+                # URL から取得したコンテンツを FAISS に保存
+                docs = self._chunker.chunk_results(url_results, domain=domain or "general")
+                added_ids = await self._mm.add_batch(docs)
+                logger.info(
+                    "URL direct fetch: %d URLs → %d results → %d docs stored",
+                    len(extracted_urls), len(url_results), len(added_ids),
+                )
+                # URL 取得後に FAISS を再検索（新規ドキュメントが追加されたため）
+                if use_memory:
+                    faiss_results = await self._mm.search_hybrid(query, domain=domain, k=k)
+                    logger.debug("FAISS re-search after URL fetch: %d results", len(faiss_results))
+
         # ── Step 2: 外部 RAG 検索 → 保存 ───────────
         rag_raw_results: list = []
         if use_rag and self._enable_rag:
@@ -212,6 +232,7 @@ class MEDPipeline:
             if active_strategies:
                 rw_results = await self._rewriter.rewrite(
                     query, strategies=active_strategies, mode=crag_mode,
+                    provider=provider, timeout=timeout,
                 )
                 for rr in rw_results:
                     detail = {
@@ -260,9 +281,12 @@ class MEDPipeline:
                     retry_rag_results.extend(sub_raw)
 
                 # FAISS を再検索（新規ドキュメントが追加されているので結果が変わる可能性あり）
-                retry_faiss_results = await self._mm.search(query, domain=domain, k=k)
+                if use_memory:
+                    retry_faiss_results = await self._mm.search(query, domain=domain, k=k)
+                else:
+                    retry_faiss_results = []
 
-                # LLM を再実行
+                # LLM を再実行（FAISS結果があればコンテキストとして使用）
                 gen_response = await self._response_gen.generate(
                     query, context_docs=retry_faiss_results, provider=provider, model=model,
                     timeout=timeout,
@@ -282,7 +306,8 @@ class MEDPipeline:
             and self._expander.is_negative(gen_response.answer)
         ):
             suggested = await self._suggest_search_query(
-                query, gen_response.answer, provider=provider, model=model
+                query, gen_response.answer, provider=provider, model=model,
+                timeout=timeout,
             )
             if suggested and suggested != query:
                 agentic_triggered = True
@@ -291,13 +316,17 @@ class MEDPipeline:
                     "Agentic retry: LLM suggested query=%r for original=%r",
                     suggested[:60], query[:60],
                 )
-                _, agentic_rag_results = await self._fetch_and_store_external(
-                    suggested,
-                    domain=domain or "general",
-                    provider=provider,
-                    max_results=self._expander.retry_max_results,
-                )
-                agentic_faiss = await self._mm.search_hybrid(query, domain=domain, k=k)
+                if use_rag and self._enable_rag:
+                    _, agentic_rag_results = await self._fetch_and_store_external(
+                        suggested,
+                        domain=domain or "general",
+                        provider=provider,
+                        max_results=self._expander.retry_max_results,
+                    )
+                if use_memory:
+                    agentic_faiss = await self._mm.search_hybrid(query, domain=domain, k=k)
+                else:
+                    agentic_faiss = []
                 gen_response = await self._response_gen.generate(
                     query, context_docs=agentic_faiss, provider=provider, model=model,
                     timeout=timeout,
@@ -356,6 +385,12 @@ class MEDPipeline:
             "retry_triggered": retry_triggered,
             "agentic_triggered": agentic_triggered,
         }
+        if url_results:
+            debug_info["url_direct_fetch"] = [_raw_to_dict(r) for r in url_results]
+            debug_info["extracted_urls"] = [
+                {"url": u.url, "type": u.url_type, "arxiv_id": u.arxiv_id}
+                for u in extracted_urls
+            ]
         if retry_triggered:
             debug_info["expanded_queries"] = expanded_queries
             debug_info["retry_faiss_results"] = [_sr_to_dict(sr) for sr in retry_faiss_results]
@@ -434,6 +469,7 @@ class MEDPipeline:
         failed_answer: str,
         provider: str | None = None,
         model: str | None = None,
+        timeout: float | None = None,
     ) -> str:
         """LLM に代替検索クエリを提案させる（Agentic 1-step）。
 
@@ -457,11 +493,12 @@ class MEDPipeline:
         try:
             from src.llm.gateway import LLMMessage
             response = await self._gateway.complete(
-                [LLMMessage(role="user", content=_SUGGEST_PROMPT)],
+                _SUGGEST_PROMPT,
                 system=_SUGGEST_SYSTEM,
                 provider=provider,
                 model=model,
-                max_tokens=64,
+                max_tokens=512,
+                timeout=timeout,
             )
             suggested = response.content.strip().strip('"').strip("'")
             return suggested if len(suggested) >= 3 else ""

@@ -140,6 +140,8 @@ class QueryRewriter:
         strategies: list[str] | None = None,
         max_queries_per_strategy: int = 3,
         mode: str = "parallel",
+        provider: str | None = None,
+        timeout: float | None = None,
     ) -> list[RewriteResult]:
         """指定された戦略でクエリを書き換える。
 
@@ -150,6 +152,8 @@ class QueryRewriter:
             mode: 実行モード。
                 - "parallel": 全戦略を実行し結果を統合。
                 - "cascade": コストが低い順に試し、クエリが生成できたら停止。
+            provider: LLM プロバイダ名（llm_rewrite 戦略で使用）。
+            timeout: リクエストタイムアウト秒数。
 
         Returns:
             戦略ごとの RewriteResult リスト。
@@ -158,19 +162,21 @@ class QueryRewriter:
             strategies = ["rule_expand"]
 
         if mode == "cascade":
-            return await self._rewrite_cascade(query, strategies, max_queries_per_strategy)
-        return await self._rewrite_parallel(query, strategies, max_queries_per_strategy)
+            return await self._rewrite_cascade(query, strategies, max_queries_per_strategy, provider=provider, timeout=timeout)
+        return await self._rewrite_parallel(query, strategies, max_queries_per_strategy, provider=provider, timeout=timeout)
 
     async def _rewrite_parallel(
         self,
         query: str,
         strategies: list[str],
         max_queries: int,
+        provider: str | None = None,
+        timeout: float | None = None,
     ) -> list[RewriteResult]:
         """全戦略を実行して結果を統合する。"""
         results: list[RewriteResult] = []
         for strat in strategies:
-            results.append(await self._run_strategy(strat, query, max_queries))
+            results.append(await self._run_strategy(strat, query, max_queries, provider=provider, timeout=timeout))
         return results
 
     async def _rewrite_cascade(
@@ -178,6 +184,8 @@ class QueryRewriter:
         query: str,
         strategies: list[str],
         max_queries: int,
+        provider: str | None = None,
+        timeout: float | None = None,
     ) -> list[RewriteResult]:
         """コストが低い順に試し、クエリが生成できた時点で停止する。
 
@@ -201,7 +209,7 @@ class QueryRewriter:
                 ))
                 continue
 
-            result = await self._run_strategy(strat, query, max_queries)
+            result = await self._run_strategy(strat, query, max_queries, provider=provider, timeout=timeout)
             results.append(result)
 
             # 有効なクエリが生成できたら停止
@@ -214,7 +222,10 @@ class QueryRewriter:
 
         return results
 
-    async def _run_strategy(self, strat: str, query: str, max_queries: int) -> RewriteResult:
+    async def _run_strategy(
+        self, strat: str, query: str, max_queries: int,
+        provider: str | None = None, timeout: float | None = None,
+    ) -> RewriteResult:
         """単一戦略を実行する。"""
         if strat == "rule_expand":
             return self._rewrite_rule_expand(query, max_queries)
@@ -223,7 +234,7 @@ class QueryRewriter:
         elif strat == "qwen_rewrite":
             return await self._rewrite_qwen(query, max_queries)
         elif strat == "llm_rewrite":
-            return await self._rewrite_llm(query, max_queries)
+            return await self._rewrite_llm(query, max_queries, provider=provider, timeout=timeout)
         else:
             return RewriteResult(
                 strategy=strat,
@@ -390,7 +401,10 @@ class QueryRewriter:
                 error=str(e),
             )
 
-    async def _rewrite_llm(self, query: str, max_queries: int) -> RewriteResult:
+    async def _rewrite_llm(
+        self, query: str, max_queries: int,
+        provider: str | None = None, timeout: float | None = None,
+    ) -> RewriteResult:
         """Teacher LLM によるクエリ書き換え。"""
         if self._gateway is None:
             return RewriteResult(
@@ -400,8 +414,6 @@ class QueryRewriter:
             )
 
         try:
-            from src.llm.gateway import LLMMessage
-
             system_msg = (
                 "You are a search query optimizer for a RAG system. "
                 "Given a user question, generate up to 3 different search queries "
@@ -411,9 +423,11 @@ class QueryRewriter:
             user_msg = f"Generate search queries for: {query}"
 
             response = await self._gateway.complete(
-                [LLMMessage(role="user", content=user_msg)],
+                user_msg,
                 system=system_msg,
-                max_tokens=128,
+                provider=provider,
+                max_tokens=512,
+                timeout=timeout,
             )
 
             rewritten: list[str] = []

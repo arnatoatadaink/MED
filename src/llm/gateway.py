@@ -79,7 +79,7 @@ class BaseLLMProvider(ABC):
         messages: list[LLMMessage],
         *,
         model: str | None = None,
-        max_tokens: int = 2048,
+        max_tokens: int = 4096,
         temperature: float = 0.7,
         enable_thinking: bool = False,
         thinking_budget_tokens: int = 8000,
@@ -184,12 +184,23 @@ class LLMGateway:
                         continue
                     from src.llm.providers.openai_compatible import OpenAICompatibleProvider
                     api_key_env = conf.get("api_key_env", "")
+                    # プロバイダー固有パラメータ（yaml で任意指定）
+                    default_max_tokens = conf.get("max_tokens")
+                    if default_max_tokens is not None:
+                        default_max_tokens = int(default_max_tokens)
+                    default_temperature = conf.get("temperature")
+                    if default_temperature is not None:
+                        default_temperature = float(default_temperature)
+                    extra_params = conf.get("extra_params") or {}
                     provider = OpenAICompatibleProvider(
                         name=name,
                         base_url=base_url,
                         default_model=conf.get("default_model", ""),
                         api_key_env=api_key_env,
                         timeout=float(conf.get("timeout", 600)),
+                        default_max_tokens=default_max_tokens,
+                        default_temperature=default_temperature,
+                        extra_params=extra_params,
                     )
                     self._providers[name] = provider
                     logger.info(
@@ -212,7 +223,7 @@ class LLMGateway:
         system: str | None = None,
         provider: str | None = None,
         model: str | None = None,
-        max_tokens: int = 2048,
+        max_tokens: int = 4096,
         temperature: float = 0.7,
         timeout: float | None = None,
     ) -> LLMResponse:
@@ -248,7 +259,7 @@ class LLMGateway:
         *,
         provider: str | None = None,
         model: str | None = None,
-        max_tokens: int = 2048,
+        max_tokens: int = 4096,
         temperature: float = 0.7,
         timeout: float | None = None,
     ) -> LLMResponse:
@@ -259,13 +270,18 @@ class LLMGateway:
         providers_to_try = self._build_provider_order(provider)
 
         last_exc: Exception | None = None
+        skip_reasons: list[str] = []
         for prov_name in providers_to_try:
             prov = self._providers.get(prov_name)
             if prov is None:
+                reason = f"{prov_name}: not registered"
                 logger.warning("Provider not registered: %s", prov_name)
+                skip_reasons.append(reason)
                 continue
             if not prov.is_available():
+                reason = f"{prov_name}: not available"
                 logger.debug("Provider %s not available; skipping", prov_name)
+                skip_reasons.append(reason)
                 continue
 
             try:
@@ -290,13 +306,14 @@ class LLMGateway:
                 return response
 
             except Exception as exc:
-                logger.warning("Provider %s failed: %s", prov_name, exc)
+                logger.warning("Provider %s failed: %s", prov_name, exc, exc_info=True)
                 last_exc = exc
+                skip_reasons.append(f"{prov_name}: {type(exc).__name__}: {exc}")
                 continue
 
         raise RuntimeError(
             f"All LLM providers failed. Tried: {providers_to_try}. "
-            f"Last error: {last_exc}"
+            f"Details: {skip_reasons}. Last error: {last_exc}"
         )
 
     def _build_provider_order(self, requested: str | None) -> list[str]:

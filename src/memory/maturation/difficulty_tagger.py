@@ -87,7 +87,7 @@ class DifficultyTagger:
                 prompt,
                 system=_TAG_SYSTEM,
                 provider=self._provider,
-                max_tokens=20,
+                max_tokens=512,
                 temperature=0.0,
             )
             level_str = response.content.strip().lower().split()[0]

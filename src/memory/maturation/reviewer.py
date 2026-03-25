@@ -101,7 +101,6 @@ class MemoryReviewer:
                 prompt,
                 system=_REVIEW_SYSTEM,
                 provider=self._provider,
-                max_tokens=200,
                 temperature=0.0,
             )
             parsed = self._parse_response(response.content)

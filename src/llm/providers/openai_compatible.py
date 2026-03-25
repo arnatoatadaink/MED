@@ -41,11 +41,17 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         api_key: str = "",
         api_key_env: str = "",
         timeout: float = 600.0,
+        default_max_tokens: int | None = None,
+        default_temperature: float | None = None,
+        extra_params: dict | None = None,
     ) -> None:
         self._name = name
         self._base_url = base_url.rstrip("/")
         self._default_model = default_model
         self._timeout = timeout
+        self._default_max_tokens = default_max_tokens
+        self._default_temperature = default_temperature
+        self._extra_params = extra_params or {}
         # APIキー解決: 直接値 → 環境変数 → ダミー値 (ローカル用)
         if api_key:
             self._api_key = api_key
@@ -70,7 +76,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         messages: list[LLMMessage],
         *,
         model: str | None = None,
-        max_tokens: int = 2048,
+        max_tokens: int = 4096,
         temperature: float = 0.7,
         enable_thinking: bool = False,
         thinking_budget_tokens: int = 8000,
@@ -81,8 +87,11 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         except ImportError:
             raise RuntimeError("openai package not installed. Run: pip install openai")
 
-        # リクエスト単位の timeout が指定されていればそちらを優先、なければコンストラクタ値
+        # プロバイダーデフォルト値を適用（yaml 設定 > 呼び出し側デフォルト）
         effective_timeout = timeout if timeout is not None else self._timeout
+        effective_max_tokens = self._default_max_tokens if self._default_max_tokens is not None else max_tokens
+        effective_temperature = self._default_temperature if self._default_temperature is not None else temperature
+
         client = AsyncOpenAI(
             base_url=self._base_url,
             api_key=self._api_key,
@@ -92,20 +101,46 @@ class OpenAICompatibleProvider(BaseLLMProvider):
 
         oai_messages = [{"role": m.role, "content": m.content} for m in messages]
 
-        raw = await client.chat.completions.create(
-            model=model_name,
-            messages=oai_messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
+        # extra_params から追加パラメータを適用（extra_body 等）
+        create_kwargs: dict = {
+            "model": model_name,
+            "messages": oai_messages,
+            "max_tokens": effective_max_tokens,
+            "temperature": effective_temperature,
+        }
+        if self._extra_params:
+            create_kwargs["extra_body"] = self._extra_params
 
-        content = raw.choices[0].message.content or ""
+        raw = await client.chat.completions.create(**create_kwargs)
+
+        choice = raw.choices[0]
+        content = choice.message.content or ""
         usage = raw.usage
+
+        # Qwen3.5 等の思考モデル対応: reasoning_content を thinking_text に保存
+        # content が空で reasoning_content がある場合は思考途中で max_tokens に達した可能性
+        thinking_text: str | None = None
+        thinking_tokens = 0
+        reasoning = getattr(choice.message, "reasoning_content", None)
+        if reasoning:
+            thinking_text = reasoning
+            # 思考トークン数は概算（usage に内訳がない場合）
+            if usage and not content:
+                thinking_tokens = usage.completion_tokens or 0
+                logger.warning(
+                    "Provider %s: content is empty but reasoning_content has %d chars. "
+                    "The model may need more max_tokens (current=%d) to produce output "
+                    "after thinking.",
+                    self._name, len(reasoning), effective_max_tokens,
+                )
+
         return LLMResponse(
             content=content,
             provider=self._name,
             model=model_name,
             input_tokens=usage.prompt_tokens if usage else 0,
             output_tokens=usage.completion_tokens if usage else 0,
+            thinking_text=thinking_text,
+            thinking_tokens=thinking_tokens,
             raw=raw,
         )

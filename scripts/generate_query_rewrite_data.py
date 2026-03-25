@@ -92,7 +92,6 @@ async def generate_with_teacher(
     from src.llm.gateway import LLMGateway
 
     gateway = LLMGateway()
-    await gateway.initialize()
 
     pairs: list[dict] = []
     errors = 0
@@ -103,7 +102,6 @@ async def generate_with_teacher(
                 f"Generate search queries for:\n{question}",
                 system=_SYSTEM_PROMPT,
                 provider=provider,
-                max_tokens=256,
                 temperature=0.3,
             )
             text = response.content.strip()

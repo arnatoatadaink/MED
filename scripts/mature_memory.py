@@ -5,10 +5,17 @@ Teacher Model による品質審査・難易度タグ付けを実行し、
 メモリの品質目標（Phase 2: 10,000 docs, confidence>0.7, exec>80%）を確認する。
 
 使い方:
-    python scripts/mature_memory.py --check          # 品質チェックのみ
-    python scripts/mature_memory.py --review         # 未審査ドキュメントを一括審査
-    python scripts/mature_memory.py --tag-difficulty # 難易度タグ付け
-    python scripts/mature_memory.py --all            # 全ステップ実行
+    # 品質チェックのみ
+    poetry run python scripts/mature_memory.py --check
+
+    # LM Studio Teacher で未審査ドキュメントを一括審査
+    poetry run python scripts/mature_memory.py --review --provider lmstudio --limit 50
+
+    # 難易度タグ付け
+    poetry run python scripts/mature_memory.py --tag-difficulty --provider lmstudio
+
+    # 全ステップ実行
+    poetry run python scripts/mature_memory.py --all --provider lmstudio
 """
 
 from __future__ import annotations
@@ -38,12 +45,16 @@ async def check_quality(domain: str | None) -> None:
 
     ready, missing = await metrics.check_phase2_readiness()
     if ready:
-        print("\n[mature] ✓ Phase 2 quality goal MET!")
+        print("\n[mature] Phase 2 quality goal MET!")
     else:
-        print(f"\n[mature] ✗ Phase 2 goal NOT MET. Missing: {missing}")
+        print(f"\n[mature] Phase 2 goal NOT MET. Missing: {missing}")
 
 
-async def review_docs(limit: int, domain: str | None) -> None:
+async def review_docs(
+    limit: int, domain: str | None,
+    provider: str | None = None,
+    concurrency: int = 1,
+) -> None:
     """未審査ドキュメントを Teacher で審査する。"""
     from src.common.config import get_settings
     from src.llm.gateway import LLMGateway
@@ -55,14 +66,37 @@ async def review_docs(limit: int, domain: str | None) -> None:
     await store.initialize()
     gateway = LLMGateway(settings)
 
-    reviewer = MemoryReviewer(gateway, store)
-    results = await reviewer.review_unreviewed(limit=limit)
+    reviewer = MemoryReviewer(gateway, store, provider=provider)
+
+    docs = await store.get_unreviewed(domain=domain, limit=limit)
+    if not docs:
+        print("[mature] No unreviewed documents found")
+        return
+
+    print(f"[mature] Reviewing {len(docs)} docs (provider={provider or 'default'}, concurrency={concurrency})")
+
+    results = []
+    for i, doc in enumerate(docs):
+        try:
+            result = await reviewer.review(doc)
+            results.append(result)
+            status = "PASS" if result.approved else "FAIL"
+            print(
+                f"  [{i+1}/{len(docs)}] {status} "
+                f"(quality={result.quality_score:.2f} confidence={result.confidence:.2f}) "
+                f"{doc.content[:60]}..."
+            )
+        except Exception as e:
+            print(f"  [{i+1}/{len(docs)}] ERROR: {e}", file=sys.stderr)
 
     approved = sum(1 for r in results if r.approved)
-    print(f"[mature] Reviewed {len(results)} docs: {approved} approved, {len(results)-approved} rejected")
+    print(f"\n[mature] Reviewed {len(results)} docs: {approved} approved, {len(results)-approved} rejected")
 
 
-async def tag_difficulty(limit: int, domain: str | None) -> None:
+async def tag_difficulty(
+    limit: int, domain: str | None,
+    provider: str | None = None,
+) -> None:
     """未タグドキュメントに難易度を付与する。"""
     from src.common.config import get_settings
     from src.llm.gateway import LLMGateway
@@ -74,7 +108,7 @@ async def tag_difficulty(limit: int, domain: str | None) -> None:
     await store.initialize()
     gateway = LLMGateway(settings)
 
-    tagger = DifficultyTagger(gateway)
+    tagger = DifficultyTagger(gateway, provider=provider)
 
     # difficulty が NULL のドキュメントを取得
     docs = await store.get_unreviewed(domain=domain, limit=limit)
@@ -83,15 +117,16 @@ async def tag_difficulty(limit: int, domain: str | None) -> None:
         print("[mature] No untagged documents found")
         return
 
-    print(f"[mature] Tagging {len(untagged)} documents...")
+    print(f"[mature] Tagging {len(untagged)} documents (provider={provider or 'default'})...")
     count = 0
-    for doc in untagged:
+    for i, doc in enumerate(untagged):
         try:
             level = await tagger.tag(doc)
             await store.update_quality(doc.id, difficulty=level.value)
             count += 1
+            print(f"  [{i+1}/{len(untagged)}] {level.value}: {doc.content[:60]}...")
         except Exception as e:
-            print(f"  [warn] Failed to tag {doc.id[:8]}: {e}", file=sys.stderr)
+            print(f"  [{i+1}/{len(untagged)}] ERROR: {e}", file=sys.stderr)
 
     print(f"[mature] Tagged {count} documents")
 
@@ -104,6 +139,8 @@ def main() -> None:
     parser.add_argument("--all", action="store_true", help="Run all steps")
     parser.add_argument("--limit", type=int, default=100, help="Max docs to process")
     parser.add_argument("--domain", type=str, default=None, help="Filter by domain")
+    parser.add_argument("--provider", type=str, default=None, help="LLM provider (e.g. lmstudio)")
+    parser.add_argument("--concurrency", type=int, default=1, help="Concurrent review requests (local models: 1)")
     args = parser.parse_args()
 
     if not any([args.check, args.review, args.tag_difficulty, args.all]):
@@ -111,11 +148,11 @@ def main() -> None:
 
     if args.all or args.review:
         print("\n=== Reviewing docs ===")
-        asyncio.run(review_docs(args.limit, args.domain))
+        asyncio.run(review_docs(args.limit, args.domain, provider=args.provider, concurrency=args.concurrency))
 
     if args.all or args.tag_difficulty:
         print("\n=== Tagging difficulty ===")
-        asyncio.run(tag_difficulty(args.limit, args.domain))
+        asyncio.run(tag_difficulty(args.limit, args.domain, provider=args.provider))
 
     if args.all or args.check:
         print("\n=== Quality check ===")

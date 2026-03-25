@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
@@ -34,6 +35,30 @@ logger = logging.getLogger(__name__)
 _DEFAULT_CONFIG = Path(__file__).parent.parent.parent / "configs" / "query_expansion.yaml"
 
 # パターンに関係なく「助詞・動詞・比較語」と判断するキーワード
+# ── URL 検出パターン ───────────────────────────────────────────
+_ARXIV_URL_RE = re.compile(
+    r"https?://(?:arxiv\.org/(?:abs|pdf)/|export\.arxiv\.org/abs/)(\d{4}\.\d{4,5}(?:v\d+)?)",
+    re.IGNORECASE,
+)
+_GITHUB_URL_RE = re.compile(
+    r"https?://github\.com/([\w\-]+/[\w\-]+(?:/[^\s]*)?)",
+    re.IGNORECASE,
+)
+_GENERAL_URL_RE = re.compile(
+    r"https?://[^\s<>\"']+",
+    re.IGNORECASE,
+)
+
+
+@dataclass
+class ExtractedURL:
+    """クエリから検出された URL。"""
+
+    url: str
+    url_type: str  # "arxiv", "github", "web"
+    arxiv_id: str = ""  # arxiv の場合のみ
+
+
 _PARTICLES: frozenset[str] = frozenset({
     "比較", "違い", "差", "差異", "相違", "difference", "differences",
     "vs", "versus", "対", "組み合わせ", "統合", "連携",
@@ -148,6 +173,47 @@ class QueryExpander:
             return False
         lower = answer.lower()
         return any(sig in lower for sig in self._negative_signals)
+
+    def extract_urls(self, query: str) -> list[ExtractedURL]:
+        """クエリ内の URL を検出して返す。
+
+        arxiv URL は論文 ID を抽出し、GitHub URL は種別を区別する。
+        それ以外の HTTP(S) URL は "web" として返す。
+
+        Args:
+            query: ユーザーのクエリ文字列。
+
+        Returns:
+            検出された ExtractedURL のリスト（重複除去済み）。
+        """
+        seen: set[str] = set()
+        results: list[ExtractedURL] = []
+
+        # arxiv
+        for m in _ARXIV_URL_RE.finditer(query):
+            url = m.group(0)
+            if url not in seen:
+                seen.add(url)
+                results.append(ExtractedURL(url=url, url_type="arxiv", arxiv_id=m.group(1)))
+
+        # github
+        for m in _GITHUB_URL_RE.finditer(query):
+            url = m.group(0)
+            if url not in seen:
+                seen.add(url)
+                results.append(ExtractedURL(url=url, url_type="github"))
+
+        # general web (excluding already matched)
+        for m in _GENERAL_URL_RE.finditer(query):
+            url = m.group(0)
+            if url not in seen:
+                seen.add(url)
+                results.append(ExtractedURL(url=url, url_type="web"))
+
+        if results:
+            logger.info("Extracted %d URLs from query: %s", len(results), results)
+
+        return results
 
     @property
     def retry_max_results(self) -> int:

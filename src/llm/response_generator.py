@@ -91,7 +91,7 @@ class ResponseGenerator:
         self,
         query: str,
         context_docs: list[SearchResult],
-        max_tokens: int = 1024,
+        max_tokens: int = 4096,
         temperature: float = 0.7,
         provider: str | None = None,
         model: str | None = None,

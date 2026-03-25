@@ -392,35 +392,34 @@ KG訓練統合タスク（将来）:
 | **Phase 4** | `src/orchestrator/model_router.py` — Graph-aware KG ルーティング | ✅ 完了 |
 | **Phase 4** | `src/llm/error_analyzer.py` / `feedback_analyzer.py` / `usage_tracker.py` / `prompt_cache.py` | ✅ 完了 |
 | **Phase 4** | `src/memory/deduplicator.py` | ✅ 完了 |
+| **Phase 4** | `src/rag/url_fetcher.py` — CRAG URL 直接取得 (arxiv/web) | ✅ 完了 |
+| **Phase 4** | `src/rag/query_expander.py` — URL 検出 (`extract_urls`) | ✅ 完了 |
+| **Phase 4** | `scripts/seed_and_mature.py` — 外部RAG→重複排除→FAISS→Teacher成熟 統合パイプライン | ✅ 完了 |
+| **Phase 4** | `scripts/test_teacher.py` — Teacher テスト CLI (ping/benchmark/ingest) | ✅ 完了 |
+| **Phase 4** | `scripts/questions.txt` — シード質問集 (47問/7カテゴリ) | ✅ 完了 |
+| **Phase 4** | LLM プロバイダー max_tokens=4096 デフォルト + yaml per-provider 設定 | ✅ 完了 |
+| **Phase 4** | OpenAI-compatible: Qwen3.5 thinking model (`reasoning_content`) 対応 | ✅ 完了 |
+| **Phase 4** | CRAG: use_memory/use_rag パラメータ伝播修正 + provider/timeout 伝播 | ✅ 完了 |
 | **Phase 3+** | 学習フレームワーク 本番稼働 (KG CoT / GRPO本番) | ⬜ 将来対応 |
 | **将来** | Neo4j 移行 / PostgreSQL 移行 / vLLM Student 本番 | ⬜ 将来対応 |
 
 ### 次セッションへの引き継ぎ事項
 
-**作業ブランチ**: `claude/gradio-web-gui-1J0AJ`（main からの PR マージ済み）
+**作業ブランチ**: `main`
 
-**完了済み（直近セッション）**
-- `all-MiniLM-L6-v2` ローカル配置 (`data/models/all-MiniLM-L6-v2/`) — HuggingFace Hub 接続不要
-  - `1_Pooling/config.json` を追加（Pooling.__init__ エラー修正）
-- `src/memory/embedder.py` — `cache_dir` 設定時にローカルフルパスを直接渡すよう修正
-- `configs/default.yaml` — `cache_dir: data/models` 追加（オフライン埋め込み有効化）
-- カスタムプロバイダーのローカル隠蔽対応
-  - `configs/llm_config.local.yaml`（git 管理外）にローカルプロバイダーを分離
-  - `src/llm/gateway.py` — llm_config.yaml と llm_config.local.yaml の両方をロード
-  - `src/gui/tabs/settings.py` — 「🔒 ローカル専用」チェックボックス追加（デフォルト ON）
-  - `src/gui/utils.py` — ドロップダウンに両ファイルのプロバイダーを反映
-- `pytest-testmon` 導入・動作確認済み（ローカル開発用、CI では使用しない）
-- `.gitignore` 更新（llm_config.local.yaml / .testmondata 系を除外）
-- unit tests: 36ファイル / 1079件 pass 確認済み
-
-**WSL2 ローカルで最初にやること**
-```bash
-git checkout claude/gradio-web-gui-1J0AJ
-git pull origin claude/gradio-web-gui-1J0AJ
-pip install -e ".[dev]"
-pip install pytest-testmon          # 差分テスト用（任意）
-python -m pytest tests/unit/ --testmon-noselect -q --tb=no  # ベースライン記録
-```
+**完了済み（直近セッション — 2026-03-26）**
+- **CRAG バグ修正**: FAISS 使用が常に ON → `use_memory`/`use_rag` パラメータを CRAG/Agentic リトライに伝播
+- **provider/timeout 伝播**: pipeline → rewriter → gateway の全経路で provider/timeout を伝播
+- **Qwen3.5 thinking model 対応**: `reasoning_content` フィールド抽出、content 空時の警告
+- **max_tokens=4096 デフォルト化**: 全プロバイダー (anthropic/openai/ollama/vllm/openai_compatible)
+- **yaml per-provider 設定**: `llm_config.local.yaml` で max_tokens/timeout/temperature/extra_params を個別指定可能
+- **CRAG URL 直接取得**: クエリ内の URL (arxiv/GitHub/web) を検出し直接コンテンツ取得 → FAISS 保存
+  - `src/rag/query_expander.py` — `extract_urls()` メソッド追加
+  - `src/rag/url_fetcher.py` — 新規（arxiv API / httpx web fetch）
+  - `src/orchestrator/pipeline.py` — Step 1.5 として URL 取得を挿入
+- **Teacher テストスクリプト**: `scripts/test_teacher.py` — 接続テスト/品質ベンチマーク/FAISS投入
+- **統合パイプライン**: `scripts/seed_and_mature.py` — 外部RAG→重複排除→FAISS→Teacher成熟を1パスで実行
+- **シード質問集**: `scripts/questions.txt` — 47問/7カテゴリ
 
 **.env に設定するキー（ローカルでの実行に必要）**
 ```
@@ -431,12 +430,15 @@ GITHUB_TOKEN=...        # 外部RAG（任意・レート制限緩和）
 ```
 
 **残作業 (優先度: 高 — ローカルで実施)**
-- `scripts/seed_memory.py` の実行（埋め込みモデル・ローカル環境準備完了）
+- `scripts/seed_and_mature.py` の実行（統合パイプライン）
   ```bash
-  python scripts/seed_memory.py --query "FAISS vector search" --domain code --dry-run
-  python scripts/seed_memory.py --query "FAISS vector search" --domain code
+  poetry run python scripts/seed_and_mature.py --questions-file scripts/questions.txt --provider lmstudio --domain code
   ```
-- `scripts/mature_memory.py` の動作確認
+- `scripts/test_teacher.py` で Teacher の品質確認
+  ```bash
+  poetry run python scripts/test_teacher.py --provider lmstudio --ping
+  poetry run python scripts/test_teacher.py --provider lmstudio --benchmark
+  ```
 - オーケストレーター起動 + E2E 動作確認
   ```bash
   python -m uvicorn src.orchestrator.server:app --port 8000 --reload
@@ -453,8 +455,17 @@ GITHUB_TOKEN=...        # 外部RAG（任意・レート制限緩和）
 - `src/training/algorithms/` — 骨格実装のみ。VERL/trl との実際の統合が必要
 - KG 永続化: NetworkX + pickle → Neo4j 移行スクリプト未実装
 - Docker E2E テスト: Docker 環境が必要
+- `tests/unit/test_alias_extractor.py` — pytest-asyncio 設定問題で1件失敗（既知）
 
-**ローカルモデルを Teacher にする場合の注意**
-- データ構造・スキーマへの破壊的影響なし
-- KG Entity 抽出とメモリ品質審査はモデル精度依存（高影響）
+**ローカルモデルを Teacher にする場合の設定例**
+```yaml
+# configs/llm_config.local.yaml
+providers:
+  lmstudio:
+    type: openai_compatible
+    base_url: http://192.168.2.104:52624/v1
+    default_model: qwen3.5-122b-a10b
+    timeout: 3600
+    max_tokens: 32767
+```
 - `teacher_registry.py` の EWMA が信頼度を自動追跡・調整する
