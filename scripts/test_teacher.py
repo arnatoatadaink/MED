@@ -42,6 +42,12 @@ from pathlib import Path
 _ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(_ROOT))
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv(_ROOT / ".env")
+except ImportError:
+    pass
+
 
 # ============================================================================
 # テストケース定義
@@ -504,8 +510,8 @@ def main() -> None:
     parser.add_argument("--list-providers", action="store_true", help="List available providers")
     parser.add_argument("--ingest", action="store_true", help="Ingest passed results to FAISS")
     parser.add_argument("--domain", default="code", choices=["code", "academic", "general"])
-    parser.add_argument("--timeout", type=float, default=300, help="Request timeout (seconds)")
-    parser.add_argument("--max-tokens", type=int, default=2048, help="Max output tokens")
+    parser.add_argument("--timeout", type=float, default=3600, help="Request timeout (seconds)")
+    parser.add_argument("--max-tokens", type=int, default=4096, help="Max output tokens")
     parser.add_argument("--output", type=str, default=None, help="Save results to JSON file")
     args = parser.parse_args()
 
@@ -537,21 +543,25 @@ def main() -> None:
         asyncio.run(run_free_prompt(args.provider, args.model, args.prompt, args.timeout, args.max_tokens))
         return
 
-    # テスト実行
+    # テスト実行（単一イベントループで全スイートを実行）
     suites_to_run = list(TEST_SUITES.keys()) if args.test in (None, "all") else [args.test]
 
-    # まず ping
-    if not asyncio.run(ping_provider(args.provider, args.model, args.timeout)):
-        print("\n[ABORT] Connection failed. Check provider and try --ping first.")
-        sys.exit(1)
+    async def _run_all() -> list[dict]:
+        # まず ping
+        if not await ping_provider(args.provider, args.model, args.timeout):
+            print("\n[ABORT] Connection failed. Check provider and try --ping first.")
+            sys.exit(1)
 
-    all_results: list[dict] = []
-    for suite_key in suites_to_run:
-        suite_name, cases = TEST_SUITES[suite_key]
-        results = asyncio.run(
-            run_test_suite(args.provider, args.model, cases, suite_name, args.timeout, args.max_tokens)
-        )
-        all_results.extend(results)
+        all_results: list[dict] = []
+        for suite_key in suites_to_run:
+            suite_name, cases = TEST_SUITES[suite_key]
+            results = await run_test_suite(
+                args.provider, args.model, cases, suite_name, args.timeout, args.max_tokens
+            )
+            all_results.extend(results)
+        return all_results
+
+    all_results = asyncio.run(_run_all())
 
     print_summary(all_results)
 
