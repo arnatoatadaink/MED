@@ -4,6 +4,19 @@ verify_results: true
 chunk_size: 512
 chunk_overlap: 50
 
+# ── Seed 品質フィルタ ──────────────────────────────────
+seed_filters:
+  # ドメイン関連性: クエリとコンテンツの cosine similarity 閾値
+  # この値未満の結果は除外する
+  relevance_threshold: 0.25
+
+  # 最小コンテンツ品質フィルタ（デフォルト OFF）
+  # ON にすると、コードブロックを含まない短いコンテンツを除外する
+  min_quality_filter:
+    enabled: false
+    min_length: 500       # コード無しの場合に要求する最小文字数
+    # コードを含む場合はこの制限を免除する
+
 sources:
   github:
     enabled: true
@@ -14,8 +27,8 @@ sources:
   stackoverflow:
     enabled: true
     max_results: 5
-    min_score: 5
-    accepted_only: false
+    min_answer_score: 1     # 回答の最低スコア（accepted は免除）
+    prefer_accepted: true   # accepted answer を優先する
 
   tavily:
     enabled: true
@@ -29,3 +42,6 @@ sources:
       - "cs.AI"
       - "cs.LG"
       - "cs.CL"
+      - "cs.IR"
+      - "cs.DB"
+      - "stat.ML"

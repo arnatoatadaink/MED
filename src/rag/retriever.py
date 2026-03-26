@@ -86,23 +86,53 @@ class RetrieverRouter:
         self._register_defaults()
 
     def _register_defaults(self) -> None:
-        """デフォルトのレトリーバーを登録する。"""
+        """デフォルトのレトリーバーを登録する。retrievers.yaml の設定を反映。"""
         from src.rag.retrievers.arxiv import ArXivRetriever
         from src.rag.retrievers.github import GitHubRetriever
         from src.rag.retrievers.stackoverflow import StackOverflowRetriever
         from src.rag.retrievers.tavily import TavilyRetriever
 
+        cfg = self._load_config()
+        sources_cfg = cfg.get("sources", {})
+
+        # SO 設定
+        so_cfg = sources_cfg.get("stackoverflow", {})
+        so_retriever = StackOverflowRetriever(
+            min_answer_score=int(so_cfg.get("min_answer_score", 1)),
+            prefer_accepted=bool(so_cfg.get("prefer_accepted", True)),
+        )
+
+        # ArXiv 設定
+        arxiv_cfg = sources_cfg.get("arxiv", {})
+        arxiv_categories = arxiv_cfg.get("categories", None)
+        arxiv_retriever = ArXivRetriever(categories=arxiv_categories)
+
         for retriever in [
             GitHubRetriever(),
-            StackOverflowRetriever(),
+            so_retriever,
             TavilyRetriever(),
-            ArXivRetriever(),
+            arxiv_retriever,
         ]:
             self._retrievers[retriever.source_name] = retriever
             logger.debug(
                 "Registered retriever: %s (available=%s)",
                 retriever.source_name, retriever.is_available(),
             )
+
+    @staticmethod
+    def _load_config() -> dict:
+        """retrievers.yaml を読み込む。"""
+        from pathlib import Path
+
+        import yaml
+
+        cfg_path = Path(__file__).parent.parent.parent / "configs" / "retrievers.yaml"
+        try:
+            with open(cfg_path, encoding="utf-8") as f:
+                return yaml.safe_load(f) or {}
+        except Exception:
+            logger.debug("Could not load retrievers.yaml; using defaults")
+            return {}
 
     def register(self, retriever: BaseRetriever) -> None:
         """カスタムレトリーバーを登録する。"""

@@ -102,6 +102,28 @@ _BUILTIN_QUESTIONS = [
 ]
 
 
+def _load_seed_filters() -> dict:
+    """retrievers.yaml から seed_filters 設定を読み込む。"""
+    import yaml
+
+    cfg_path = _ROOT / "configs" / "retrievers.yaml"
+    try:
+        with open(cfg_path, encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+        return cfg.get("seed_filters", {})
+    except Exception:
+        logger.warning("Could not load seed_filters from retrievers.yaml; using defaults")
+        return {}
+
+
+def _has_code(content: str) -> bool:
+    """コンテンツにコードブロックが含まれるか判定する。"""
+    return any(marker in content for marker in [
+        "```", "\ndef ", "\nimport ", "\nclass ", "\nfunction ",
+        "def ", "import ", "class ", "function ",
+    ])
+
+
 async def seed_and_mature(
     queries: list[str],
     domain: str,
@@ -111,7 +133,9 @@ async def seed_and_mature(
     skip_mature: bool,
     dedup_threshold: float,
 ) -> dict:
-    """外部RAG取得 → 重複排除 → FAISS投入 → Teacher成熟。"""
+    """外部RAG取得 → 重複排除 → 関連性フィルタ → FAISS投入 → Teacher成熟。"""
+    import numpy as np
+
     from src.memory.deduplicator import Deduplicator
     from src.memory.embedder import Embedder
     from src.memory.memory_manager import MemoryManager
@@ -122,6 +146,8 @@ async def seed_and_mature(
         "queries": len(queries),
         "retrieved": 0,
         "duplicates": 0,
+        "irrelevant": 0,
+        "quality_filtered": 0,
         "added": 0,
         "reviewed": 0,
         "approved": 0,
@@ -134,6 +160,18 @@ async def seed_and_mature(
         for i, q in enumerate(queries):
             logger.info("  [%d] %s", i + 1, q)
         return stats
+
+    # Seed フィルタ設定
+    seed_filters = _load_seed_filters()
+    relevance_threshold = float(seed_filters.get("relevance_threshold", 0.25))
+    quality_cfg = seed_filters.get("min_quality_filter", {})
+    quality_filter_enabled = bool(quality_cfg.get("enabled", False))
+    quality_min_length = int(quality_cfg.get("min_length", 500))
+
+    logger.info(
+        "Seed filters: relevance_threshold=%.2f, quality_filter=%s (min_len=%d)",
+        relevance_threshold, quality_filter_enabled, quality_min_length,
+    )
 
     retriever = RetrieverRouter()
     embedder = Embedder()
@@ -156,7 +194,7 @@ async def seed_and_mature(
     _SOURCE_MAP = {s.value: s for s in SourceType}
     new_doc_ids: list[str] = []
 
-    # ── Phase 1: 外部RAG → 重複排除 → FAISS投入 ──────────
+    # ── Phase 1: 外部RAG → 関連性フィルタ → 重複排除 → FAISS投入 ──────────
     logger.info("=== Phase 1: Seed (%d queries, top_k=%d) ===", len(queries), top_k)
 
     for qi, query in enumerate(queries):
@@ -171,10 +209,34 @@ async def seed_and_mature(
 
         stats["retrieved"] += len(results)
 
+        # クエリの埋め込みを事前計算（ドメイン関連性チェック用）
+        query_vec = embedder.embed(query)
+
         for result in results:
             content = getattr(result, "content", "")
             if not content or len(content.strip()) < 50:
                 continue
+
+            # ── ドメイン関連性チェック（cosine similarity）──
+            content_vec = embedder.embed(content[:1000])  # 先頭1000文字で計算
+            similarity = float(np.dot(query_vec, content_vec))
+            if similarity < relevance_threshold:
+                logger.debug(
+                    "  Irrelevant (sim=%.3f < %.2f): %s",
+                    similarity, relevance_threshold, content[:60],
+                )
+                stats["irrelevant"] += 1
+                continue
+
+            # ── 最小品質フィルタ（configurable, default OFF）──
+            if quality_filter_enabled:
+                if not _has_code(content) and len(content.strip()) < quality_min_length:
+                    logger.debug(
+                        "  Quality filtered (no code, len=%d < %d): %s",
+                        len(content.strip()), quality_min_length, content[:60],
+                    )
+                    stats["quality_filtered"] += 1
+                    continue
 
             # 重複チェック（ハッシュ）
             content_hash = dedup.content_hash(content)
@@ -208,13 +270,14 @@ async def seed_and_mature(
                 stats["errors"] += 1
 
         logger.info(
-            "  Retrieved %d, added %d new (total: %d)",
-            len(results), stats["added"], len(new_doc_ids),
+            "  Retrieved %d, added %d new (irrelevant=%d, total: %d)",
+            len(results), stats["added"], stats["irrelevant"], len(new_doc_ids),
         )
 
     logger.info(
-        "Phase 1 done: retrieved=%d, duplicates=%d, added=%d",
-        stats["retrieved"], stats["duplicates"], stats["added"],
+        "Phase 1 done: retrieved=%d, irrelevant=%d, quality_filtered=%d, duplicates=%d, added=%d",
+        stats["retrieved"], stats["irrelevant"], stats["quality_filtered"],
+        stats["duplicates"], stats["added"],
     )
 
     # ── Phase 2: Teacher 成熟（審査 + 難易度タグ） ────────

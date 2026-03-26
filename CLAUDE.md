@@ -315,6 +315,17 @@ KG訓練統合タスク（将来）:
 - 拡張アルゴリズム (PPO, DPO) 骨格実装 ✅ **完了**（本番チューニングは将来）
 - ベンチマーク骨格 (`tests/unit/test_phase4.py`, `test_phase5.py`) ✅ **完了**
 
+### Phase 5: NEAT Context-Sensitive Search — ⬜ **計画策定済み**
+`plan_neat_hyp_e.md` に基づき、FAISS検索結果をコンテキスト依存で再スコアリングする。
+
+- Phase 5-1: `AssociationFn` — numpy版 MLP（3項関数: query, candidate, context）
+  - `cosine(q,c)`, `cosine(q,ctx)`, `cosine(c,ctx)`, `cosine(q-ctx,c)` の加重合計
+  - 重みは学習可能（JSON保存・ロード対応）
+- Phase 5-2: `ContextSensitiveSearch` — FAISS k*3 候補取得 → association_fn リランク → top-k
+  - faiss 未インストール時は numpy ブルートフォースにフォールバック
+- Phase 5-3: MED 統合 — 既存 FAISS モジュールへの差し込み、context_emb 生成元の決定
+- 将来: `AssociationFn` のアーキテクチャを NEAT (CPPN) で進化させる
+
 ## 設計原則
 
 - **抽象IFファースト**: 全モジュールはインターフェース→実装の順で作成
@@ -345,6 +356,7 @@ KG訓練統合タスク（将来）:
 - `docs/project_plan_v4.md` — 正式計画書(本版)
 - `plan.md` — Knowledge Graph統合計画
 - `plan_data.md` — データ世代管理計画（restic + NAS）
+- `plan_neat_hyp_e.md` — NEAT Context-Sensitive Search 計画（association_fn によるコンテキスト依存リランキング）
 
 参照アーキテクチャ・論文:
 - GraphRAG (Microsoft, 2024) — Vector + KG統合の基本設計
@@ -400,6 +412,7 @@ KG訓練統合タスク（将来）:
 | **Phase 4** | LLM プロバイダー max_tokens=4096 デフォルト + yaml per-provider 設定 | ✅ 完了 |
 | **Phase 4** | OpenAI-compatible: Qwen3.5 thinking model (`reasoning_content`) 対応 | ✅ 完了 |
 | **Phase 4** | CRAG: use_memory/use_rag パラメータ伝播修正 + provider/timeout 伝播 | ✅ 完了 |
+| **Phase 5** | NEAT Context-Sensitive Search — `association_fn(q, c, ctx)` リランキング | ⬜ 計画策定済み (`plan_neat_hyp_e.md`) |
 | **Phase 3+** | 学習フレームワーク 本番稼働 (KG CoT / GRPO本番) | ⬜ 将来対応 |
 | **将来** | Neo4j 移行 / PostgreSQL 移行 / vLLM Student 本番 | ⬜ 将来対応 |
 
@@ -449,6 +462,7 @@ GITHUB_TOKEN=...        # 外部RAG（任意・レート制限緩和）
 **残作業 (優先度: 中)**
 - `data/faiss_indices/` へのシードデータ投入（目標: 10,000 docs / confidence > 0.7 / 実行成功率 > 80%）
 - Phase 3+: GRPO + TinyLoRA 本番学習パイプラインの実稼働
+- Phase 5: NEAT Context-Sensitive Search 実装（`plan_neat_hyp_e.md` 参照）
 
 **技術的負債**
 - `src/memory/maturation/seed_builder.py` — Teacher API 呼び出し部分はスタブ。実プロバイダー接続時に完成

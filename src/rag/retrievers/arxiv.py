@@ -1,8 +1,12 @@
-"""src/rag/retrievers/arxiv.py — ArXiv 論文検索レトリーバー"""
+"""src/rag/retrievers/arxiv.py — ArXiv 論文検索レトリーバー
+
+カテゴリフィルタを適用し、プロジェクト関連分野の論文のみを返す。
+"""
 
 from __future__ import annotations
 
 import logging
+import re
 import xml.etree.ElementTree as ET
 
 from src.rag.retriever import BaseRetriever, RawResult
@@ -12,9 +16,26 @@ logger = logging.getLogger(__name__)
 _ARXIV_API = "https://export.arxiv.org/api/query"
 _NS = {"atom": "http://www.w3.org/2005/Atom"}
 
+# デフォルトの許可カテゴリ（cs.AI, cs.LG, cs.CL, cs.IR, cs.DB, stat.ML）
+_DEFAULT_CATEGORIES = ["cs.AI", "cs.LG", "cs.CL", "cs.IR", "cs.DB", "stat.ML"]
+
 
 class ArXivRetriever(BaseRetriever):
-    """ArXiv API を使った学術論文検索。API キー不要。"""
+    """ArXiv API を使った学術論文検索。
+
+    カテゴリフィルタを API クエリに適用し、関連分野の論文に限定する。
+
+    Args:
+        categories: 許可する ArXiv カテゴリリスト。
+            None の場合デフォルトカテゴリ（cs.AI, cs.LG, cs.CL 等）を使用。
+            空リスト [] の場合はフィルタなし（全カテゴリ）。
+    """
+
+    def __init__(self, categories: list[str] | None = None) -> None:
+        if categories is None:
+            self._categories = list(_DEFAULT_CATEGORIES)
+        else:
+            self._categories = categories
 
     @property
     def source_name(self) -> str:
@@ -24,13 +45,13 @@ class ArXivRetriever(BaseRetriever):
         return True  # 公開 API のため常に利用可能
 
     async def search(self, query: str, max_results: int = 5) -> list[RawResult]:
-        try:
-            import httpx
-        except ImportError:
-            raise RuntimeError("httpx not installed. Run: pip install httpx")
+        import httpx
+
+        # カテゴリフィルタ付きクエリ構築
+        search_query = self._build_query(query)
 
         params = {
-            "search_query": f"all:{query}",
+            "search_query": search_query,
             "start": 0,
             "max_results": max_results,
             "sortBy": "relevance",
@@ -58,6 +79,12 @@ class ArXivRetriever(BaseRetriever):
             summary = summary_el.text.strip() if summary_el is not None else ""
             arxiv_url = id_el.text.strip() if id_el is not None else ""
 
+            # カテゴリ抽出
+            categories = [
+                c.get("term", "")
+                for c in entry.findall("atom:category", _NS)
+            ]
+
             # 著者
             authors = [
                 a.findtext("atom:name", namespaces=_NS) or ""
@@ -73,7 +100,26 @@ class ArXivRetriever(BaseRetriever):
                 metadata={
                     "authors": authors,
                     "published": entry.findtext("atom:published", namespaces=_NS) or "",
+                    "categories": categories,
                 },
             ))
 
+        if results:
+            logger.info(
+                "ArXiv search: query=%r categories=%s → %d results",
+                query[:50], self._categories or ["all"], len(results),
+            )
         return results
+
+    def _build_query(self, query: str) -> str:
+        """カテゴリフィルタ付き ArXiv API クエリを構築する。
+
+        例: categories=["cs.AI","cs.LG"] の場合
+            → "all:FAISS vector search AND (cat:cs.AI OR cat:cs.LG)"
+        """
+        base = f"all:{query}"
+        if not self._categories:
+            return base
+
+        cat_filter = " OR ".join(f"cat:{c}" for c in self._categories)
+        return f"{base} AND ({cat_filter})"
