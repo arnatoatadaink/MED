@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
@@ -38,12 +39,43 @@ class RawResult:
 
 
 # ============================================================================
+# レート制限
+# ============================================================================
+
+# ソース別のリクエスト間隔（秒）。デフォルト1秒、ArXivは利用規約に基づき3秒。
+_RATE_LIMIT_INTERVALS: dict[str, float] = {
+    "arxiv": 3.0,
+}
+_DEFAULT_RATE_LIMIT = 1.0
+
+# ソース別の最終リクエスト時刻
+_last_request_times: dict[str, float] = {}
+
+
+async def _rate_limit_wait(source: str) -> None:
+    """ソース別のレート制限待機。各 API に対して最低間隔を保証する。"""
+    interval = _RATE_LIMIT_INTERVALS.get(source, _DEFAULT_RATE_LIMIT)
+    last = _last_request_times.get(source, 0.0)
+    now = time.monotonic()
+    elapsed = now - last
+    if elapsed < interval:
+        wait = interval - elapsed
+        logger.debug("Rate limit [%s]: waiting %.1fs", source, wait)
+        await asyncio.sleep(wait)
+    _last_request_times[source] = time.monotonic()
+
+
+# ============================================================================
 # 抽象基底クラス
 # ============================================================================
 
 
 class BaseRetriever(ABC):
-    """外部検索ソースの抽象基底クラス。"""
+    """外部検索ソースの抽象基底クラス。
+
+    サブクラスは _do_search を実装する。search() がレート制限を適用した上で
+    _do_search を呼び出す。
+    """
 
     @property
     @abstractmethod
@@ -52,14 +84,19 @@ class BaseRetriever(ABC):
         ...
 
     @abstractmethod
-    async def search(self, query: str, max_results: int = 5) -> list[RawResult]:
-        """検索クエリを実行し、結果を返す。"""
+    async def _do_search(self, query: str, max_results: int = 5) -> list[RawResult]:
+        """検索クエリを実行し、結果を返す（サブクラスで実装）。"""
         ...
 
     @abstractmethod
     def is_available(self) -> bool:
         """APIキー等の設定が揃っているか。"""
         ...
+
+    async def search(self, query: str, max_results: int = 5) -> list[RawResult]:
+        """レート制限付き検索。サブクラスは _do_search を実装する。"""
+        await _rate_limit_wait(self.source_name)
+        return await self._do_search(query, max_results)
 
 
 # ============================================================================

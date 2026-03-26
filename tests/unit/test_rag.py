@@ -27,7 +27,7 @@ class MockRetriever(BaseRetriever):
     def is_available(self) -> bool:
         return self._available
 
-    async def search(self, query: str, max_results: int = 5) -> list[RawResult]:
+    async def _do_search(self, query: str, max_results: int = 5) -> list[RawResult]:
         self.calls.append(query)
         return self._results[:max_results]
 
@@ -40,7 +40,7 @@ class FailingRetriever(BaseRetriever):
     def is_available(self) -> bool:
         return True
 
-    async def search(self, query: str, max_results: int = 5) -> list[RawResult]:
+    async def _do_search(self, query: str, max_results: int = 5) -> list[RawResult]:
         raise RuntimeError("Search failed")
 
 

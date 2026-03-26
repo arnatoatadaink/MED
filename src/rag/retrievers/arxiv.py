@@ -1,12 +1,15 @@
 """src/rag/retrievers/arxiv.py — ArXiv 論文検索レトリーバー
 
 カテゴリフィルタを適用し、プロジェクト関連分野の論文のみを返す。
+
+ArXiv API 利用規約に基づき、リクエスト間隔を最低3秒空ける。
+https://info.arxiv.org/help/api/tou.html
+レート制限は BaseRetriever 共通機構で管理（retriever.py の _RATE_LIMIT_INTERVALS）。
 """
 
 from __future__ import annotations
 
 import logging
-import re
 import xml.etree.ElementTree as ET
 
 from src.rag.retriever import BaseRetriever, RawResult
@@ -24,6 +27,7 @@ class ArXivRetriever(BaseRetriever):
     """ArXiv API を使った学術論文検索。
 
     カテゴリフィルタを API クエリに適用し、関連分野の論文に限定する。
+    ArXiv API の利用規約（3秒/1リクエスト）は BaseRetriever のレート制限で遵守。
 
     Args:
         categories: 許可する ArXiv カテゴリリスト。
@@ -44,7 +48,7 @@ class ArXivRetriever(BaseRetriever):
     def is_available(self) -> bool:
         return True  # 公開 API のため常に利用可能
 
-    async def search(self, query: str, max_results: int = 5) -> list[RawResult]:
+    async def _do_search(self, query: str, max_results: int = 5) -> list[RawResult]:
         import httpx
 
         # カテゴリフィルタ付きクエリ構築

@@ -26,7 +26,7 @@ class GitHubRetriever(BaseRetriever):
     def is_available(self) -> bool:
         return bool(self._token)
 
-    async def search(self, query: str, max_results: int = 5) -> list[RawResult]:
+    async def _do_search(self, query: str, max_results: int = 5) -> list[RawResult]:
         try:
             import httpx
         except ImportError:

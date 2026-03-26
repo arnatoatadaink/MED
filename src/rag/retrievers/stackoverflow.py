@@ -53,7 +53,7 @@ class StackOverflowRetriever(BaseRetriever):
     def is_available(self) -> bool:
         return True  # 公開 API のため常に利用可能
 
-    async def search(self, query: str, max_results: int = 5) -> list[RawResult]:
+    async def _do_search(self, query: str, max_results: int = 5) -> list[RawResult]:
         import httpx
 
         async with httpx.AsyncClient(timeout=30.0) as client:
