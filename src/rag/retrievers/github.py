@@ -62,6 +62,7 @@ class GitHubRetriever(BaseRetriever):
                 source=self.source_name,
                 score=float(item.get("score", 0)),
                 metadata={
+                    "content_type": "code_file",
                     "repo": repo.get("full_name", ""),
                     "language": repo.get("language", ""),
                     "stars": repo.get("stargazers_count", 0),

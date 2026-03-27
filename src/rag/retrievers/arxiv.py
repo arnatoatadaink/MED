@@ -102,6 +102,7 @@ class ArXivRetriever(BaseRetriever):
                 source=self.source_name,
                 score=1.0,  # ArXiv は relevance スコアを提供しないため固定
                 metadata={
+                    "content_type": "paper_abstract",
                     "authors": authors,
                     "published": entry.findtext("atom:published", namespaces=_NS) or "",
                     "categories": categories,

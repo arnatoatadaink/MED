@@ -47,15 +47,27 @@ class TavilyRetriever(BaseRetriever):
 
         results: list[RawResult] = []
         for item in data.get("results", [])[:max_results]:
+            url = item.get("url", "")
             results.append(RawResult(
                 title=item.get("title", ""),
                 content=item.get("content", ""),
-                url=item.get("url", ""),
+                url=url,
                 source=self.source_name,
                 score=float(item.get("score", 0.0)),
                 metadata={
                     "published_date": item.get("published_date", ""),
+                    "content_type": "web_article",
+                    "domain": _extract_domain(url),
                 },
             ))
 
         return results
+
+
+def _extract_domain(url: str) -> str:
+    """URL からドメインを抽出する。"""
+    try:
+        from urllib.parse import urlparse
+        return urlparse(url).netloc
+    except Exception:
+        return ""

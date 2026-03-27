@@ -65,7 +65,7 @@ class StackOverflowRetriever(BaseRetriever):
                 "order": "desc",
                 "sort": "relevance",
                 "filter": "withbody",
-                "accepted": "True",  # 回答済み質問のみ
+                "answers": 1,  # 回答が1件以上ある質問
             }
             resp = await client.get(f"{_API_BASE}/search/advanced", params=params)
             resp.raise_for_status()
@@ -108,6 +108,7 @@ class StackOverflowRetriever(BaseRetriever):
             q_title = q.get("title", "")
             q_link = q.get("link", "")
             q_tags = q.get("tags", [])
+            q_body = _strip_html(q.get("body", ""))[:1000]  # 質問本文（CoTデータ用）
 
             ans_list = answers_by_q.get(qid, [])
 
@@ -134,27 +135,30 @@ class StackOverflowRetriever(BaseRetriever):
                         "is_answered": True,
                         "is_accepted_answer": is_accepted,
                         "answer_score": ans_score,
+                        "question_score": q.get("score", 0),
                         "view_count": q.get("view_count", 0),
                         "tags": q_tags,
                         "content_type": "answer",
+                        "question_body": q_body,
                     },
                 ))
             else:
                 # フォールバック: 回答なしの場合のみ質問本文を使用（低スコア付与）
-                body = _strip_html(q.get("body", ""))
                 logger.debug("No suitable answer for q=%d, using question body as fallback", qid)
                 results.append(RawResult(
                     title=q_title,
-                    content=body[:2000],
+                    content=q_body[:2000],
                     url=q_link,
                     source=self.source_name,
                     score=max(float(q.get("score", 0)) * 0.3, 0.1),  # 質問は低スコア
                     metadata={
                         "answer_count": q.get("answer_count", 0),
                         "is_answered": q.get("is_answered", False),
+                        "question_score": q.get("score", 0),
                         "view_count": q.get("view_count", 0),
                         "tags": q_tags,
                         "content_type": "question_fallback",
+                        "question_body": q_body,
                     },
                 ))
 
