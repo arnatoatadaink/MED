@@ -259,6 +259,7 @@ async def seed_and_mature(
                         ),
                         url=getattr(result, "url", ""),
                         title=getattr(result, "title", ""),
+                        extra=getattr(result, "metadata", {}) or {},
                     ),
                 )
                 doc_id = await mm.add(doc)
