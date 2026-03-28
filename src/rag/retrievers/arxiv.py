@@ -10,9 +10,22 @@ https://info.arxiv.org/help/api/tou.html
 from __future__ import annotations
 
 import logging
+import re
 import xml.etree.ElementTree as ET
 
 from src.rag.retriever import BaseRetriever, RawResult
+
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_LATEX_CMD_RE = re.compile(r"\\[a-zA-Z]+\{([^}]*)\}")  # \cmd{text} → text
+_LATEX_MATH_RE = re.compile(r"\$\$?[^$]+\$\$?")        # $...$ / $$...$$ → [MATH]
+
+
+def _clean_arxiv_text(text: str) -> str:
+    """ArXiv アブストラクトの HTML タグと LaTeX を除去して読みやすいテキストにする。"""
+    text = _HTML_TAG_RE.sub(" ", text)
+    text = _LATEX_CMD_RE.sub(r"\1", text)
+    text = _LATEX_MATH_RE.sub("[MATH]", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +92,8 @@ class ArXivRetriever(BaseRetriever):
             summary_el = entry.find("atom:summary", _NS)
             id_el = entry.find("atom:id", _NS)
 
-            title = title_el.text.strip() if title_el is not None else ""
-            summary = summary_el.text.strip() if summary_el is not None else ""
+            title = _clean_arxiv_text(title_el.text or "") if title_el is not None else ""
+            summary = _clean_arxiv_text(summary_el.text or "") if summary_el is not None else ""
             arxiv_url = id_el.text.strip() if id_el is not None else ""
 
             # カテゴリ抽出

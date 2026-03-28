@@ -4,8 +4,17 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 
 from src.rag.retriever import BaseRetriever, RawResult
+
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _clean_web_text(text: str) -> str:
+    """Web 記事コンテンツの HTML タグを除去して正規化する。"""
+    text = _HTML_TAG_RE.sub(" ", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +58,8 @@ class TavilyRetriever(BaseRetriever):
         for item in data.get("results", [])[:max_results]:
             url = item.get("url", "")
             results.append(RawResult(
-                title=item.get("title", ""),
-                content=item.get("content", ""),
+                title=_clean_web_text(item.get("title", "")),
+                content=_clean_web_text(item.get("content", "")),
                 url=url,
                 source=self.source_name,
                 score=float(item.get("score", 0.0)),

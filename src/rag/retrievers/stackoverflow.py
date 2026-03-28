@@ -20,11 +20,25 @@ logger = logging.getLogger(__name__)
 _API_BASE = "https://api.stackexchange.com/2.3"
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 
+# プロンプトインジェクションによく使われるパターン
+_INJECT_RE = re.compile(
+    r"(ignore\s+(previous|above|all)\s+instructions?|"
+    r"system\s*prompt|<\|im_start\|>|<\|im_end\|>|"
+    r"\[INST\]|\[/INST\]|###\s*instruction|"
+    r"you\s+are\s+now|forget\s+everything|disregard\s+)",
+    re.IGNORECASE,
+)
+
 
 def _strip_html(html: str) -> str:
     """HTML タグを除去してプレーンテキストにする。"""
     text = _HTML_TAG_RE.sub(" ", html)
     return re.sub(r"\s+", " ", text).strip()
+
+
+def _sanitize(text: str) -> str:
+    """プロンプトインジェクションパターンを無害化する。"""
+    return _INJECT_RE.sub("[REDACTED]", text)
 
 
 class StackOverflowRetriever(BaseRetriever):
@@ -108,7 +122,7 @@ class StackOverflowRetriever(BaseRetriever):
             q_title = q.get("title", "")
             q_link = q.get("link", "")
             q_tags = q.get("tags", [])
-            q_body = _strip_html(q.get("body", ""))[:1000]  # 質問本文（CoTデータ用）
+            q_body = _sanitize(_strip_html(q.get("body", "")))[:1000]  # 質問本文（CoTデータ用）
 
             ans_list = answers_by_q.get(qid, [])
 
@@ -116,7 +130,7 @@ class StackOverflowRetriever(BaseRetriever):
             best_ans = self._pick_best_answer(ans_list, q.get("accepted_answer_id"))
 
             if best_ans:
-                body = _strip_html(best_ans.get("body", ""))
+                body = _sanitize(_strip_html(best_ans.get("body", "")))
                 ans_score = best_ans.get("score", 0)
                 is_accepted = best_ans.get("is_accepted", False)
 
