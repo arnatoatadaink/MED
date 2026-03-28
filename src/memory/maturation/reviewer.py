@@ -45,9 +45,23 @@ Quality criteria:
 - Clarity: Is it clear and well-written?
 - Relevance: Is it relevant for technical learning?
 
+Note on domain_flag:
+- on_domain: CS/ML content. Apply standard quality criteria.
+- off_domain: Non-CS/ML field (physics, math, etc.). This content is intentionally
+  retained for associative memory diversity. Approve if the document is high-quality
+  within its own field, even if not directly CS/ML relevant. Lower the relevance
+  weight and focus on accuracy and clarity instead.
+
 Approve if quality_score >= 0.6"""
 
-_REVIEW_PROMPT = "Review this document:\n\n{text}"
+_REVIEW_PROMPT = """\
+Document metadata:
+- content_type: {content_type}
+- categories: {categories}
+- domain_flag: {domain_flag}
+
+Document text:
+{text}"""
 
 
 @dataclass
@@ -93,8 +107,18 @@ class MemoryReviewer:
         Returns:
             ReviewResult オブジェクト。
         """
+        import json as _json
         text = doc.content[:self._max_text]
-        prompt = _REVIEW_PROMPT.format(text=text)
+        extra = doc.source.extra or {}
+        content_type = extra.get("content_type", "unknown")
+        categories = ", ".join(extra.get("categories", [])) or "unknown"
+        domain_flag = extra.get("domain_flag", "unknown")
+        prompt = _REVIEW_PROMPT.format(
+            content_type=content_type,
+            categories=categories,
+            domain_flag=domain_flag,
+            text=text,
+        )
 
         try:
             response = await self._gateway.complete(
