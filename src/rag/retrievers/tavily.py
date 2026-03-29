@@ -42,7 +42,7 @@ class TavilyRetriever(BaseRetriever):
             "api_key": self._api_key,
             "query": query,
             "max_results": max_results,
-            "search_depth": "basic",
+            "search_depth": "advanced",
             "include_raw_content": False,
         }
 

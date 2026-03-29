@@ -214,7 +214,10 @@ async def seed_and_mature(
 
         for result in results:
             content = getattr(result, "content", "")
-            if not content or len(content.strip()) < 50:
+            source = getattr(result, "source", "")
+            min_len = 300 if source == "tavily" else 50
+            if not content or len(content.strip()) < min_len:
+                stats["quality_filtered"] += 1
                 continue
 
             # ── ドメイン関連性チェック（cosine similarity）──
