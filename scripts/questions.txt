@@ -9,6 +9,10 @@ How to implement Product Quantization (PQ) with FAISS?
 FAISS GPU acceleration with CUDA examples
 How to migrate from IndexFlatIP to IndexIVFPQ in FAISS?
 FAISS batch search performance optimization techniques
+HNSW index vs IVF index trade-offs for approximate nearest neighbor search
+ScaNN vs FAISS vs Annoy benchmark comparison for ANN search
+FAISS index serialization and deserialization for persistent storage
+How to tune nprobe and nlist parameters in FAISS IVF index?
 
 # === RAG (Retrieval Augmented Generation) ===
 How to implement RAG (Retrieval Augmented Generation) from scratch?
@@ -17,6 +21,12 @@ HyDE (Hypothetical Document Embeddings) implementation in Python
 Reciprocal Rank Fusion (RRF) algorithm for combining search results
 Self-RAG: adaptive retrieval routing implementation
 GraphRAG: combining knowledge graphs with vector search
+HippoRAG: hippocampus-inspired RAG with associative memory
+FLARE: forward-looking active retrieval augmented generation
+Modular RAG architecture patterns and design decisions
+Multi-hop question answering with iterative RAG retrieval
+RAG evaluation metrics: faithfulness, relevance, and groundedness
+Context compression for RAG: reducing retrieved document length
 
 # === Embedding / Reranking ===
 How to use sentence-transformers for text embedding?
@@ -24,6 +34,11 @@ Cross-encoder reranker implementation for document reranking
 Learning to Rank (LTR) with linear models for search
 all-MiniLM-L6-v2 vs UniXcoder embedding model comparison
 Bi-encoder vs cross-encoder trade-offs for retrieval
+ColBERT late interaction model for efficient document retrieval
+Jina embeddings multi-lingual text embedding for retrieval
+BGE reranker implementation for semantic search pipeline
+Matryoshka representation learning for variable-length embeddings
+Embedding model fine-tuning with contrastive learning
 
 # === Knowledge Graph ===
 How to build a knowledge graph with NetworkX in Python?
@@ -31,6 +46,11 @@ Entity extraction from text using LLM APIs
 Neo4j Cypher query examples for graph traversal
 Knowledge graph entity linking and relation extraction
 NetworkX to Neo4j migration strategies
+Relation extraction with LLMs for knowledge graph construction
+Knowledge graph embedding methods: TransE, RotatE, ComplEx
+Named entity recognition with spaCy and transformer models
+Graph neural networks for knowledge graph reasoning
+Temporal knowledge graphs for time-aware reasoning
 
 # === LLM Fine-tuning / Training ===
 What is LoRA and how to fine-tune with PEFT?
@@ -41,21 +61,71 @@ SFT (Supervised Fine-Tuning) with Hugging Face Transformers
 DPO (Direct Preference Optimization) implementation guide
 Curriculum learning for model training difficulty scheduling
 VERL framework for reinforcement learning from human feedback
+LoRA rank selection and hyperparameter tuning strategies
+QLoRA: quantized LoRA for memory-efficient fine-tuning
+Reward model training for RLHF pipeline
+GRPO group relative policy optimization implementation details
+SimPO reference-free preference optimization for language models
+LoRA-XS: extreme parameter reduction with low-rank adaptation
+Merging LoRA adapters: TIES-merging and DARE techniques
+Gradient checkpointing for memory-efficient model training
+Mixed precision training with bfloat16 and torch.amp
+
+# === Quantization ===
+GGUF quantization formats for local LLM deployment
+AWQ activation-aware weight quantization for LLMs
+GPTQ post-training quantization for transformer models
+bitsandbytes 4-bit and 8-bit quantization with transformers
+Comparing quantization methods: quality vs speed trade-offs
+llama.cpp quantization levels Q4_K_M vs Q8_0 explained
+
+# === Local LLM Inference ===
+vLLM server setup for local LLM inference
+vLLM continuous batching and PagedAttention explained
+Qwen2.5 model deployment with vLLM or llama.cpp
+Speculative decoding for faster LLM inference
+Flash Attention 2 implementation and memory savings
+KV cache management for long context LLM inference
+LM Studio API integration with OpenAI compatible endpoints
+Ollama model management and API usage patterns
+
+# === Agent Patterns ===
+ReAct agent pattern: reasoning and acting with LLMs
+Tool use and function calling with Claude and OpenAI APIs
+Multi-agent orchestration patterns with LLMs
+Reflection and self-critique patterns for LLM agents
+LLM agent memory: short-term and long-term memory architectures
+Planning with LLMs: task decomposition and execution
+Structured output generation with JSON mode and Pydantic
+
+# === Prompt Engineering & Caching ===
+Prompt caching with Anthropic Claude API for cost reduction
+Chain-of-thought prompting for complex reasoning tasks
+Few-shot learning prompting strategies for LLMs
+System prompt design patterns for specialized LLM behavior
+Structured output extraction from LLMs with validation
+Constitutional AI and harmlessness prompting techniques
 
 # === Infrastructure ===
 Docker sandbox for safe code execution in Python
 FastAPI async endpoint implementation patterns
 aiosqlite async database operations in Python
 Gradio multi-tab interface with state management
-LM Studio API integration with OpenAI compatible endpoints
-vLLM server setup for local LLM inference
+Python asyncio patterns for concurrent API calls
+SQLite FTS5 full-text search implementation in Python
+Rate limiting and retry logic for LLM API calls
+Async task queue patterns with asyncio and semaphores
+Streaming LLM responses with Server-Sent Events in FastAPI
 
 # === Python / ML Patterns ===
-Python asyncio patterns for concurrent API calls
 PyTorch training loop with mixed precision
 Pydantic settings management with YAML config
 pytest fixtures and async test patterns
 Python dataclass and Pydantic model best practices
+NumPy vectorized operations for embedding similarity
+Weights and Biases experiment tracking integration
+Hugging Face datasets loading and preprocessing patterns
+JAX JIT compilation and vmap for neural network acceleration
 
 # === Advanced RAG Topics ===
 Iterative retrieval with multi-hop reasoning
@@ -63,3 +133,8 @@ Memory consolidation patterns for RAG systems
 Query expansion and rewriting for search systems
 Agentic RAG: LLM-driven retrieval loop implementation
 Chunk size optimization for RAG document splitting
+Semantic chunking vs fixed-size chunking for RAG
+Parent-child document retrieval with small-to-big chunking
+Hybrid search: combining BM25 and dense retrieval
+RAG hallucination detection and mitigation strategies
+Long-context reranking: lost in the middle problem solutions

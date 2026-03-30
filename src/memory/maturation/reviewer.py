@@ -36,6 +36,7 @@ Evaluate the given document and respond with ONLY valid JSON:
   "quality_score": 0.0-1.0,
   "confidence": 0.0-1.0,
   "approved": true/false,
+  "needs_supplement": true/false,
   "reason": "brief explanation"
 }
 
@@ -52,7 +53,15 @@ Note on domain_flag:
   within its own field, even if not directly CS/ML relevant. Lower the relevance
   weight and focus on accuracy and clarity instead.
 
-Approve if quality_score >= 0.6"""
+Set needs_supplement=true if the document meets ANY of these conditions:
+1. Fragment / incomplete: truncated mid-sentence, missing context to be understood
+   standalone, or is clearly a partial excerpt needing surrounding content.
+2. Thin / shallow: fewer than ~3 meaningful sentences of substance, only contains
+   a title/header/install command with no explanation, or is a navigation/UI
+   description with no actual knowledge content.
+
+When needs_supplement=true, set approved=false regardless of quality_score.
+Approve if quality_score >= 0.6 AND needs_supplement=false."""
 
 _REVIEW_PROMPT = """\
 Document metadata:
@@ -72,6 +81,7 @@ class ReviewResult:
     quality_score: float
     confidence: float
     approved: bool
+    needs_supplement: bool
     reason: str
     review_status: ReviewStatus
 
@@ -92,12 +102,14 @@ class MemoryReviewer:
         gateway: LLMGateway,
         store: MetadataStore,
         provider: str | None = None,
+        model: str | None = None,
         max_text_length: int = 1200,
         approval_threshold: float = 0.6,
     ) -> None:
         self._gateway = gateway
         self._store = store
         self._provider = provider
+        self._model = model
         self._max_text = max_text_length
         self._threshold = approval_threshold
 
@@ -125,6 +137,7 @@ class MemoryReviewer:
                 prompt,
                 system=_REVIEW_SYSTEM,
                 provider=self._provider,
+                model=self._model,
                 temperature=0.0,
             )
             parsed = self._parse_response(response.content)
@@ -140,9 +153,19 @@ class MemoryReviewer:
         quality_score = float(parsed.get("quality_score", 0.0))
         confidence = float(parsed.get("confidence", 0.5))
         approved = bool(parsed.get("approved", False))
+        needs_supplement = bool(parsed.get("needs_supplement", False))
         reason = str(parsed.get("reason", ""))
 
-        review_status = ReviewStatus.APPROVED if approved else ReviewStatus.REJECTED
+        # quality >= 0.7 なら needs_supplement でも APPROVED として扱う（内容は十分）
+        if needs_supplement and quality_score >= 0.7:
+            needs_supplement = False  # 品質十分なので保留扱いしない
+            approved = True
+        if needs_supplement:
+            review_status = ReviewStatus.NEEDS_UPDATE
+        elif approved:
+            review_status = ReviewStatus.APPROVED
+        else:
+            review_status = ReviewStatus.REJECTED
 
         # MetadataStore を更新
         try:
@@ -160,12 +183,13 @@ class MemoryReviewer:
             quality_score=quality_score,
             confidence=confidence,
             approved=approved,
+            needs_supplement=needs_supplement,
             reason=reason,
             review_status=review_status,
         )
         logger.debug(
-            "Reviewed doc=%s: quality=%.2f approved=%s",
-            doc.id, quality_score, approved,
+            "Reviewed doc=%s: quality=%.2f approved=%s needs_supplement=%s",
+            doc.id, quality_score, approved, needs_supplement,
         )
         return result
 

@@ -132,6 +132,7 @@ async def seed_and_mature(
     dry_run: bool,
     skip_mature: bool,
     dedup_threshold: float,
+    model: str | None = None,
 ) -> dict:
     """外部RAG取得 → 重複排除 → 関連性フィルタ → FAISS投入 → Teacher成熟。"""
     import numpy as np
@@ -305,8 +306,8 @@ async def seed_and_mature(
     from src.memory.maturation.reviewer import MemoryReviewer
 
     gateway = LLMGateway()
-    reviewer = MemoryReviewer(gateway, mm.store, provider=provider)
-    tagger = DifficultyTagger(gateway, provider=provider)
+    reviewer = MemoryReviewer(gateway, mm.store, provider=provider, model=model)
+    tagger = DifficultyTagger(gateway, provider=provider, model=model)
 
     for i, doc_id in enumerate(new_doc_ids):
         doc = await mm.store.get(doc_id)
@@ -321,7 +322,15 @@ async def seed_and_mature(
             stats["reviewed"] += 1
             if result.approved:
                 stats["approved"] += 1
-            status = "PASS" if result.approved else "FAIL"
+            elif result.needs_supplement:
+                stats.setdefault("needs_supplement", 0)
+                stats["needs_supplement"] += 1
+            if result.needs_supplement:
+                status = "HOLD"
+            elif result.approved:
+                status = "PASS"
+            else:
+                status = "FAIL"
             logger.info(
                 "  [%d/%d] Review %s (%.1fs, quality=%.2f): %s",
                 i + 1, len(new_doc_ids), status, elapsed,
@@ -332,14 +341,15 @@ async def seed_and_mature(
             stats["errors"] += 1
             continue
 
-        # 難易度タグ
-        try:
-            level = await tagger.tag(doc)
-            await mm.store.update_quality(doc.id, difficulty=level.value)
-            stats["tagged"] += 1
-            logger.info("    Difficulty: %s", level.value)
-        except Exception as e:
-            logger.warning("    Tagging error: %s", e)
+        # 難易度タグ (HOLD はスキップ)
+        if result.approved:
+            try:
+                level = await tagger.tag(doc)
+                await mm.store.update_quality(doc.id, difficulty=level.value)
+                stats["tagged"] += 1
+                logger.info("    Difficulty: %s", level.value)
+            except Exception as e:
+                logger.warning("    Tagging error: %s", e)
 
     logger.info(
         "Phase 2 done: reviewed=%d, approved=%d, tagged=%d",
@@ -351,7 +361,7 @@ async def seed_and_mature(
 
 
 async def mature_only(
-    limit: int, domain: str | None, provider: str,
+    limit: int, domain: str | None, provider: str, model: str | None = None,
 ) -> None:
     """既存の未審査ドキュメントのみ成熟させる。"""
     from src.llm.gateway import LLMGateway
@@ -365,8 +375,8 @@ async def mature_only(
     await mm.initialize()
     gateway = LLMGateway()
 
-    reviewer = MemoryReviewer(gateway, mm.store, provider=provider)
-    tagger = DifficultyTagger(gateway, provider=provider)
+    reviewer = MemoryReviewer(gateway, mm.store, provider=provider, model=model)
+    tagger = DifficultyTagger(gateway, provider=provider, model=model)
 
     docs = await mm.store.get_unreviewed(domain=domain, limit=limit)
     if not docs:
@@ -378,6 +388,7 @@ async def mature_only(
 
     reviewed = 0
     approved = 0
+    needs_supplement = 0
     tagged = 0
 
     for i, doc in enumerate(docs):
@@ -389,7 +400,14 @@ async def mature_only(
             reviewed += 1
             if result.approved:
                 approved += 1
-            status = "PASS" if result.approved else "FAIL"
+            elif result.needs_supplement:
+                needs_supplement += 1
+            if result.needs_supplement:
+                status = "HOLD"
+            elif result.approved:
+                status = "PASS"
+            else:
+                status = "FAIL"
             logger.info(
                 "  [%d/%d] Review %s (%.1fs, quality=%.2f): %s",
                 i + 1, len(docs), status, elapsed,
@@ -399,8 +417,8 @@ async def mature_only(
             logger.warning("  [%d/%d] Review error: %s", i + 1, len(docs), e)
             continue
 
-        # 難易度タグ
-        if doc.difficulty is None:
+        # 難易度タグ (HOLD はスキップ)
+        if result.approved and doc.difficulty is None:
             try:
                 level = await tagger.tag(doc)
                 await mm.store.update_quality(doc.id, difficulty=level.value)
@@ -409,7 +427,10 @@ async def mature_only(
             except Exception as e:
                 logger.warning("    Tagging error: %s", e)
 
-    logger.info("Done: reviewed=%d, approved=%d, tagged=%d", reviewed, approved, tagged)
+    logger.info(
+        "Done: reviewed=%d, approved=%d, needs_supplement=%d, tagged=%d",
+        reviewed, approved, needs_supplement, tagged,
+    )
     await mm.close()
 
 
@@ -448,7 +469,8 @@ def main() -> None:
     parser.add_argument("--top-k", type=int, default=10, help="Docs per query from RAG")
 
     # Teacher
-    parser.add_argument("--provider", type=str, default=None, help="Teacher provider (e.g. lmstudio)")
+    parser.add_argument("--provider", type=str, default=None, help="Teacher provider (e.g. lmstudio, anthropic)")
+    parser.add_argument("--model", type=str, default=None, help="Model override (e.g. claude-haiku-4-5-20251001)")
 
     # 制御
     parser.add_argument("--dry-run", action="store_true", help="Preview queries without execution")
@@ -463,7 +485,7 @@ def main() -> None:
     if args.mature_only:
         if not args.provider:
             parser.error("--mature-only requires --provider")
-        asyncio.run(mature_only(args.limit, args.domain, args.provider))
+        asyncio.run(mature_only(args.limit, args.domain, args.provider, model=args.model))
         return
 
     questions = load_questions(args)
@@ -476,6 +498,7 @@ def main() -> None:
         dry_run=args.dry_run,
         skip_mature=args.no_mature,
         dedup_threshold=args.dedup_threshold,
+        model=args.model,
     ))
 
     # サマリー

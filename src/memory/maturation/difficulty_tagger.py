@@ -65,11 +65,13 @@ class DifficultyTagger:
         self,
         gateway: LLMGateway,
         provider: str | None = None,
+        model: str | None = None,
         max_text_length: int = 800,
         default_level: DifficultyLevel = DifficultyLevel.INTERMEDIATE,
     ) -> None:
         self._gateway = gateway
         self._provider = provider
+        self._model = model
         self._max_text = max_text_length
         self._default_level = default_level
 
@@ -87,6 +89,7 @@ class DifficultyTagger:
                 prompt,
                 system=_TAG_SYSTEM,
                 provider=self._provider,
+                model=self._model,
                 max_tokens=512,
                 temperature=0.0,
             )

@@ -408,7 +408,7 @@ KG訓練統合タスク（将来）:
 | **Phase 4** | `src/rag/query_expander.py` — URL 検出 (`extract_urls`) | ✅ 完了 |
 | **Phase 4** | `scripts/seed_and_mature.py` — 外部RAG→重複排除→FAISS→Teacher成熟 統合パイプライン | ✅ 完了 |
 | **Phase 4** | `scripts/test_teacher.py` — Teacher テスト CLI (ping/benchmark/ingest) | ✅ 完了 |
-| **Phase 4** | `scripts/questions.txt` — シード質問集 (47問/7カテゴリ) | ✅ 完了 |
+| **Phase 4** | `scripts/questions.txt` — シード質問集 (125問/11カテゴリ) | ✅ 完了 |
 | **Phase 4** | LLM プロバイダー max_tokens=4096 デフォルト + yaml per-provider 設定 | ✅ 完了 |
 | **Phase 4** | OpenAI-compatible: Qwen3.5 thinking model (`reasoning_content`) 対応 | ✅ 完了 |
 | **Phase 4** | CRAG: use_memory/use_rag パラメータ伝播修正 + provider/timeout 伝播 | ✅ 完了 |
@@ -420,7 +420,32 @@ KG訓練統合タスク（将来）:
 
 **作業ブランチ**: `main`
 
-**完了済み（直近セッション — 2026-03-26）**
+**完了済み（直近セッション — 2026-03-31）**
+- **SOデータ再seed**: question_body → answer-first 取得に変更、`answers>=1` フィルタ
+- **データ属性ラベリング**: `content_type` / `categories` / `domain_flag` を全APIソースに追加
+  - SO: `question_body`, `question_score`, `content_type: "qa_answer"` / `"qa_body"`
+  - ArXiv: `content_type: "paper_abstract"`, LaTeX/HTMLクリーニング, post-hocカテゴリ付与
+  - Tavily: `content_type: "web_article"`, HTMLクリーニング, `search_depth: advanced`, min 300chars
+  - GitHub: `content_type: "code_file"`
+- **プロンプトインジェクション対策**: SO retriever に `_sanitize()` 追加
+- **ArXiv off_domain ラベリング**: 695 on_domain / 128 off_domain (intentional FAISS diversity)
+- **reviewer.py 強化**: domain_flag aware + `needs_supplement` フラグ（HOLD/PASS判定）
+  - `quality >= 0.7` なら `needs_supplement=true` でも APPROVED（Bオプション）
+  - `model=` パラメータ追加（LLMGateway へ伝播）
+- **difficulty_tagger.py 強化**: `model=` パラメータ追加
+- **seed_and_mature.py 修正**: `extra=result.metadata` 伝播バグ修正、Tavily最小長フィルタ
+- **seed_and_mature.py 拡張**: `--model` CLI フラグ追加（reviewer/tagger に伝播）、HOLD/PASS/FAIL ステータス表示
+- **questions.txt 拡張**: 47問/7カテゴリ → **125問/11カテゴリ** (+78問)
+  - 追加カテゴリ: Quantization(6q), Local LLM Inference(8q), Agent Patterns(7q), Prompt Engineering & Caching(6q)
+  - 既存拡張: FAISS(+4), RAG(+6), Embedding(+5), KG(+5), Fine-tuning(+9), Infrastructure(+3), Python/ML(+3), Advanced RAG(+5)
+- **Haiku mature バッチ**: `claude-haiku-4-5-20251001` で 1069件の未審査ドキュメントを一括成熟
+  - code domain: 687件 → 約34分で完了
+  - 全体 approved ~728件 / FAISS: 908 → **1844 vectors**
+- **seed_and_mature 125問実行**: 936件の新規ドキュメントを FAISS に投入（Haiku mature 込み）
+- **mature 継続**: バッチ10回完了（主要ドキュメントを review 済み）
+- **NEAT実装完了**: `claude_work/neat_trident` — ES-HyperNEAT / HybridIndexer / MAP-Elites (WSL動作未確認)
+
+**完了済み（2026-03-26セッション）**
 - **CRAG バグ修正**: FAISS 使用が常に ON → `use_memory`/`use_rag` パラメータを CRAG/Agentic リトライに伝播
 - **provider/timeout 伝播**: pipeline → rewriter → gateway の全経路で provider/timeout を伝播
 - **Qwen3.5 thinking model 対応**: `reasoning_content` フィールド抽出、content 空時の警告
@@ -443,15 +468,6 @@ GITHUB_TOKEN=...        # 外部RAG（任意・レート制限緩和）
 ```
 
 **残作業 (優先度: 高 — ローカルで実施)**
-- `scripts/seed_and_mature.py` の実行（統合パイプライン）
-  ```bash
-  poetry run python scripts/seed_and_mature.py --questions-file scripts/questions.txt --provider lmstudio --domain code
-  ```
-- `scripts/test_teacher.py` で Teacher の品質確認
-  ```bash
-  poetry run python scripts/test_teacher.py --provider lmstudio --ping
-  poetry run python scripts/test_teacher.py --provider lmstudio --benchmark
-  ```
 - オーケストレーター起動 + E2E 動作確認
   ```bash
   python -m uvicorn src.orchestrator.server:app --port 8000 --reload
@@ -460,9 +476,23 @@ GITHUB_TOKEN=...        # 外部RAG（任意・レート制限緩和）
 - `tests/integration/` の E2E テスト（Docker 必要）
 
 **残作業 (優先度: 中)**
-- `data/faiss_indices/` へのシードデータ投入（目標: 10,000 docs / confidence > 0.7 / 実行成功率 > 80%）
+- `data/faiss_indices/` へのシードデータ投入継続（目標: 10,000 docs / confidence > 0.7 / 実行成功率 > 80%）
+  - 現状: 1844 vectors (approved ~728) — seed_and_mature を追加質問で繰り返す
+- mature バッチ継続（NEEDS_UPDATE/未審査 docs の supplement → re-mature）
 - Phase 3+: GRPO + TinyLoRA 本番学習パイプラインの実稼働
-- Phase 5: NEAT Context-Sensitive Search 実装（`plan_neat_hyp_e.md` 参照）
+- **NEAT 環境検証** (WSL2): `claude_work/neat_trident` の動作確認
+  ```bash
+  cd /mnt/d/Projects/claude_work/neat_trident
+  python scripts/phase0_verify.py
+  python scripts/faiss_hybrid_verify.py   # HybridIndexer (9/9)
+  python scripts/es_hyperneat_verify.py   # ES-HyperNEAT (13/13)
+  python scripts/long_term_loop.py        # 長期進化ループ (5/5)
+  ```
+- **NEAT × MED 統合**: `neat_trident` の `HybridIndexer` を MED の FAISS インデクサに接続
+  - MED FAISS I/F 確認: `src/memory/faiss_index.py`, `src/memory/memory_manager.py`
+  - アダプタ層設計: `neat_trident/src/med_integration/` (interfaces.py / trident_adapter.py / stub_med.py)
+  - 詳細: `claude_work/neat_trident/handover_next_session.md` 参照
+- Phase 5: NEAT Context-Sensitive Search 本格実装（`plan_neat_hyp_e.md` 参照）
 
 **技術的負債**
 - `src/memory/maturation/seed_builder.py` — Teacher API 呼び出し部分はスタブ。実プロバイダー接続時に完成
