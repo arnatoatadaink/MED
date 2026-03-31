@@ -423,28 +423,18 @@ KG訓練統合タスク（将来）:
 **完了済み（直近セッション — 2026-03-31）**
 - **SOデータ再seed**: question_body → answer-first 取得に変更、`answers>=1` フィルタ
 - **データ属性ラベリング**: `content_type` / `categories` / `domain_flag` を全APIソースに追加
-  - SO: `question_body`, `question_score`, `content_type: "qa_answer"` / `"qa_body"`
-  - ArXiv: `content_type: "paper_abstract"`, LaTeX/HTMLクリーニング, post-hocカテゴリ付与
-  - Tavily: `content_type: "web_article"`, HTMLクリーニング, `search_depth: advanced`, min 300chars
-  - GitHub: `content_type: "code_file"`
 - **プロンプトインジェクション対策**: SO retriever に `_sanitize()` 追加
-- **ArXiv off_domain ラベリング**: 695 on_domain / 128 off_domain (intentional FAISS diversity)
-- **reviewer.py 強化**: domain_flag aware + `needs_supplement` フラグ（HOLD/PASS判定）
-  - `quality >= 0.7` なら `needs_supplement=true` でも APPROVED（Bオプション）
-  - `model=` パラメータ追加（LLMGateway へ伝播）
+- **reviewer.py 強化**: domain_flag aware + `needs_supplement` フラグ、Bオプション、`model=` param
 - **difficulty_tagger.py 強化**: `model=` パラメータ追加
-- **seed_and_mature.py 修正**: `extra=result.metadata` 伝播バグ修正、Tavily最小長フィルタ
-- **seed_and_mature.py 拡張**: `--model` CLI フラグ追加（reviewer/tagger に伝播）、HOLD/PASS/FAIL ステータス表示
-- **questions.txt 拡張**: 47問/7カテゴリ → **125問/11カテゴリ** (+78問)
-  - 追加カテゴリ: Quantization(6q), Local LLM Inference(8q), Agent Patterns(7q), Prompt Engineering & Caching(6q)
-  - 既存拡張: FAISS(+4), RAG(+6), Embedding(+5), KG(+5), Fine-tuning(+9), Infrastructure(+3), Python/ML(+3), Advanced RAG(+5)
-- **Haiku mature バッチ**: `claude-haiku-4-5-20251001` で 1069件の未審査ドキュメントを一括成熟
-  - code domain: 687件 → 約34分で完了
-  - 全体 approved ~728件 / FAISS: 908 → **1844 vectors**
-- **seed_and_mature 125問実行**: 936件の新規ドキュメントを FAISS に投入（Haiku mature 込み）
-- **クリーンアップ**: Tavily断片(733) + SO不完全(57) + arXiv重複(472) = 1,262件削除
-  - 削除後: TOTAL 930件 / approved 704件 / needs_update 175件(arXiv代表1件ずつ保持)
-- **mature 継続**: バッチ10回完了（主要ドキュメントを review 済み）
+- **seed_and_mature.py 拡張**: `--model` CLI フラグ、HOLD/PASS/FAIL 表示
+- **questions.txt 拡張**: 125問/11カテゴリ → **150問/19カテゴリ** (+25問)
+  - 追加カテゴリ: Context Engineering, ICL Theory, Self-Play, LLM Uncertainty, Training Stability, Hyperbolic Embeddings, Authorship Style
+  - arXiv URL 埋め込み（URL フェッチャー直接取得対応）
+- **クリーンアップ**: Tavily断片(733) + SO不完全(57) + arXiv重複(472) = **1,262件削除**
+- **seed_and_mature 150問実行（途中）**: 1,156/1,230件 mature 完了時点で予算切れ停止
+  - FAISS code: 1,844 → **3,074 vectors**
+  - approved: 704 → **1,043**、unreviewed 残: **74件**（mature 未完）
+- **neat extras 追加**: pyproject.toml に jax/tensorneat/qdax/evosax を optional deps として登録
 - **NEAT実装完了**: `claude_work/neat_trident` — ES-HyperNEAT / HybridIndexer / MAP-Elites (WSL動作未確認)
 
 **完了済み（2026-03-26セッション）**
@@ -469,27 +459,30 @@ TAVILY_API_KEY=...      # 外部RAG（任意）
 GITHUB_TOKEN=...        # 外部RAG（任意・レート制限緩和）
 ```
 
-**残作業 (優先度: 高 — ローカルで実施)**
+**残作業 (優先度: 高)**
+- **API 残高補充後: mature 残り 74件**
+  ```bash
+  poetry run python scripts/seed_and_mature.py \
+    --mature-only --domain code \
+    --provider anthropic --model claude-haiku-4-5-20251001 --limit 100
+  ```
+- **needs_update 838件（code）の対処方針決定**
+  - Tavily 断片が主因 → Chunker 改善後に再 seed が推奨
+  - arXiv 175件は保持中（needs_update）
+- **med_hyp_style_g.md の内容確認・方針決定**（まだ未確認）
 - オーケストレーター起動 + E2E 動作確認
   ```bash
   python -m uvicorn src.orchestrator.server:app --port 8000 --reload
   python scripts/launch_gui.py
   ```
-- `tests/integration/` の E2E テスト（Docker 必要）
-- **新規 MD ファイルの内容確認・方針決定**（pull で追加）
-  - `med_enhancement_seed.md` — seed 拡充方針の確認
-  - `med_hyp_style_g.md` — Hyperbolic Embedding スタイルガイドの確認
-  - `med_seed_papers.md` — seed 対象論文リストの確認
 
 **残作業 (優先度: 中)**
-- `data/faiss_indices/` へのシードデータ投入継続（目標: 10,000 docs / confidence > 0.7 / 実行成功率 > 80%）
-  - 現状: approved 704件 / FAISS ~755 docs（arXiv 175件は needs_update で保持中）
+- `data/faiss_indices/` へのシードデータ投入継続（目標: 10,000 docs）
+  - 現状: approved **1,043件** / FAISS code **3,074 vectors**
 - **Tavily Chunker 改善 + 再 seed**
-  - 問題: Tavily 取得コンテンツが記事途中チャンクで断片化 → 1,262件削除済み
+  - 問題: 記事途中チャンクで断片化 → 大量 HOLD になる根本原因
   - 対策: `src/rag/retrievers/tavily.py` のチャンクサイズ拡大 or 記事全文取得に変更
-  - 改善後に seed_and_mature を再実行して Tavily ドキュメントを補充
-- mature バッチ継続（arXiv needs_update 175件は補完 seed 後に re-mature 予定）
-- Phase 3+: GRPO + TinyLoRA 本番学習パイプラインの実稼働
+  - 改善後に seed_and_mature を再実行
 - **NEAT 環境検証** (WSL2): `claude_work/neat_trident` の動作確認
   ```bash
   cd /mnt/d/Projects/claude_work/neat_trident
@@ -502,7 +495,9 @@ GITHUB_TOKEN=...        # 外部RAG（任意・レート制限緩和）
   - MED FAISS I/F 確認: `src/memory/faiss_index.py`, `src/memory/memory_manager.py`
   - アダプタ層設計: `neat_trident/src/med_integration/` (interfaces.py / trident_adapter.py / stub_med.py)
   - 詳細: `claude_work/neat_trident/handover_next_session.md` 参照
+- Phase 3+: GRPO + TinyLoRA 本番学習パイプラインの実稼働
 - Phase 5: NEAT Context-Sensitive Search 本格実装（`plan_neat_hyp_e.md` 参照）
+- `tests/integration/` の E2E テスト（Docker 必要）
 
 **技術的負債**
 - `src/memory/maturation/seed_builder.py` — Teacher API 呼び出し部分はスタブ。実プロバイダー接続時に完成
