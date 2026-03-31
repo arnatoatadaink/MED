@@ -11,8 +11,10 @@ LM Studio / vLLM / Together.ai / Azure OpenAI 等、
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
+import time
 
 from src.llm.gateway import BaseLLMProvider, LLMMessage, LLMResponse
 
@@ -44,6 +46,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         default_max_tokens: int | None = None,
         default_temperature: float | None = None,
         extra_params: dict | None = None,
+        requests_per_minute: int | None = None,
     ) -> None:
         self._name = name
         self._base_url = base_url.rstrip("/")
@@ -59,6 +62,13 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             self._api_key = os.environ.get(api_key_env, "not-set")
         else:
             self._api_key = "not-set"
+        # レート制限 (requests_per_minute が設定されている場合)
+        if requests_per_minute and requests_per_minute > 0:
+            self._rate_interval = 60.0 / requests_per_minute  # 秒/リクエスト
+        else:
+            self._rate_interval = 0.0
+        self._rate_lock = asyncio.Lock()
+        self._last_request_time: float = 0.0
 
     @property
     def name(self) -> str:
@@ -82,6 +92,16 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         thinking_budget_tokens: int = 8000,
         timeout: float | None = None,
     ) -> LLMResponse:
+        # レート制限: requests_per_minute が設定されている場合、間隔を守る
+        if self._rate_interval > 0:
+            async with self._rate_lock:
+                now = time.monotonic()
+                wait = self._rate_interval - (now - self._last_request_time)
+                if wait > 0:
+                    logger.debug("Rate limit wait: %.2fs for provider %s", wait, self._name)
+                    await asyncio.sleep(wait)
+                self._last_request_time = time.monotonic()
+
         try:
             from openai import AsyncOpenAI
         except ImportError:

@@ -420,7 +420,17 @@ KG訓練統合タスク（将来）:
 
 **作業ブランチ**: `main`
 
-**完了済み（直近セッション — 2026-03-31）**
+**完了済み（直近セッション — 2026-03-31 後半）**
+- **OpenRouter プロバイダー追加**: `llm_config.yaml` に openrouter (openai_compatible) を追加
+  - `default_model: nvidia/nemotron-nano-12b-v2-vl:free`、requests_per_minute=20
+- **rate limiting 実装**: `OpenAICompatibleProvider` に asyncio.Lock ベースのリクエスト間隔制御追加
+- **OpenRouter モデルテスト**: `scripts/openrouter_model_test.py` + `data/openrouter_test.db` 作成
+  - 無料モデル25件登録、全件テスト完了
+  - 推奨: `nvidia/nemotron-nano-12b-v2-vl:free`（speed/quality バランス最良、overall=best）
+- **mature 全件完了**: openrouter で unreviewed 71件→**0件** (approved 1,043→**1,105**、83% PASS率)
+  - 品質スコア 0.70〜0.90 で安定
+
+**完了済み（直近セッション — 2026-03-31 前半）**
 - **SOデータ再seed**: question_body → answer-first 取得に変更、`answers>=1` フィルタ
 - **データ属性ラベリング**: `content_type` / `categories` / `domain_flag` を全APIソースに追加
 - **プロンプトインジェクション対策**: SO retriever に `_sanitize()` 追加
@@ -433,7 +443,7 @@ KG訓練統合タスク（将来）:
 - **クリーンアップ**: Tavily断片(733) + SO不完全(57) + arXiv重複(472) = **1,262件削除**
 - **seed_and_mature 150問実行（途中）**: 1,156/1,230件 mature 完了時点で予算切れ停止
   - FAISS code: 1,844 → **3,074 vectors**
-  - approved: 704 → **1,043**、unreviewed 残: **74件**（mature 未完）
+  - approved: 704 → **1,043**
 - **neat extras 追加**: pyproject.toml に jax/tensorneat/qdax/evosax を optional deps として登録
 - **NEAT実装完了**: `claude_work/neat_trident` — ES-HyperNEAT / HybridIndexer / MAP-Elites (WSL動作未確認)
 
@@ -460,13 +470,7 @@ GITHUB_TOKEN=...        # 外部RAG（任意・レート制限緩和）
 ```
 
 **残作業 (優先度: 高)**
-- **API 残高補充後: mature 残り 74件**
-  ```bash
-  poetry run python scripts/seed_and_mature.py \
-    --mature-only --domain code \
-    --provider anthropic --model claude-haiku-4-5-20251001 --limit 100
-  ```
-- **needs_update 838件（code）の対処方針決定**
+- **needs_update 862件（code）の対処方針決定**
   - Tavily 断片が主因 → Chunker 改善後に再 seed が推奨
   - arXiv 175件は保持中（needs_update）
 - **med_hyp_style_g.md の内容確認・方針決定**（まだ未確認）
@@ -478,7 +482,7 @@ GITHUB_TOKEN=...        # 外部RAG（任意・レート制限緩和）
 
 **残作業 (優先度: 中)**
 - `data/faiss_indices/` へのシードデータ投入継続（目標: 10,000 docs）
-  - 現状: approved **1,043件** / FAISS code **3,074 vectors**
+  - 現状: approved **1,105件** / FAISS code **3,074 vectors**
 - **Tavily Chunker 改善 + 再 seed**
   - 問題: 記事途中チャンクで断片化 → 大量 HOLD になる根本原因
   - 対策: `src/rag/retrievers/tavily.py` のチャンクサイズ拡大 or 記事全文取得に変更

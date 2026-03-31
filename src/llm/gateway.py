@@ -192,6 +192,9 @@ class LLMGateway:
                     if default_temperature is not None:
                         default_temperature = float(default_temperature)
                     extra_params = conf.get("extra_params") or {}
+                    requests_per_minute = conf.get("requests_per_minute")
+                    if requests_per_minute is not None:
+                        requests_per_minute = int(requests_per_minute)
                     provider = OpenAICompatibleProvider(
                         name=name,
                         base_url=base_url,
@@ -201,6 +204,7 @@ class LLMGateway:
                         default_max_tokens=default_max_tokens,
                         default_temperature=default_temperature,
                         extra_params=extra_params,
+                        requests_per_minute=requests_per_minute,
                     )
                     self._providers[name] = provider
                     logger.info(
