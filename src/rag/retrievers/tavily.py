@@ -9,11 +9,32 @@ import re
 from src.rag.retriever import BaseRetriever, RawResult
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
+# Markdown 画像: ![alt](url)
+_MD_IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
+# Markdown リンク: [text](url) → text を残す
+_MD_LINK_RE = re.compile(r"\[([^\]]*)\]\([^)]*\)")
+# Markdown 見出し記号（行頭・行中）
+_MD_HEADING_RE = re.compile(r"#{1,6}\s+")
+# 連続する記号行（ナビゲーション残骸）
+_NAV_LINE_RE = re.compile(r"^[\[\]|#*>\-]+\s*$", re.MULTILINE)
 
 
 def _clean_web_text(text: str) -> str:
-    """Web 記事コンテンツの HTML タグを除去して正規化する。"""
+    """Web 記事コンテンツを正規化する。
+
+    HTML タグ、Markdown 画像/リンク記法、ナビゲーション残骸を除去する。
+    """
+    # HTML タグ除去
     text = _HTML_TAG_RE.sub(" ", text)
+    # Markdown 画像除去
+    text = _MD_IMAGE_RE.sub(" ", text)
+    # Markdown リンク → リンクテキストのみ残す
+    text = _MD_LINK_RE.sub(r"\1", text)
+    # Markdown 見出し記号除去
+    text = _MD_HEADING_RE.sub("", text)
+    # 記号のみの行（ナビゲーション残骸）除去
+    text = _NAV_LINE_RE.sub("", text)
+    # 空白正規化
     return re.sub(r"\s+", " ", text).strip()
 
 logger = logging.getLogger(__name__)
