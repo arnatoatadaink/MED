@@ -53,6 +53,19 @@ dev = [
     "ruff>=0.3.0",
     "mypy>=1.8.0",
 ]
+neat = [
+    # NEAT / HyperNEAT
+    "tensorneat @ git+https://github.com/EMI-Group/tensorneat.git",
+    # Quality Diversity (MAP-Elites)
+    "qdax>=0.5.0",
+    # Evolution Strategies (参考用)
+    "evosax>=0.2.0",
+    # JAX backend (CPU; GPU は jax[cuda12] に差し替え)
+    "jax>=0.4.0",
+    "jaxlib>=0.4.0",
+    # NetworkX (KG 統合時の NEAT グラフ操作)
+    "networkx>=3.0",
+]
 docs = [
     "mkdocs>=1.6.0",
     "mkdocs-material>=9.5.0",
