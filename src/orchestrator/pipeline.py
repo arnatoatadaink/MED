@@ -88,7 +88,7 @@ class MEDPipeline:
         self._router = retriever_router or RetrieverRouter()
         self._sandbox = sandbox_manager or SandboxManager()
         self._conv = conversation_manager   # None = 会話履歴機能を無効化
-        self._chunker = Chunker()
+        self._chunker = Chunker(chunk_size=1500, chunk_overlap=100, min_chunk_len=100)
         self._verifier = ResultVerifier(gateway=self._gateway)
         self._response_gen = ResponseGenerator(self._gateway)
         self._code_gen = CodeGenerator(self._gateway)

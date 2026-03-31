@@ -26,8 +26,10 @@ class TavilyRetriever(BaseRetriever):
     def source_name(self) -> str:
         return "tavily"
 
-    def __init__(self) -> None:
+    def __init__(self, include_raw_content: bool = True) -> None:
         self._api_key = os.environ.get("TAVILY_API_KEY", "")
+        # True にすると全文コンテンツを取得（断片化防止）
+        self._include_raw_content = include_raw_content
 
     def is_available(self) -> bool:
         return bool(self._api_key)
@@ -43,7 +45,7 @@ class TavilyRetriever(BaseRetriever):
             "query": query,
             "max_results": max_results,
             "search_depth": "advanced",
-            "include_raw_content": False,
+            "include_raw_content": self._include_raw_content,
         }
 
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -57,9 +59,13 @@ class TavilyRetriever(BaseRetriever):
         results: list[RawResult] = []
         for item in data.get("results", [])[:max_results]:
             url = item.get("url", "")
+            # raw_content があれば優先使用（全文）、なければ snippet にフォールバック
+            raw = item.get("raw_content") or ""
+            snippet = item.get("content", "")
+            content = _clean_web_text(raw) if raw else _clean_web_text(snippet)
             results.append(RawResult(
                 title=_clean_web_text(item.get("title", "")),
-                content=_clean_web_text(item.get("content", "")),
+                content=content,
                 url=url,
                 source=self.source_name,
                 score=float(item.get("score", 0.0)),
@@ -67,6 +73,7 @@ class TavilyRetriever(BaseRetriever):
                     "published_date": item.get("published_date", ""),
                     "content_type": "web_article",
                     "domain": _extract_domain(url),
+                    "has_raw_content": bool(raw),
                 },
             ))
 

@@ -146,7 +146,7 @@ class TestRetrieverRouter:
 
 class TestChunker:
     def test_chunk_text_short(self) -> None:
-        chunker = Chunker(chunk_size=512)
+        chunker = Chunker(chunk_size=512, min_chunk_len=0)
         chunks = chunker.chunk_text("short text")
         assert len(chunks) == 1
         assert chunks[0] == "short text"
@@ -201,14 +201,14 @@ class TestChunker:
             assert docs[1].parent_id == docs[0].id
 
     def test_chunk_results_batch(self) -> None:
-        chunker = Chunker()
+        chunker = Chunker(min_chunk_len=0)
         results = [_make_result(f"Result {i}") for i in range(3)]
         docs = chunker.chunk_results(results, domain="general")
         assert len(docs) >= 3
 
     def test_source_type_mapping(self) -> None:
         from src.memory.schema import SourceType
-        chunker = Chunker()
+        chunker = Chunker(min_chunk_len=0)
         for source, expected_type in [
             ("github", SourceType.GITHUB),
             ("stackoverflow", SourceType.STACKOVERFLOW),

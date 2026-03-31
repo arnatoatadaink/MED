@@ -1,8 +1,9 @@
 max_results_per_source: 5
 timeout_seconds: 30
 verify_results: true
-chunk_size: 512
-chunk_overlap: 50
+chunk_size: 1500       # 段落・文境界優先分割のため拡大（旧: 512）
+chunk_overlap: 100
+min_chunk_len: 100     # この文字数未満の断片を除外
 
 # ── Seed 品質フィルタ ──────────────────────────────────
 seed_filters:
@@ -34,6 +35,7 @@ sources:
     enabled: true
     max_results: 5
     search_depth: "advanced"
+    include_raw_content: true   # 全文取得（断片化防止）
 
   arxiv:
     enabled: true
