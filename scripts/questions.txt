@@ -138,3 +138,54 @@ Parent-child document retrieval with small-to-big chunking
 Hybrid search: combining BM25 and dense retrieval
 RAG hallucination detection and mitigation strategies
 Long-context reranking: lost in the middle problem solutions
+
+# === Context Engineering / Metacognitive AI ===
+Context Engineering 2.0: metacognitive AI with structured thought logs https://arxiv.org/abs/2510.26493
+Self-evaluation in LLMs: accuracy, relevance, completeness scoring
+Structured reasoning chains with confidence scores for LLM outputs
+Knowledge graph auto-update from high-confidence reasoning patterns
+4-phase learning cycle: execute, self-evaluate, extract patterns, adapt
+GRPO reward design from self-evaluation signals
+
+# === In-Context Learning Theory ===
+ICL as Bayesian inference: posterior variance and context length https://arxiv.org/abs/2510.10981
+Optimal k for FAISS retrieval: Bayesian convergence analysis
+Bayes Gap vs Posterior Variance in in-context learning
+OOD robustness in retrieval-augmented generation
+
+# === Self-Play / Curriculum Learning ===
+Propose-Solve-Verify self-play for LLM curriculum generation https://arxiv.org/abs/2512.18160
+Agent0: self-evolving agents from zero data https://arxiv.org/abs/2511.16043
+Automatic curriculum generation based on student success rate
+Two-agent curriculum: proposer vs executor for LLM training
+Formal verifier as reward function in RLHF pipeline
+
+# === LLM Uncertainty & Ambiguity ===
+LLMs not modeling ambiguity: single-interpretation collapse https://arxiv.org/abs/2304.14399
+Ambiguity in LLMs as missing concept in latent space https://arxiv.org/abs/2505.11679
+LLM uncertainty faithfulness: confidence vs linguistic expression mismatch
+Semantic entropy for ambiguity detection in LLM outputs
+Ambiguity-aware RAG: parallel search across multiple query interpretations
+IN-DEDUCTIVE hybrid reasoning: inductive vs deductive path selection
+
+# === Training Stability & Loss Functions ===
+Attention logit soft-capping in Gemma 2: tanh-based logit constraint
+QK LayerNorm and softmax capping for LLM training stability https://arxiv.org/abs/2410.16682
+Focal loss for hard example mining in classification https://arxiv.org/abs/1708.02002
+Chance-level threshold for sample selection in curriculum learning
+LLM training divergence: QKV norm growth as early warning signal
+
+# === Hyperbolic Embeddings ===
+Hyperbolic space for knowledge graph embeddings: Poincaré ball model
+geoopt: Riemannian optimization in PyTorch for hyperbolic embeddings https://arxiv.org/abs/2005.02819
+Multi-relational hyperbolic word embeddings for concept hierarchy https://arxiv.org/abs/2305.07303
+HypStructure: hierarchical label structure regularization with hyperbolic space https://arxiv.org/abs/2412.01023
+Hyperbolic vs Euclidean embeddings for hierarchical knowledge graphs
+Poincaré ball expmap0 for projecting Euclidean embeddings to hyperbolic space
+
+# === Authorship & Writing Style ===
+Authorship analysis: linguistic individuality theory for LLM personalization
+LLMs identifying authorship from writing style samples
+LLMs struggle with implicit writing styles: style imitation limitations https://arxiv.org/abs/2509.14543
+T5 encoder for authorship signature extraction
+Personal writing style extraction as RAG context signal
