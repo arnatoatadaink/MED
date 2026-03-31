@@ -442,6 +442,8 @@ KG訓練統合タスク（将来）:
   - code domain: 687件 → 約34分で完了
   - 全体 approved ~728件 / FAISS: 908 → **1844 vectors**
 - **seed_and_mature 125問実行**: 936件の新規ドキュメントを FAISS に投入（Haiku mature 込み）
+- **クリーンアップ**: Tavily断片(733) + SO不完全(57) + arXiv重複(472) = 1,262件削除
+  - 削除後: TOTAL 930件 / approved 704件 / needs_update 175件(arXiv代表1件ずつ保持)
 - **mature 継続**: バッチ10回完了（主要ドキュメントを review 済み）
 - **NEAT実装完了**: `claude_work/neat_trident` — ES-HyperNEAT / HybridIndexer / MAP-Elites (WSL動作未確認)
 
@@ -474,11 +476,19 @@ GITHUB_TOKEN=...        # 外部RAG（任意・レート制限緩和）
   python scripts/launch_gui.py
   ```
 - `tests/integration/` の E2E テスト（Docker 必要）
+- **新規 MD ファイルの内容確認・方針決定**（pull で追加）
+  - `med_enhancement_seed.md` — seed 拡充方針の確認
+  - `med_hyp_style_g.md` — Hyperbolic Embedding スタイルガイドの確認
+  - `med_seed_papers.md` — seed 対象論文リストの確認
 
 **残作業 (優先度: 中)**
 - `data/faiss_indices/` へのシードデータ投入継続（目標: 10,000 docs / confidence > 0.7 / 実行成功率 > 80%）
-  - 現状: 1844 vectors (approved ~728) — seed_and_mature を追加質問で繰り返す
-- mature バッチ継続（NEEDS_UPDATE/未審査 docs の supplement → re-mature）
+  - 現状: approved 704件 / FAISS ~755 docs（arXiv 175件は needs_update で保持中）
+- **Tavily Chunker 改善 + 再 seed**
+  - 問題: Tavily 取得コンテンツが記事途中チャンクで断片化 → 1,262件削除済み
+  - 対策: `src/rag/retrievers/tavily.py` のチャンクサイズ拡大 or 記事全文取得に変更
+  - 改善後に seed_and_mature を再実行して Tavily ドキュメントを補充
+- mature バッチ継続（arXiv needs_update 175件は補完 seed 後に re-mature 予定）
 - Phase 3+: GRPO + TinyLoRA 本番学習パイプラインの実稼働
 - **NEAT 環境検証** (WSL2): `claude_work/neat_trident` の動作確認
   ```bash
