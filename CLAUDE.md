@@ -324,6 +324,10 @@ KG訓練統合タスク（将来）:
 - Phase 5-2: `ContextSensitiveSearch` — FAISS k*3 候補取得 → association_fn リランク → top-k
   - faiss 未インストール時は numpy ブルートフォースにフォールバック
 - Phase 5-3: MED 統合 — 既存 FAISS モジュールへの差し込み、context_emb 生成元の決定
+  - **StyleVector 連携**: `med_hyp_style_g.md` の `StyleVector.personal` を `context_emb` として活用
+    - 層1（口調）+ 層2（語彙）→ 64-128次元の個人スタイルベクトル
+    - SudachiPy（形態素解析）+ StyloMetrix（文体特徴量）で抽出
+    - KGノード属性・GRPO報酬（スタイル一貫性スコア）にも統合予定
 - 将来: `AssociationFn` のアーキテクチャを NEAT (CPPN) で進化させる
 
 ## 設計原則
@@ -473,7 +477,8 @@ GITHUB_TOKEN=...        # 外部RAG（任意・レート制限緩和）
 - **needs_update 862件（code）の対処方針決定**
   - Tavily 断片が主因 → Chunker 改善後に再 seed が推奨
   - arXiv 175件は保持中（needs_update）
-- **med_hyp_style_g.md の内容確認・方針決定**（まだ未確認）
+- **med_hyp_style_g.md**: ✅ 確認済み — StyleVector（3層スタイル分解）をPhase 5 context_embとして統合予定
+  - 実装ギャップ: SudachiPy動作確認 / StyloMetrix日本語対応確認 / 次元設計（64-128次元）
 - オーケストレーター起動 + E2E 動作確認
   ```bash
   python -m uvicorn src.orchestrator.server:app --port 8000 --reload
