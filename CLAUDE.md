@@ -424,7 +424,16 @@ KG訓練統合タスク（将来）:
 
 **作業ブランチ**: `main`
 
-**完了済み（直近セッション — 2026-03-31 後半）**
+**完了済み（直近セッション — 2026-04-01）**
+- **Tavily Chunker 改善**: 段落・文境界優先分割 + `min_chunk_len=100` フィルタ
+  - `src/rag/chunker.py`: `chunk_text()` を paragraph→sentence→line→char フォールバック方式に刷新
+  - `src/rag/retrievers/tavily.py`: `include_raw_content=True` で全文取得 + Markdown残骸除去クリーナー追加
+  - `configs/retrievers.yaml`: chunk_size 512→1500、min_chunk_len=100
+- **Tavily re-seed完了**: 628件削除（needs_update+rejected）→ 150問で507件新規追加・mature
+  - Tavily needs_update: 521件 → **11件**（98%削減）
+  - PASS率: 83% → **90%**（チャンカー改善の効果）
+  - approved: 1,105 → **1,562件** / FAISS code: 3,074 → **3,581 vectors**
+- **med_hyp_style_g.md 確認**: StyleVector(3層スタイル分解)をPhase 5 context_embとして統合予定
 - **OpenRouter プロバイダー追加**: `llm_config.yaml` に openrouter (openai_compatible) を追加
   - `default_model: nvidia/nemotron-nano-12b-v2-vl:free`、requests_per_minute=20
 - **rate limiting 実装**: `OpenAICompatibleProvider` に asyncio.Lock ベースのリクエスト間隔制御追加
