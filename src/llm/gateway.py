@@ -195,6 +195,9 @@ class LLMGateway:
                     requests_per_minute = conf.get("requests_per_minute")
                     if requests_per_minute is not None:
                         requests_per_minute = int(requests_per_minute)
+                    daily_request_limit = conf.get("daily_request_limit")
+                    if daily_request_limit is not None:
+                        daily_request_limit = int(daily_request_limit)
                     provider = OpenAICompatibleProvider(
                         name=name,
                         base_url=base_url,
@@ -205,6 +208,7 @@ class LLMGateway:
                         default_temperature=default_temperature,
                         extra_params=extra_params,
                         requests_per_minute=requests_per_minute,
+                        daily_request_limit=daily_request_limit,
                     )
                     self._providers[name] = provider
                     logger.info(

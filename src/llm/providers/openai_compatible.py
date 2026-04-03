@@ -20,6 +20,23 @@ from src.llm.gateway import BaseLLMProvider, LLMMessage, LLMResponse
 
 logger = logging.getLogger(__name__)
 
+# モジュールレベルのシングルトン tracker（初回 complete() 呼び出し時に遅延初期化）
+_global_tracker: "DailyUsageTracker | None" = None
+_tracker_lock = asyncio.Lock()
+
+
+async def _get_tracker() -> "DailyUsageTracker":
+    """グローバル DailyUsageTracker を遅延初期化して返す。"""
+    global _global_tracker
+    if _global_tracker is None:
+        async with _tracker_lock:
+            if _global_tracker is None:
+                from src.llm.daily_usage_tracker import DailyUsageTracker
+                t = DailyUsageTracker()
+                await t.initialize()
+                _global_tracker = t
+    return _global_tracker
+
 
 class OpenAICompatibleProvider(BaseLLMProvider):
     """OpenAI互換 `/v1/chat/completions` エンドポイント汎用プロバイダー。
@@ -47,6 +64,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         default_temperature: float | None = None,
         extra_params: dict | None = None,
         requests_per_minute: int | None = None,
+        daily_request_limit: int | None = None,
     ) -> None:
         self._name = name
         self._base_url = base_url.rstrip("/")
@@ -69,6 +87,8 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             self._rate_interval = 0.0
         self._rate_lock = asyncio.Lock()
         self._last_request_time: float = 0.0
+        # 日次リクエスト上限 (OpenRouter 等の無料枠保護)
+        self._daily_request_limit: int | None = daily_request_limit
 
     @property
     def name(self) -> str:
@@ -92,6 +112,11 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         thinking_budget_tokens: int = 8000,
         timeout: float | None = None,
     ) -> LLMResponse:
+        # 日次リクエスト上限チェック (OpenRouter 等の無料枠保護)
+        if self._daily_request_limit is not None:
+            tracker = await _get_tracker()
+            await tracker.check_and_increment(self._name, self._daily_request_limit)
+
         # レート制限: requests_per_minute が設定されている場合、間隔を守る
         if self._rate_interval > 0:
             async with self._rate_lock:

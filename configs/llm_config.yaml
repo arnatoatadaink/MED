@@ -21,6 +21,7 @@ providers:
     timeout: 120
     max_tokens: 4096
     requests_per_minute: 20
+    daily_request_limit: 950   # OpenRouter 無料枠は 1000/日。50 リクエストのバッファ
 task_routing:
   code_generation: sonnet
   error_analysis: sonnet
