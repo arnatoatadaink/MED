@@ -424,6 +424,16 @@ KG訓練統合タスク（将来）:
 
 **作業ブランチ**: `main`
 
+**完了済み（直近セッション — 2026-04-03）**
+- **needs_update 対策完了**: 対策先にシード増加後の方針を実施
+  - SO needs_update 18件 → 削除
+  - arXiv needs_update 356件 → 再 mature → **306件 approved (86%)** / 残 41件 HOLD
+  - Tavily needs_update 11件 → 削除 → 再 seed
+  - `scripts/remature_needs_update.py` 新規作成（needs_update 専用再 mature スクリプト）
+- **Tavily 再 seed 完了**: 150問で544件新規追加 → **486件 approved (89%)**
+  - approved: 1,868 → **2,354件** / FAISS code: 3,581 → **4,125 vectors**
+  - Tavily approved: 253 → **324件**
+
 **完了済み（直近セッション — 2026-04-01）**
 - **Tavily Chunker 改善**: 段落・文境界優先分割 + `min_chunk_len=100` フィルタ
   - `src/rag/chunker.py`: `chunk_text()` を paragraph→sentence→line→char フォールバック方式に刷新
@@ -496,11 +506,8 @@ GITHUB_TOKEN=...        # 外部RAG（任意・レート制限緩和）
 
 **残作業 (優先度: 中)**
 - `data/faiss_indices/` へのシードデータ投入継続（目標: 10,000 docs）
-  - 現状: approved **1,105件** / FAISS code **3,074 vectors**
-- **Tavily Chunker 改善 + 再 seed**
-  - 問題: 記事途中チャンクで断片化 → 大量 HOLD になる根本原因
-  - 対策: `src/rag/retrievers/tavily.py` のチャンクサイズ拡大 or 記事全文取得に変更
-  - 改善後に seed_and_mature を再実行
+  - 現状: approved **2,354件** / FAISS code **4,125 vectors**
+  - needs_update: arxiv 64件 / tavily 26件 / SO 4件（次回再 mature 候補）
 - **NEAT 環境検証** (WSL2): `claude_work/neat_trident` の動作確認
   ```bash
   cd /mnt/d/Projects/claude_work/neat_trident
