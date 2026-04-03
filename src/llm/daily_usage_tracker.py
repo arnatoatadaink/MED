@@ -226,11 +226,11 @@ class DailyUsageTracker:
 # ──────────────────────────────────────────
 
 def _today() -> str:
-    return datetime.date.today().isoformat()
+    return datetime.datetime.now(datetime.timezone.utc).date().isoformat()
 
 
 def _now_iso() -> str:
-    return datetime.datetime.now().isoformat(timespec="seconds")
+    return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
 
 
 def _script_name() -> str:
