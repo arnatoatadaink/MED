@@ -433,6 +433,15 @@ KG訓練統合タスク（将来）:
 - **Tavily 再 seed 完了**: 150問で544件新規追加 → **486件 approved (89%)**
   - approved: 1,868 → **2,354件** / FAISS code: 3,581 → **4,125 vectors**
   - Tavily approved: 253 → **324件**
+- **OpenRouter 日次上限管理実装**: `src/llm/daily_usage_tracker.py`
+  - SQLite永続化 (`data/openrouter_usage.db`)、日別/ジョブ別カウント、UTC基準
+  - 950件/日で DailyLimitExceeded raise、90%で警告、100件刻みでINFOログ
+  - `scripts/check_usage.py` — 使用量確認 CLI
+  - `configs/llm_config.yaml` に `daily_request_limit: 950` 追加
+- **seed_and_mature.py**: `--exclude-sources` フラグ追加 (Tavily 等を除外可能)
+- **Tavily 除外 seed 完了**: arXiv + SO のみで 150問 → 458件追加 → **423件 approved (92%)**
+  - approved: 2,354 → **2,777件** / FAISS code: 4,125 → **4,583 vectors**
+  - OpenRouter 使用: 902/950件 (UTC Apr 3)
 
 **完了済み（直近セッション — 2026-04-01）**
 - **Tavily Chunker 改善**: 段落・文境界優先分割 + `min_chunk_len=100` フィルタ
@@ -506,8 +515,10 @@ GITHUB_TOKEN=...        # 外部RAG（任意・レート制限緩和）
 
 **残作業 (優先度: 中)**
 - `data/faiss_indices/` へのシードデータ投入継続（目標: 10,000 docs）
-  - 現状: approved **2,354件** / FAISS code **4,125 vectors**
-  - needs_update: arxiv 64件 / tavily 26件 / SO 4件（次回再 mature 候補）
+  - 現状: approved **2,777件** / FAISS code **4,583 vectors**
+  - needs_update: arxiv 84件 / tavily 26件 / SO 9件（次回再 mature 候補）
+  - OpenRouter 日次上限: 950件/日 (UTC)。次回ジョブは UTC Apr 4 (JST 09:00) 以降推奨
+  - Tavily は credits 節約のため `--exclude-sources tavily` で除外中
 - **NEAT 環境検証** (WSL2): `claude_work/neat_trident` の動作確認
   ```bash
   cd /mnt/d/Projects/claude_work/neat_trident
