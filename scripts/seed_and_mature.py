@@ -133,6 +133,7 @@ async def seed_and_mature(
     skip_mature: bool,
     dedup_threshold: float,
     model: str | None = None,
+    exclude_sources: list[str] | None = None,
 ) -> dict:
     """外部RAG取得 → 重複排除 → 関連性フィルタ → FAISS投入 → Teacher成熟。"""
     import numpy as np
@@ -202,7 +203,12 @@ async def seed_and_mature(
         logger.info("[%d/%d] Searching: %s", qi + 1, len(queries), query[:80])
 
         try:
-            results = await retriever.search(query, max_results=top_k)
+            # 除外ソースを除いた利用可能ソースを計算
+            if exclude_sources:
+                available = [s for s in retriever.available_sources() if s not in exclude_sources]
+                results = await retriever.search(query, max_results=top_k, sources=available)
+            else:
+                results = await retriever.search(query, max_results=top_k)
         except Exception as e:
             logger.warning("  RAG search failed: %s", e)
             stats["errors"] += 1
@@ -478,6 +484,7 @@ def main() -> None:
     parser.add_argument("--mature-only", action="store_true", help="Only mature existing unreviewed docs")
     parser.add_argument("--limit", type=int, default=100, help="Max docs for --mature-only")
     parser.add_argument("--dedup-threshold", type=float, default=0.95, help="Near-dup cosine threshold")
+    parser.add_argument("--exclude-sources", type=str, default="", help="除外するソース (カンマ区切り, e.g. tavily,github)")
 
     args = parser.parse_args()
 
@@ -490,6 +497,10 @@ def main() -> None:
 
     questions = load_questions(args)
 
+    exclude_sources = [s.strip() for s in args.exclude_sources.split(",") if s.strip()]
+    if exclude_sources:
+        logger.info("Excluding sources: %s", exclude_sources)
+
     stats = asyncio.run(seed_and_mature(
         queries=questions,
         domain=args.domain,
@@ -499,6 +510,7 @@ def main() -> None:
         skip_mature=args.no_mature,
         dedup_threshold=args.dedup_threshold,
         model=args.model,
+        exclude_sources=exclude_sources or None,
     ))
 
     # サマリー
