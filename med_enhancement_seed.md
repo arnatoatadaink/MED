@@ -137,6 +137,37 @@ def generate_curriculum(student_success_rate: float) -> Problem:
 - [ ] Verifier（ルールベースから開始）
 - [ ] Student成功率のEMAトラッカー
 
+#### 実装パターン参照: hantani記事（2026-04-01）`sketch`
+> note.com/hantani/n/n9e1b0c170514
+> 「Claude Codeで作ってCodex CLIでレビューする、AI駆動開発の全自動化をSkillで試した話」
+
+記事のskill構造がIDEA-003の「カリキュラム生成→Verify→修正ループ」の実装例として機能している。
+
+```
+記事の構造 → IDEA-003への対応:
+
+start-skill（親skill・状態を見て判断）
+  ↕ 対応
+Teacher（状態を見てカリキュラムを判断）
+
+spec-to-design の1ドキュメントごとのループ:
+  1. ドキュメント作成（Claude Code）
+  2. Codex CLIで個別レビュー
+  3. QandA.mdに不明点追記
+  4. 修正してから次へ
+  ↕ 対応
+IDEA-003のVerifyループ:
+  1. Studentが問題を解く
+  2. Verifierで検証
+  3. QandA.md的な「不明点ログ」に記録（IDEA-001の思考ログ）
+  4. 修正・再学習してから次の問題へ
+
+記事の知見:
+  「全部まとめて作ってから最後にレビュー」を避ける
+  → 1ドキュメント（1問題）ごとにVerifyを通す設計が重要
+  → MEDでもStudent学習を「一括→評価」より「逐次→即Verify」で回す
+```
+
 ---
 
 ### IDEA-004: GRPO Reward from Self-Evaluation（自己評価→報酬変換）
@@ -281,6 +312,36 @@ IDEA-010 → 確信度でパスを動的選択
 IDEA-008 → 帰納パスでの具体的な検索戦略
 ```
 
+#### 実装パターン参照: hantani記事（2026-04-01）`sketch`
+> note.com/hantani/n/n9e1b0c170514
+
+記事のstart-skill構造がIN-DEDUCTIVEの「演繹/帰納パス切り替え」の実装例として機能している。
+
+```
+記事の構造 → IDEA-010への対応:
+
+start-skill の判定ルール:
+  if レビュー依頼 or 大きなコード差分:
+      → Codex CLI を直接実行（演繹パス: 明確なタスク）
+  elif SPEC.mdあり、設計書不足:
+      → spec-to-design を実行（帰納パス: 段階的な証拠収集）
+  ↕ 対応
+IDEA-010の切り替えロジック:
+  if 確信度 >= threshold:
+      → 演繹パス（Teacher絞り込み: 目的が明確な場合）
+  else:
+      → 帰納パス（IDEA-008曖昧さ認識RAG: 複数解釈が必要な場合）
+
+記事の知見:
+  「今は何をすべきか」をworkspace状態から判断する親役が必要
+  → MEDでもTeacherが現在のStudent状態を見て
+    「演繹（絞り込み）か帰納（並列探索）か」を判断する役割を持つ
+
+  Codex CLI = 外部Verifier（作る役と見る役を分ける）
+  → MEDの「Teacher（出題）× Student（解答）× Verifier（検証）」
+    の3役分担と同じ構造
+```
+
 ---
 
 ## Implementation Roadmap
@@ -313,3 +374,4 @@ Phase 5: スタイル統合 → med_hyp_style_g.md（StyleExtractor）
 | 2026-03-26 | Initial draft from 4 note.com articles |
 | 2026-03-26 | Added IDEA-008, IDEA-009（コードレビュー済み）, IDEA-010 |
 | 2026-03-26 | 全体最新化: MED/TRIDENT分離マップ、Hyperbolic実装方針、Roadmap更新 |
+| 2026-04-04 | IDEA-003/010にhantani記事の実装パターンをsketchとして追記 |
