@@ -445,6 +445,9 @@ KG訓練統合タスク（将来）:
 - **Tavily 除外 seed 完了 (UTC Apr 4)**: 150問 → 501件追加 → **460件 approved (92%)**
   - approved: 2,777 → **3,237件** / FAISS code: 4,583 → **5,084 vectors**
   - OpenRouter 上限 (961/950) で自動停止 → DailyLimitExceeded 正常動作確認
+- **Tavily 除外 seed 完了 (UTC Apr 5)**: 150問 → 471件追加 → **441件 approved (94%)**
+  - approved: 3,237 → **3,678件** / FAISS code: 5,084 → **5,555 vectors**
+  - OpenRouter 使用: 912/950件
 
 **完了済み（直近セッション — 2026-04-01）**
 - **Tavily Chunker 改善**: 段落・文境界優先分割 + `min_chunk_len=100` フィルタ
@@ -518,9 +521,9 @@ GITHUB_TOKEN=...        # 外部RAG（任意・レート制限緩和）
 
 **残作業 (優先度: 中)**
 - `data/faiss_indices/` へのシードデータ投入継続（目標: 10,000 docs）
-  - 現状: approved **3,237件** / FAISS code **5,084 vectors**
-  - needs_update: arxiv 107件 / tavily 26件 / SO 12件（次回再 mature 候補）
-  - OpenRouter 日次上限: 950件/日 (UTC)。次回ジョブは UTC Apr 5 (JST 09:00) 以降推奨
+  - 現状: approved **3,678件** / FAISS code **5,555 vectors**
+  - needs_update: 次回確認・再 mature 候補
+  - OpenRouter 日次上限: 950件/日 (UTC)。次回ジョブは UTC Apr 6 (JST 09:00) 以降推奨
   - Tavily は credits 節約のため `--exclude-sources tavily` で除外中
 - **NEAT 環境検証** (WSL2): `claude_work/neat_trident` の動作確認
   ```bash
