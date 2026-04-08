@@ -1,7 +1,7 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-03-24（D. KG ABC化 + Neo4j バックエンド + K/I-B1 完了）
-> 参照元: `CLAUDE.md` / `plan.md` / `plan_think.md` / `plan_test.md` / `plan_training_a.md` / `plan_training_b.md` / `docs/session_progress.md`
+> 最終更新: 2026-04-09
+> 参照元: `CLAUDE.md` / `plan.md` / `plan_translate.md` / `plan_version_aware.md` / `plan_neat_hyp_e.md` / `plan_programming_seed.md`
 
 ---
 
@@ -16,264 +16,207 @@
 
 ---
 
-## A. 新機能 — 今セッションで設計したもの
+## A. 新機能 — 実装済み
 
-### A-1. 会話履歴の永続化 + ユーザー管理 ✅ **完了（サーバーサイド）**
-> サーバーサイド SQLite + JWT 認証による完全実装。
+### A-1. 会話履歴の永続化 + ユーザー管理 ✅ **完了**
+- ✅ `src/auth/` — User / JWT 認証（bcrypt + python-jose）
+- ✅ `src/conversation/` — Session / Turn / ConversationManager
+- ✅ `src/orchestrator/server.py` — /auth/* / /sessions/* / /admin/* エンドポイント
+- ✅ `src/gui/tabs/chat.py` — セッション選択・履歴復元 UI
+- 🟢 ブラウザローカルストレージからの履歴復元（サーバーAPIで代替済みのため低優先度）
 
-**認証モジュール（`src/auth/`）**
-- ✅ `src/auth/schema.py` — User / TokenPayload / LoginRequest / RegisterRequest / TestTokenRequest / TokenResponse
-- ✅ `src/auth/store.py` — UserStore (aiosqlite CRUD)
-- ✅ `src/auth/service.py` — AuthService (bcrypt + python-jose JWT)
-- ✅ `src/auth/deps.py` — FastAPI 依存注入（get_current_user / get_optional_user / require_localhost）
-
-**会話履歴モジュール（`src/conversation/`）**
-- ✅ `src/conversation/schema.py` — Session / Turn データクラス
-- ✅ `src/conversation/store.py` — ConversationStore (aiosqlite, CASCADE DELETE, WAL)
-- ✅ `src/conversation/manager.py` — ConversationManager (セッション上限, トークンウィンドウ, FAISS自動登録)
-
-**統合・エンドポイント**
-- ✅ `src/common/config.py` — AuthConfig / ConversationConfig 追加
-- ✅ `configs/default.yaml` — auth / conversation セクション追加
-- ✅ `src/orchestrator/pipeline.py` — user_id / session_id 統合、会話履歴コンテキスト注入
-- ✅ `src/orchestrator/server.py` — /auth/* / /sessions/* / /admin/* エンドポイント追加
-- ✅ `src/gui/tabs/chat.py` — セッション選択ドロップダウン・履歴復元 UI 追加
-- ✅ `scripts/seed_test_users.py` — テストユーザー登録スクリプト
-- ✅ `tests/unit/test_auth.py` — 認証テスト（TestRegister/Login/TestToken/JWT/UserStore）
-- ✅ `tests/unit/test_conversation.py` — 会話履歴テスト（CASCADE/トークン窓/時系列順）
-
-**残作業（ブラウザローカルストレージ、オプション）**
-- 🟡 `src/gui/tabs/chat.py` — セッション開始時にローカルストレージから履歴を復元する JS を注入（サーバーAPIで代替済みのため低優先度）
-- 🟡 GradioのJavaScript APIを使った実装方式の選定（`gr.HTML` + JS）
+### A-2. Teacher思考過程の抽出・保存（ReasoningTrace）✅ **完了**
+- ✅ `src/memory/schema.py` — KnowledgeType / TraceMethod / ReasoningTrace
+- ✅ `src/llm/gateway.py` — thinking_text / enable_thinking 対応
+- ✅ `src/llm/providers/anthropic.py` — Extended Thinking API 対応
+- ✅ `src/memory/metadata_store.py` — reasoning_traces / trace_documents テーブル
+- ✅ `src/llm/thinking_extractor.py` — ThinkingExtractor（プロバイダ別抽出）
+- 🟢 pipeline.py に思考過程自動保存フック追加
+- 🟢 GUI デバッグパネルに thinking_text 表示
 
 ---
 
-### A-2. Teacher思考過程の抽出・保存（ReasoningTrace）
-> 📄 詳細: `plan_think.md`
+## B. CI/CD
 
-**Step 1: スキーマ追加** ✅ **完了**
-- ✅ `src/memory/schema.py` — `KnowledgeType` / `TraceMethod` 列挙型を追加
-- ✅ `src/memory/schema.py` — `ReasoningTrace` Pydantic モデルを追加
-
-**Step 2: LLMレイヤー拡張** ✅ **完了**
-- ✅ `src/llm/gateway.py` — `LLMResponse` に `thinking_text: str | None` / `thinking_tokens: int` を追加
-- ✅ `src/llm/gateway.py` — `BaseLLMProvider.complete()` に `enable_thinking: bool = False` を追加
-- ✅ `src/llm/providers/anthropic.py` — Extended Thinking API（`thinking={"type":"enabled","budget_tokens":N}`）対応
-
-**Step 3: ストレージ** ✅ **完了**
-- ✅ `src/memory/metadata_store.py` — `reasoning_traces` テーブル追加
-- ✅ `src/memory/metadata_store.py` — `trace_documents`（多対多）テーブル追加
-- ✅ `src/memory/memory_manager.py` — `save_reasoning_trace()` メソッド追加
-
-**Step 4: 抽出ロジック** ✅ **完了**
-- ✅ `src/llm/prompt_templates/reasoning_extraction.yaml` — CoT抽出プロンプト（非Anthropicプロバイダ用）
-- ✅ `src/llm/thinking_extractor.py` — `ThinkingExtractor` クラス新規作成（プロバイダ別に抽出方式を切替）
-
-**Step 5: テスト** ✅ **完了**
-- ✅ `tests/unit/test_thinking_extractor.py` — 30テスト全通過（Extended Thinking / CoTパース / SQLite CRUD）
-
-**後続フェーズ（任意）**
-- 🟢 `src/orchestrator/pipeline.py` — Teacher呼び出し後に思考過程を自動保存するフック
-- 🟢 `src/gui/tabs/chat.py` — デバッグパネルに thinking_text を表示
-- 🟢 FAISSへの `reasoning` ドメイン新設（judgment_criteriaを検索可能に）
-
----
-
-## B. CI/CD 改善
-> 📄 詳細: `plan_test.md`
-
-### B-0. 即効修正（CI 6h → 20分） ✅ **完了**
-- ✅ `.github/workflows/ci.yml` — 各ジョブに `timeout-minutes` 追加（lint:5 / unit-tests:20 / docker-tests:30）
-- ✅ `.github/workflows/ci.yml` — `unit-tests` ジョブの `pip install` から `sentence-transformers` を削除
-- ✅ `.github/workflows/ci.yml` — `docker-tests` ジョブの重複 pytest ステップ削除済み
+### B-0. CI 高速化 ✅ **完了**
+- ✅ `timeout-minutes` 追加 / sentence-transformers 除去 / 重複 pytest 削除
 
 ### B-1〜4. testmon + xdist 移行
-- ✅ `pyproject.toml` — `pytest-testmon>=2.2` を dev dependency に追加（poetry add 済み）
-- ✅ `pyproject.toml` — `asyncio_default_fixture_loop_scope` / `filterwarnings` 追加（Event loop is closed 警告修正）
-- ✅ testmon ローカル動作確認済み（変更なし→0件/0.13s、embedder変更→68件/12s）
-- 🟡 `Dockerfile.test` — testmon/xdist 入り軽量イメージに修正
-- 🟡 `docker-compose.test.yml` — `.testmondata` ボリュームマウント設定
-- 🟡 `.github/workflows/test.yml` — testmon差分収集 → xdist並列実行ワークフロー作成
-- 🟡 `.github/workflows/test-full.yml` — 週次フルラン + `.testmondata` 再生成ワークフロー作成
+- ✅ `pytest-testmon>=2.2` 導入・ローカル動作確認済み
+- 🟡 `Dockerfile.test` — testmon/xdist 入り軽量イメージ
+- 🟡 `.github/workflows/test.yml` — testmon差分 → xdist並列実行ワークフロー
+- 🟡 `.github/workflows/test-full.yml` — 週次フルラン + `.testmondata` 再生成
 
 ---
 
-## C. 動作確認・統合テスト
-
-- ✅ オーケストレーター起動 E2E 動作確認完了
-  - `/health` / `/stats` / `/auth/*` / `/sessions/*` / `/add` / `/query` 全正常
-  - Haiku でのクエリ応答・FAISSコンテキスト付き回答生成を確認
-- ✅ `tests/integration/` Docker ベースの E2E テスト全通過（Docker内: 1096件 / ローカル: 1096件）
-  - `test_docker_sandbox.py` — 17 passed（コンテナ実行・セキュリティ・タイムアウト・並行実行）
-  - `test_e2e_pipeline.py` — 49 passed（CRUD / FastAPI / 認証 / セッション / 管理者）
-- ✅ `scripts/seed_memory.py` — 修正・動作確認完了（RetrieverRouter/Document/SourceMeta API修正）
-- ✅ `scripts/mature_memory.py` — 修正・動作確認完了（--check/--review/--tag-difficulty 全正常）
-- ✅ `scripts/train_student.py` — 修正・動作確認完了（SeedBuilder.build() API修正、dry-run成功）
+## C. 動作確認・統合テスト ✅ **完了**
+- ✅ オーケストレーター E2E 動作確認（/health / /query / /auth/* 全正常）
+- ✅ `tests/integration/` Docker E2E 全通過（unit 1030件 + integration 66件）
+- ✅ seed / mature / train スクリプト動作確認済み
 
 ---
 
-## D. Knowledge Graph フェーズ2（永続化）
-> 📄 詳細: `plan.md` Phase 2
-
-### ABC化 + Neo4j バックエンド — ✅ **完了**
-
-- ✅ `src/knowledge_graph/store.py` — ABC化 (KnowledgeGraphStore base + `create()` factory + `load()`)
-- ✅ `src/knowledge_graph/networkx_store.py` — NetworkX 実装を分離
-- ✅ `src/knowledge_graph/neo4j_store.py` — Neo4j バックエンド (Cypher クエリ、APOC フォールバック)
-- ✅ `configs/default.yaml` — `knowledge_graph.backend` 設定追加
-- ✅ `tests/unit/test_knowledge_graph.py` — ファクトリテスト 7件追加、既存 33件 全通過
-- ✅ 呼び出し側 (extractor.py / router_bridge.py / model_router.py) 変更なし
-
-### 追加完了
-
-- ✅ `pyproject.toml` — `neo4j>=5.0` を optional dependency として追加
+## D. Knowledge Graph ✅ **完了（Phase 1.5）**
+- ✅ `src/knowledge_graph/store.py` — ABC + NetworkX + Neo4j バックエンド
+- ✅ `src/knowledge_graph/extractor.py` / `router_bridge.py`
 - ✅ `src/knowledge_graph/migration.py` — NetworkX↔Neo4j↔JSON 双方向移行
-- ✅ `tests/integration/test_neo4j_kg.py` — Neo4j 統合テスト (Docker + testcontainers)
-- ✅ `tests/unit/test_knowledge_graph.py` — JSON ラウンドトリップ + dry-run テスト追加
-
-### 残作業
-
 - 🟢 KGスキーマの MED 特化設計（汎用 vs MED特化 Entity型の決定）
+- 🟢 Neo4j 永続化本番移行（現状: NetworkX + pickle）
 
 ---
 
-## E. 学習フレームワーク 本番稼働（Phase 3+）
+## E. 学習フレームワーク（Phase 3+）
 > 現状: 骨格実装のみ。VERL/trl との実際の統合が未完
 
-- 🟢 `src/training/algorithms/grpo.py` — VERL/trl との実際の統合
-- 🟢 `src/training/adapters/tinylora.py` — `frozen_rank=2, proj=4, tie=7` の本番チューニング
-- 🟢 KG パスを Teacher へのプロンプトに含めて CoT 強化
+- 🟢 `src/training/algorithms/grpo.py` — VERL/trl 実統合
+- 🟢 `src/training/adapters/tinylora.py` — 本番チューニング（frozen_rank=2, proj=4, tie=7）
+- 🟢 KG パスを Teacher プロンプトに含めて CoT 強化
 - 🟢 GRPO 報酬関数に KG 整合性スコアを追加
-- 🟢 評価指標に Entity 精度・関係再現率を追加
-- 🟢 拡張アルゴリズム（PPO, DPO）の本番チューニング
+- 🟢 拡張アルゴリズム（PPO, DPO）本番チューニング
+
+### Phase B（訓練拡張）✅ **骨格完了**
+- ✅ `TrainingDataGate` / StarPO-S / CurriculumController
+- ✅ `InterviewEvaluator` / `MultiChallengeEvaluator` / `AssumptionCorrectionEvaluator`
+- ✅ REFUEL アルゴリズム / CURIO 情報利得報酬
+- 🟢 KGカバレッジ監視フック（Echo Trap 早期検出）
+- 🟢 Cross-Encoder 疑似報酬モード（Teacher API コスト削減）
+- 🟢 IQA-EVAL ペルソナ別評価自動化
 
 ---
 
-## I. 面接形式テスト・多ターン訓練拡張
-> 📄 詳細: `plan_training_b.md`
+## F. メモリ品質目標（シード継続）
+> 📄 `plan_programming_seed.md`
 
-### Phase B-1: データ品質層の基盤 — ✅ **完了**
+**現状: approved 4,834件 / FAISS code 6,813 vectors（2026-04-09）**
 
-- ✅ `src/training/pipeline.py` — `TrainingDataGate` + `GateConfig` 追加
-- ✅ `src/training/algorithms/grpo.py` — StarPO-S 分散フィルタ + 非対称クリッピング追加
-- ✅ `src/memory/maturation/difficulty_tagger.py` — 動的カリキュラム調整 (CurriculumController)
-  - CurriculumConfig / CurriculumController: 損失移動平均 → 難易度配分シフト
-  - `src/training/pipeline.py` — _stage_grpo() にカリキュラム統合 (use_curriculum フラグ)
-  - `tests/unit/test_curriculum_controller.py` — 27テスト全通過
+### F-1. 日次 seed_and_mature ジョブ 🔴
+- 🔴 **Apr 9 ジョブ起動**（UTC 00:00 / JST 09:00以降・gemma-4-31b-it:free）
+  ```bash
+  poetry run python scripts/seed_and_mature.py \
+    --questions scripts/questions.txt \
+    --exclude-sources tavily \
+    --top-k 5 --limit 150
+  ```
+- OpenRouter 日次上限: 950件/UTC日。毎日 JST 09:00 以降に起動
+- 目標: approved **10,000件**
 
-### Phase B-2: 評価フレームワーク拡張 — ✅ **完了**
+### F-2. seed_from_docs.py 本番実行 🔴
+> 📄 `plan_programming_seed.md` カテゴリ I〜L（見込み 2,150〜4,200件）
+- 🔴 GitHub ドキュメントリポジトリ（tldr-pages / Node.js / cpython / MDN）
+  ```bash
+  poetry run python scripts/seed_from_docs.py --source github_docs --max-files 100 --dry-run
+  poetry run python scripts/seed_from_docs.py --source github_docs --max-files 100 --mature --provider openrouter
+  ```
+- 🔴 URLリスト（Arch Wiki / Python docs / Linux Command Line）
+  ```bash
+  poetry run python scripts/seed_from_docs.py --source url_list --mature --provider openrouter
+  ```
 
-- ✅ `src/training/evaluation/interview_evaluator.py` — `InterviewEvaluator` (圧迫深掘りテスト)
-- ✅ `src/training/evaluation/multi_challenge_evaluator.py` — `MultiChallengeEvaluator` (長期指示維持4カテゴリ)
-- ✅ `src/training/evaluation/assumption_correction_evaluator.py` — `AssumptionCorrectionEvaluator` (MEDオリジナル)
-- ✅ `tests/unit/test_interview_evaluators.py` — 23テスト全通過
-- ✅ `src/training/evaluation/benchmark_suite.py` — mtRAG ベンチマーク統合
+### F-3. needs_update 再mature 🟡
+- 現状: needs_update **188件**（arXiv中心）
+  ```bash
+  poetry run python scripts/remature_needs_update.py --provider fastflowlm --limit 200
+  ```
 
-### Phase B-3: 訓練アルゴリズム拡張 — ✅ **完了**
-
-- ✅ `src/training/algorithms/refuel.py` — REFUEL アルゴリズム (Q値差分回帰)
-- ✅ `src/training/rewards/composite.py` — CURIO 情報利得報酬 (`curio_coef` パラメータ)
-- ✅ `configs/training.yaml` — `starpo_s` / `refuel_tinylora` / `grpo_curio` プロファイル追加
-
-### Phase B-4: 統合・モニタリング
-
-- 🟢 `src/knowledge_graph/router_bridge.py` — KGカバレッジ監視フック追加
-  - エンティティ経路の多様性スコアを計算し Echo Trap 早期検出シグナルに
-  - `多様性スコア = ユニークエンティティ数 / 総エンティティ参照数 < θ` で警告
-- 🟢 `src/memory/learning/cross_encoder.py` — Cross-Encoder疑似報酬モードを追加
-  - Teacher API を毎ステップ呼ばずに Cross-Encoder でコスト削減
-  - N ステップに1回 Teacher API で品質を補正するハイブリッド運用
-- 🟢 `src/training/evaluation/` — IQA-EVAL ペルソナ別評価自動化
-  - `src/memory/maturation/seed_builder.py` と連携してペルソナ付きテストデータを生成
-
----
-
-## F. メモリ品質目標（運用フェーズ）
-
-- 🟢 `data/faiss_indices/` へのシードデータ投入（目標: 10,000 docs）
-- 🟢 confidence > 0.7 の達成
-- 🟢 コード実行成功率 > 80% の達成
-- 🟢 `src/memory/maturation/seed_builder.py` — Teacher API 呼び出し部分（現状スタブ）を実接続
+### F-4. seed_blacklist ✅ **完了（2026-04-09）**
+- ✅ `src/memory/metadata_store.py` — `seed_blacklist` テーブル追加
+- ✅ `reviewer.py` — rejected 判定時に自動登録
+- ✅ `seed_and_mature.py` — fetch後・dedup前にblacklistチェック
+- ✅ `seed_from_docs.py` — Phase 1.5 にblacklistフィルタ挿入
+- 現状: 172件登録済み（既存rejected文書から自動投入）
 
 ---
 
-## J. データ世代管理（restic + NAS）
-> 📄 詳細: `plan_data.md`
+## G. ローカル Teacher 設定 ✅ **完了（2026-04-09）**
 
-### 基盤構築 — ✅ **完了**
+### FastFlowLM (NPU)
+- ✅ `configs/llm_config.local.yaml` — `fastflowlm` プロバイダー追加
+  - `qwen3.5:9b`（Q4_1・NPU）採用
+  - IFBench: 9b Q4_1≈57% / 4b Q4_1≈50% / 2b Q4_1≈35%
+  - reviewer用途は9b推奨（4bはJSON失敗率増のリスク）
+- ✅ 全32モデルベンチマーク完了（decode速度 / JSON出力品質）
 
-- ✅ restic ローカルリポジトリ初期化（`.restic/repo/`、暗号化済み）
-- ✅ `scripts/backup_data.sh` — バックアップ自動化スクリプト（backup / list / restore / NAS sync）
-- ✅ NAS 同期（rsync + SMB互換フラグ `--no-perms --no-owner --no-group --no-times`）
-- ✅ Git 連携（スナップショットタグに `git:<hash>` / `docs:<件数>` 自動付与）
-- ✅ `.gitignore` に `.restic/` 追加
+### LM Studio
+- ✅ `configs/llm_config.local.yaml` — `lmstudio` プロバイダー設定済み
+  - `qwen3.5-9b`（BF16 IFBench 64.5%）推奨
 
-### 復元検証・バッチ作成 — ✅ **完了**
+---
 
-- ✅ `restic restore` ローカル復元テスト（スナップショット → /tmp 展開 → ファイル一致確認）
-- ✅ NAS 災害復旧フロー検証（NAS → rsync → ローカルリポジトリ再構築 → restore → ファイル一致）
-- ✅ `poetry_run_backup.bat` — Windows からバックアップ実行（WSL経由）
-- ✅ `poetry_run_restore_from_nas.bat` — NAS災害復旧バッチ
-- ✅ `.gitignore` に `poetry_run_*.bat` / `scripts/claude_commit.sh` 追加
+## H. 多言語対応 🟡
+> 📄 `plan_translate.md`
 
-### 残作業
+- ✅ 日本語 manual 5件 英訳 + FAISS 再エンベッド済み
+- ✅ 多言語対応方針決定（10,000 docs 達成後に移行）
+- 🟡 **バックアップ**: `cp -r data/faiss_indices/ data/faiss_indices_minilm_backup/`（移行前に実施）
+- 🟡 **`scripts/reindex_faiss.py` 作成**（未実装）
+- 🟡 `configs/default.yaml` の embedding model を `paraphrase-multilingual-MiniLM-L12-v2` に変更
 
+---
+
+## I. バージョン対応知識管理 🟡
+> 📄 `plan_version_aware.md`
+
+- 🟡 **Step 1**: `src/memory/schema.py` に version フィールド追加
+  - `version_status: str = "unknown"` / `tech_name` / `version_introduced` / `version_deprecated` / `version_removed`
+  - `src/memory/metadata_store.py` に ALTER TABLE マイグレーション追加
+- 🟢 **Step 2**: KG バージョンノード設計（introduced_in / deprecated_in / removed_in / replaced_by）
+- 🟢 **Step 3**: バージョン対応検索フロー（クエリからバージョン抽出 → フィルタ）
+
+---
+
+## J. データ世代管理 ✅ **完了**
+- ✅ restic + NAS バックアップ基盤
+- ✅ `scripts/backup_data.sh` / `poetry_run_backup.bat`
 - 🟢 定期バックアップ（cron / タスクスケジューラ）
-- 🟢 保持ポリシー設定（`restic forget --keep-last 10 --keep-daily 7 --keep-weekly 4 --prune`）
-- 🟢 バックアップ整合性チェック（`restic check`）の定期実行
+- 🟢 保持ポリシー（`restic forget --keep-last 10 --keep-daily 7 --keep-weekly 4 --prune`）
 
 ---
 
-## K. CRAG Query Rewriter + タイムアウト伝播
-
-### CRAG 多戦略 Query Rewriter — ✅ **完了**
-
-- ✅ `src/rag/query_rewriter.py` — QueryRewriter (4戦略: rule_expand / flan_t5_rewrite / qwen_rewrite / llm_rewrite)
-- ✅ `data/models/flan-t5-small/` — HuggingFace Hub 経由 DL 済み (77MB)
-- ✅ `data/models/Qwen2.5-0.5B-Instruct/` — HuggingFace Hub 経由 DL 済み (494MB)
-- ✅ `src/orchestrator/pipeline.py` — `crag_strategies` パラメータ追加、CRAG リトライ時にモデルベース戦略併用
-- ✅ `src/orchestrator/server.py` — `QueryRequest.crag_strategies` + `/crag/strategies` エンドポイント
-- ✅ `src/gui/tabs/chat.py` — CRAG 戦略チェックボックス (4個、モデル未配置は非活性)
-- ✅ デバッグ情報に各戦略の結果を表示
-
-### タイムアウト伝播 — ✅ **完了**
-
-- ✅ GUI → FastAPI → Pipeline → ResponseGenerator → Gateway → Provider の全チェーンで `timeout` パラメータ伝播
-- ✅ 全 5 プロバイダー (anthropic / openai / ollama / openai_compatible / vllm_student) に `timeout` 追加
-- ✅ カスタムプロバイダー (LM Studio) のフォールバック修正: ビルトインプロバイダーへの自動フォールバック
-
-### 残作業
-
-- ✅ CRAG カスケード戦略: 安い順に試して十分なら打ち切り（実装済み）
-- ✅ `scripts/generate_query_rewrite_data.py` — Teacher LLM で訓練データ生成
-- ✅ `scripts/train_query_rewriter.py` — FLAN-T5 / Qwen SFT fine-tune スクリプト
-- ✅ `src/rag/query_rewriter.py` — fine-tune 済みモデル (*-crag/) 自動検出
-- 🟡 訓練データ生成実行 + SFT 実行 (Teacher API キー必要)
-- 🟡 RL fine-tune (GRPO報酬 = FAISS検索品質スコア) の実装
-- 🟢 doc2query-T5 インデックス時クエリ生成の検討
+## K. CRAG Query Rewriter ✅ **完了**
+- ✅ QueryRewriter（4戦略: rule_expand / flan_t5 / qwen / llm）
+- ✅ FLAN-T5-small / Qwen2.5-0.5B-Instruct DL済み
+- ✅ タイムアウト伝播（GUI→FastAPI→Pipeline→Gateway→全5プロバイダー）
+- 🟡 訓練データ生成実行 + SFT 実行（Teacher API キー必要）
+- 🟡 RL fine-tune（GRPO報酬 = FAISS検索品質スコア）
 
 ---
 
-## G. インフラ移行（将来フェーズ）
+## L. NEAT Context-Sensitive Search 🟢
+> 📄 `plan_neat_hyp_e.md`
+
+- 🟢 **Phase 5-1**: `AssociationFn` — numpy版 MLP（3項関数: query, candidate, context）
+- 🟢 **Phase 5-2**: `ContextSensitiveSearch` — FAISS k*3 候補 → association_fn リランク
+- 🟢 **Phase 5-3**: MED 統合 + StyleVector 連携（`med_hyp_style_g.md`）
+- 🟢 NEAT 環境検証（WSL2）: `claude_work/neat_trident`
+  ```bash
+  cd /mnt/d/Projects/claude_work/neat_trident
+  python scripts/phase0_verify.py
+  python scripts/faiss_hybrid_verify.py
+  python scripts/es_hyperneat_verify.py
+  python scripts/long_term_loop.py
+  ```
+- 🟢 NEAT × MED 統合（`neat_trident/src/med_integration/` アダプタ層設計）
+
+---
+
+## M. インフラ移行（将来フェーズ）🟢
 
 - 🟢 SQLite → PostgreSQL 移行スクリプト
-- 🟢 KG: NetworkX + pickle → Neo4j 移行（plan.md Phase 2）
-- 🟢 埋め込みモデル: `all-MiniLM-L6-v2` → `UniXcoder` 移行評価
+- 🟢 KG: NetworkX + pickle → Neo4j 本番移行
+- 🟢 埋め込みモデル: all-MiniLM-L6-v2 → UniXcoder 移行評価
 - 🟢 将来評価: Cognee / Weaviate（FAISS + KG 統合候補）
 
 ---
 
-## H. ドキュメント・スクリプト整備
+## 技術的負債
 
-- 🟡 `scripts/` 各スクリプトのヘルプ文・引数整備（`argparse`）
-- 🟡 `docs/site/dev/roadmap.md` — 本 TODO に合わせて更新
-- 🟢 OpenAI o1/o3 系の `reasoning_content` フィールド対応調査（A-2 の拡張）
+- `src/memory/maturation/seed_builder.py` — Teacher API 呼び出し部分はスタブ
+- `src/training/algorithms/` — 骨格実装のみ、VERL/trl 実統合が必要
+- `tests/unit/test_alias_extractor.py` — pytest-asyncio 設定問題で1件失敗（既知）
 
 ---
 
-## 完了済み参照（変更不要）
-
-以下は実装済み。混同しないよう記載。
+## 完了済みモジュール一覧
 
 | モジュール | 状態 |
 |-----------|------|
@@ -282,13 +225,12 @@
 | Phase 2: maturation / cross_encoder / teacher_registry / mcp_tools | ✅ |
 | Phase 3: training 骨格（base / algorithms / adapters / rewards） | ✅ 骨格 |
 | Phase 4: model_router / query_parser / error_analyzer / deduplicator | ✅ |
+| Seed拡張: github_docs_fetcher / url_list_fetcher / seed_from_docs.py | ✅ |
+| Seed品質管理: seed_blacklist / remature_needs_update.py | ✅ |
+| OpenRouter日次管理: daily_usage_tracker / check_usage.py | ✅ |
 | GUI: Gradio 6タブ + docs_chat | ✅ |
-| CI: GitHub Actions + ruff + pytest 1096テスト (unit 1030 + integration 66) | ✅ |
+| CI: GitHub Actions + ruff + pytest 1096テスト | ✅ |
 | A-1: src/auth/ + src/conversation/ + JWT + セッション管理 | ✅ |
-| Docker統合テスト: sandbox 17件 + E2E pipeline 49件 全通過 | ✅ |
-| testmon: pytest-testmon 2.2.0 導入・ベースライン記録済み | ✅ |
-| pytest警告修正: asyncio loop_scope + filterwarnings 設定 | ✅ |
-| C. 動作確認: オーケストレーター + seed/mature/train スクリプト修正・E2E通過 | ✅ |
-| J. データ世代管理: restic + NAS + backup/restore検証 + Windows bat | ✅ |
-| K. CRAG Query Rewriter: 4戦略 + FLAN-T5/Qwen DL + GUI チェックボックス | ✅ |
-| K. タイムアウト伝播: GUI→FastAPI→Pipeline→Gateway→全5プロバイダー | ✅ |
+| A-2: ReasoningTrace / ThinkingExtractor / Extended Thinking | ✅ |
+| J: restic + NAS バックアップ基盤 | ✅ |
+| K: CRAG Query Rewriter 4戦略 + タイムアウト伝播 | ✅ |

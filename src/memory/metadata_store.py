@@ -187,6 +187,22 @@ _CREATE_REASONING_INDICES_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_reasoning_traces_method ON reasoning_traces(trace_method);",
 ]
 
+_CREATE_BLACKLIST_SQL = """
+CREATE TABLE IF NOT EXISTS seed_blacklist (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_type TEXT NOT NULL DEFAULT '',
+    source_url  TEXT NOT NULL DEFAULT '',
+    source_title TEXT NOT NULL DEFAULT '',
+    reason TEXT NOT NULL DEFAULT 'rejected',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+"""
+
+_CREATE_BLACKLIST_INDICES_SQL = [
+    "CREATE INDEX IF NOT EXISTS idx_blacklist_url   ON seed_blacklist(source_url)   WHERE source_url != '';",
+    "CREATE INDEX IF NOT EXISTS idx_blacklist_title ON seed_blacklist(source_title) WHERE source_title != '';",
+]
+
 _CREATE_INDICES_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_documents_domain ON documents(domain);",
     "CREATE INDEX IF NOT EXISTS idx_documents_review_status ON documents(review_status);",
@@ -358,8 +374,9 @@ class MetadataStore:
         await self._db.execute(_CREATE_FTS_SQL)
         await self._db.execute(_CREATE_REASONING_TRACES_SQL)
         await self._db.execute(_CREATE_TRACE_DOCUMENTS_SQL)
+        await self._db.execute(_CREATE_BLACKLIST_SQL)
         await self._migrate()  # 列追加を先に行い、その後インデックス作成
-        for idx_sql in _CREATE_INDICES_SQL + _CREATE_RAW_RESULTS_INDICES_SQL + _CREATE_REASONING_INDICES_SQL:
+        for idx_sql in _CREATE_INDICES_SQL + _CREATE_RAW_RESULTS_INDICES_SQL + _CREATE_REASONING_INDICES_SQL + _CREATE_BLACKLIST_INDICES_SQL:
             await self._db.execute(idx_sql)
         for trigger_sql in _CREATE_FTS_TRIGGERS_SQL:
             await self._db.execute(trigger_sql)
@@ -379,12 +396,81 @@ class MetadataStore:
         if "keywords" not in columns:
             await self._db.execute(_MIGRATION_ADD_KEYWORDS)
             logger.info("MetadataStore: migrated — added keywords column")
+        # seed_blacklist への rejected 文書の初期投入（冪等）
+        await self._db.execute("""
+            INSERT OR IGNORE INTO seed_blacklist (source_type, source_url, source_title, reason)
+            SELECT source_type,
+                   COALESCE(source_url, ''),
+                   COALESCE(source_title, ''),
+                   'rejected'
+            FROM documents
+            WHERE review_status = 'rejected'
+              AND (source_url != '' OR source_title != '')
+              AND NOT EXISTS (
+                  SELECT 1 FROM seed_blacklist b
+                  WHERE (source_url != '' AND b.source_url = documents.source_url)
+                     OR (source_title != '' AND b.source_title = documents.source_title)
+              )
+        """)
+        cur = await self._db.execute("SELECT COUNT(*) FROM seed_blacklist")
+        count = (await cur.fetchone())[0]
+        if count:
+            logger.info("MetadataStore: seed_blacklist — %d entries", count)
 
     async def close(self) -> None:
         """DB 接続を閉じる。"""
         if self._db:
             await self._db.close()
             self._db = None
+
+    # ------------------------------------------------------------------ #
+    # seed_blacklist
+    # ------------------------------------------------------------------ #
+
+    async def is_blacklisted(self, source_url: str = "", source_title: str = "") -> bool:
+        """URL またはタイトルがブラックリストに登録されているか確認する。"""
+        if not source_url and not source_title:
+            return False
+        cur = await self._db.execute(
+            """SELECT 1 FROM seed_blacklist
+               WHERE (source_url != '' AND source_url = ?)
+                  OR (source_title != '' AND source_title = ?)
+               LIMIT 1""",
+            (source_url, source_title),
+        )
+        return await cur.fetchone() is not None
+
+    async def add_to_blacklist(
+        self,
+        source_type: str,
+        source_url: str = "",
+        source_title: str = "",
+        reason: str = "rejected",
+    ) -> None:
+        """ブラックリストにエントリを追加する（重複は無視）。"""
+        if not source_url and not source_title:
+            return
+        await self._db.execute(
+            """INSERT OR IGNORE INTO seed_blacklist
+               (source_type, source_url, source_title, reason)
+               VALUES (?, ?, ?, ?)""",
+            (source_type, source_url, source_title, reason),
+        )
+        await self._db.commit()
+
+    async def get_blacklist(self, source_type: str | None = None) -> list[dict]:
+        """ブラックリスト一覧を返す。source_type で絞り込み可能。"""
+        if source_type:
+            cur = await self._db.execute(
+                "SELECT * FROM seed_blacklist WHERE source_type = ? ORDER BY created_at DESC",
+                (source_type,),
+            )
+        else:
+            cur = await self._db.execute(
+                "SELECT * FROM seed_blacklist ORDER BY created_at DESC"
+            )
+        rows = await cur.fetchall()
+        return [dict(r) for r in rows]
 
     async def save(self, doc: Document) -> None:
         """Document を保存する (UPSERT)。"""

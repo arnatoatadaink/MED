@@ -248,6 +248,14 @@ async def seed_and_mature(
                     stats["quality_filtered"] += 1
                     continue
 
+            # ── ブラックリストチェック ──
+            result_url = getattr(result, "url", "") or ""
+            result_title = getattr(result, "title", "") or ""
+            if await mm.store.is_blacklisted(source_url=result_url, source_title=result_title):
+                logger.debug("  Blacklisted: %s", result_url or result_title)
+                stats["duplicates"] += 1
+                continue
+
             # 重複チェック（ハッシュ）
             content_hash = dedup.content_hash(content)
             dup_result = dedup.check(

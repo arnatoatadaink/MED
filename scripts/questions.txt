@@ -189,3 +189,77 @@ LLMs identifying authorship from writing style samples
 LLMs struggle with implicit writing styles: style imitation limitations https://arxiv.org/abs/2509.14543
 T5 encoder for authorship signature extraction
 Personal writing style extraction as RAG context signal
+
+# === Style Transfer & Style Extraction ===
+STRAP: reformulating unsupervised style transfer as paraphrase generation via back-translation https://arxiv.org/abs/2010.05700
+Back-translation as style-neutral paraphrase for content-style disentanglement
+Round-trip translation for authorship obfuscation: style erasure via pivot language
+PAN shared task: authorship obfuscation methods and evaluation
+Style transfer without parallel data: cross-alignment adversarial approach Shen 2017
+Disentangled VAE for text: separating content and style latent spaces
+Delete-Retrieve-Generate: style transfer by explicit style marker removal
+Text detoxification: removing toxic style while preserving content
+Authorship fingerprint removal: linguistic feature neutralization
+StyloMetrix: computational stylometry feature extraction for authorship analysis
+Residual style vector: original embedding minus back-translated embedding as style signal
+CTRL control codes: conditioning language model generation on writing style
+
+# === JavaScript & Frontend Development ===
+JavaScript event loop: microtask queue vs macrotask queue execution order
+Promise vs async/await: error handling patterns in JavaScript
+JavaScript closures and lexical scoping: practical use cases
+ES2022+ features: top-level await, class fields, using declaration
+Node.js streams: readable writable transform stream patterns
+JavaScript module system: ESM vs CommonJS interoperability
+TypeScript generics and conditional types: advanced patterns
+React hooks: useCallback useMemo useRef optimization patterns
+Webpack vs Vite: bundle optimization and tree-shaking strategies
+CSS custom properties and cascade layers: modern CSS architecture
+
+# === HTML/CSS & Web Standards ===
+CSS Grid vs Flexbox: layout decision criteria and use cases
+CSS container queries and has() selector: component-scoped styles
+Web Components: custom elements shadow DOM slot patterns
+Progressive enhancement vs graceful degradation in web development
+Accessibility: ARIA roles landmarks and keyboard navigation patterns
+HTTP caching: Cache-Control ETag Last-Modified strategies
+Content Security Policy: XSS prevention via response headers
+Web performance: Core Web Vitals LCP FID CLS optimization
+
+# === Server & Infrastructure ===
+nginx configuration: reverse proxy upstream load balancing patterns
+Docker multi-stage builds: minimizing image size for production
+Docker Compose networking: service discovery and volume patterns
+Linux process management: systemd service unit file configuration
+Environment variable management: .env files secrets best practices
+WSGI vs ASGI: Python web server interface differences and migration
+gunicorn uvicorn configuration: worker count timeout settings
+PostgreSQL indexing: B-tree GIN GiST index selection criteria
+Redis patterns: caching session pub/sub use cases
+GitHub Actions workflow: matrix strategy caching artifact patterns
+
+# === Linux System Administration ===
+Linux file permissions: chmod chown umask numeric and symbolic modes
+Linux process signals: SIGTERM SIGKILL SIGHUP graceful shutdown patterns
+systemd unit files: service timer socket activation configuration
+Linux networking: ip route ss netstat firewalld iptables basics
+SSH configuration: key-based auth port forwarding ProxyJump patterns
+Linux filesystem hierarchy: /proc /sys /var /etc /usr purpose and structure
+Bash scripting: error handling set -euo pipefail trap patterns
+Linux package management: apt dpkg rpm differences and best practices
+cgroups and namespaces: Linux container isolation primitives
+Linux memory management: virtual memory swap OOM killer behavior
+Linux performance tools: top htop vmstat iostat strace perf basics
+Regular expressions in Linux: grep sed awk practical text processing
+
+# === Library Release Notes & Version Changes ===
+Python 3.12 changes: removal of distutils deprecated APIs migration guide
+Python 3.11 features: exception groups TaskGroup tomllib additions
+Breaking changes in PyTorch 2.0: compile() API and 1.x migration
+FastAPI 0.100+ changes: Pydantic v2 migration breaking changes
+Pydantic v1 to v2 migration: validator field_validator model_validator
+SQLAlchemy 2.0 migration: legacy query API to 2.0 style
+React 18 breaking changes: automatic batching concurrent features
+Node.js LTS release policy: even-numbered versions support lifecycle
+numpy 2.0 migration: removed functions and dtype changes
+transformers library version compatibility: AutoModel API changes

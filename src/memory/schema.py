@@ -39,6 +39,8 @@ class SourceType(str, Enum):
     MANUAL = "manual"  # 手動投入
     TEACHER = "teacher"  # Teacher Model 生成
     SEED = "seed"  # シードデータ
+    GITHUB_DOCS = "github_docs"  # GitHub ドキュメントリポジトリ取得
+    WEB_DOCS = "web_docs"  # キュレーテッド URL リスト取得
 
 
 class DifficultyLevel(str, Enum):

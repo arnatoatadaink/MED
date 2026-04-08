@@ -175,6 +175,14 @@ class MemoryReviewer:
                 review_status=review_status.value,
                 confidence=confidence,
             )
+            # rejected 時はブラックリストに登録（同一 URL/タイトルの再取得を防ぐ）
+            if review_status == ReviewStatus.REJECTED:
+                await self._store.add_to_blacklist(
+                    source_type=doc.source.source_type.value if doc.source else "",
+                    source_url=doc.source.url or "" if doc.source else "",
+                    source_title=doc.source.title or "" if doc.source else "",
+                    reason="rejected",
+                )
         except Exception:
             logger.exception("Failed to update quality for doc=%s", doc.id)
 

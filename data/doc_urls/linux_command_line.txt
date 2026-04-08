@@ -1,0 +1,29 @@
+# The Linux Command Line — William Shotts (Free HTML Edition)
+# Rate: 3 seconds between requests
+# Source: linuxcommand.org (small site, be gentle)
+
+# === Learning the Shell ===
+https://linuxcommand.org/lc3_lts0010.php
+https://linuxcommand.org/lc3_lts0020.php
+https://linuxcommand.org/lc3_lts0030.php
+https://linuxcommand.org/lc3_lts0040.php
+https://linuxcommand.org/lc3_lts0050.php
+https://linuxcommand.org/lc3_lts0060.php
+https://linuxcommand.org/lc3_lts0070.php
+https://linuxcommand.org/lc3_lts0080.php
+
+# === Writing Shell Scripts ===
+https://linuxcommand.org/lc3_wss0010.php
+https://linuxcommand.org/lc3_wss0020.php
+https://linuxcommand.org/lc3_wss0030.php
+https://linuxcommand.org/lc3_wss0040.php
+https://linuxcommand.org/lc3_wss0050.php
+https://linuxcommand.org/lc3_wss0060.php
+https://linuxcommand.org/lc3_wss0070.php
+https://linuxcommand.org/lc3_wss0080.php
+https://linuxcommand.org/lc3_wss0090.php
+https://linuxcommand.org/lc3_wss0100.php
+https://linuxcommand.org/lc3_wss0110.php
+https://linuxcommand.org/lc3_wss0120.php
+https://linuxcommand.org/lc3_wss0130.php
+https://linuxcommand.org/lc3_wss0140.php

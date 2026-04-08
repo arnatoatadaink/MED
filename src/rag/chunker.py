@@ -26,6 +26,8 @@ _SOURCE_TYPE_MAP = {
     "stackoverflow": SourceType.STACKOVERFLOW,
     "tavily": SourceType.TAVILY,
     "arxiv": SourceType.ARXIV,
+    "github_docs": SourceType.GITHUB_DOCS,
+    "web_docs": SourceType.WEB_DOCS,
 }
 
 # 文末境界パターン（句点・感嘆符・疑問符の後ろの空白）

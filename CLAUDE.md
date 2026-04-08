@@ -412,17 +412,64 @@ KG訓練統合タスク（将来）:
 | **Phase 4** | `src/rag/query_expander.py` — URL 検出 (`extract_urls`) | ✅ 完了 |
 | **Phase 4** | `scripts/seed_and_mature.py` — 外部RAG→重複排除→FAISS→Teacher成熟 統合パイプライン | ✅ 完了 |
 | **Phase 4** | `scripts/test_teacher.py` — Teacher テスト CLI (ping/benchmark/ingest) | ✅ 完了 |
-| **Phase 4** | `scripts/questions.txt` — シード質問集 (125問/11カテゴリ) | ✅ 完了 |
+| **Phase 4** | `scripts/questions.txt` — シード質問集 (262問/25カテゴリ) | ✅ 完了 |
 | **Phase 4** | LLM プロバイダー max_tokens=4096 デフォルト + yaml per-provider 設定 | ✅ 完了 |
 | **Phase 4** | OpenAI-compatible: Qwen3.5 thinking model (`reasoning_content`) 対応 | ✅ 完了 |
 | **Phase 4** | CRAG: use_memory/use_rag パラメータ伝播修正 + provider/timeout 伝播 | ✅ 完了 |
+| **Seed拡張** | `src/memory/schema.py` — SourceType.GITHUB_DOCS / WEB_DOCS 追加 | ✅ 完了 |
+| **Seed拡張** | `src/rag/github_docs_fetcher.py` — GitHub Contents API 一括取得 (RST/MD対応) | ✅ 完了 |
+| **Seed拡張** | `src/rag/url_list_fetcher.py` — URLリスト順次フェッチ (ドメイン別レート制限) | ✅ 完了 |
+| **Seed拡張** | `scripts/seed_from_docs.py` — GitHub docs / URLリスト → FAISS 統合スクリプト | ✅ 完了 |
+| **Seed拡張** | `data/doc_urls/` — github_doc_repos.yaml / archwiki.txt / python_docs.txt / linux_command_line.txt | ✅ 完了 |
 | **Phase 5** | NEAT Context-Sensitive Search — `association_fn(q, c, ctx)` リランキング | ⬜ 計画策定済み (`plan_neat_hyp_e.md`) |
+| **将来** | 多言語埋め込みモデル移行 (paraphrase-multilingual-MiniLM-L12-v2) | ⬜ 10,000 docs 達成後 (`plan_translate.md`) |
+| **将来** | バージョン対応知識管理 (schema拡張 + KGバージョンノード) | ⬜ 設計済み (`plan_version_aware.md`) |
 | **Phase 3+** | 学習フレームワーク 本番稼働 (KG CoT / GRPO本番) | ⬜ 将来対応 |
 | **将来** | Neo4j 移行 / PostgreSQL 移行 / vLLM Student 本番 | ⬜ 将来対応 |
 
 ### 次セッションへの引き継ぎ事項
 
 **作業ブランチ**: `main`
+
+**完了済み（直近セッション — 2026-04-08）**
+- **日本語 manual ドキュメント 5件 英訳完了**
+  - content + source_title を英語に更新 (metadata.db)
+  - FAISS ベクトルを英語コンテンツで再エンベッド (5/5)
+  - `data/isolation/` に翻訳済みテキストを保管
+- **Tavily 文書中の CJK 人名影響: 無視できる範囲と判断** (英語200+トークン中1〜4文字)
+- **多言語対応方針決定** (`plan_translate.md` 新規)
+  - 現状は英語コンテンツ95%以上のため対応不要
+  - 10,000 docs 達成後に `paraphrase-multilingual-MiniLM-L12-v2`（384-dim, 50言語）へ切り替え
+  - all-MiniLM-L6-v2 ベクトルは `data/faiss_indices_minilm_backup/` に保持予定
+- **スタイル抽出研究メモ追加** (`plan_translate.md` Part 3)
+  - STRAP (back-translation style disentanglement) / PAN Authorship Obfuscation と直接対応
+  - MED Phase 5 StyleVector との統合候補
+- **バージョン対応知識管理設計** (`plan_version_aware.md` 新規)
+  - documents テーブルに version フィールド追加計画 (Step 1: schema変更のみ)
+  - KG バージョンノード設計 (introduced_in / deprecated_in / removed_in)
+- **questions.txt 拡張**: 192問 → **262問** (+70問)
+  - 新カテゴリ: Style Transfer & Style Extraction (12問)
+  - 新カテゴリ: JavaScript & Frontend (10問)
+  - 新カテゴリ: HTML/CSS & Web Standards (8問)
+  - 新カテゴリ: Server & Infrastructure (10問)
+  - 新カテゴリ: Linux System Administration (12問)
+  - 新カテゴリ: Library Release Notes & Version Changes (10問)
+- **plan_programming_seed.md 拡張**: カテゴリ I〜L 追加 (JS/HTML/CSS/Server/Linux/ReleaseNotes)
+  - 見込みドキュメント数: 1,200〜2,300 → **2,150〜4,200件** に拡大
+- **ドキュメント Seed 基盤実装完了**
+  - `src/memory/schema.py`: SourceType.GITHUB_DOCS / WEB_DOCS 追加
+  - `src/rag/chunker.py`: 新SourceType マッピング追加
+  - `src/rag/github_docs_fetcher.py`: GitHub Contents API 一括取得 (RST/MD クリーナー付き)
+  - `src/rag/url_list_fetcher.py`: URLリスト順次フェッチ (ドメイン別レート制限, HTML本文抽出)
+  - `scripts/seed_from_docs.py`: fetch → chunk → dedup → add → mature 統合スクリプト
+  - `data/doc_urls/github_doc_repos.yaml`: tldr-pages / Node.js / cpython / MDN 設定
+  - `data/doc_urls/archwiki.txt`: Arch Wiki 40ページ
+  - `data/doc_urls/python_docs.txt`: Python docs 34ページ (whatsnew 3.9〜3.13 含む)
+  - `data/doc_urls/linux_command_line.txt`: linuxcommand.org 24ページ
+- **GITHUB_TOKEN**: `.env` に追加済み・動作確認済み (API rate limit 5,000/5,000)
+- **Apr 7 seed_and_mature 完了**: 150問 → 501件 → approved **452件 (90%)**
+  - approved: 4,134 → **4,586件** / FAISS code: 6,056 → **6,562 vectors**
+  - OpenRouter: 953/950 で上限到達（正常動作）
 
 **完了済み（直近セッション — 2026-04-03）**
 - **needs_update 対策完了**: 対策先にシード増加後の方針を実施
@@ -507,27 +554,45 @@ KG訓練統合タスク（将来）:
 ANTHROPIC_API_KEY=...   # seed_builder / mature / KG抽出 に必要
 OPENAI_API_KEY=...      # 代替 Teacher として使用可
 TAVILY_API_KEY=...      # 外部RAG（任意）
-GITHUB_TOKEN=...        # 外部RAG（任意・レート制限緩和）
+GITHUB_TOKEN=...        # GitHub docs 取得 + レート制限緩和 ✅ 設定済み
+OPENROUTER_API_KEY=...  # Teacher (openrouter) ✅ 設定済み
 ```
 
 **残作業 (優先度: 高)**
-- **needs_update 862件（code）の対処方針決定**
-  - Tavily 断片が主因 → Chunker 改善後に再 seed が推奨
-  - arXiv 175件は保持中（needs_update）
-- **med_hyp_style_g.md**: ✅ 確認済み — StyleVector（3層スタイル分解）をPhase 5 context_embとして統合予定
-  - 実装ギャップ: SudachiPy動作確認 / StyloMetrix日本語対応確認 / 次元設計（64-128次元）
-- オーケストレーター起動 + E2E 動作確認
+- **Apr 8 seed_and_mature ジョブ起動** (UTC 00:48 / JST 09:48 以降)
   ```bash
-  python -m uvicorn src.orchestrator.server:app --port 8000 --reload
-  python scripts/launch_gui.py
+  poetry run python scripts/seed_and_mature.py \
+    --questions scripts/questions.txt \
+    --exclude-sources tavily \
+    --top-k 5 --limit 150
+  ```
+- **seed_from_docs.py 本番実行** (GITHUB_TOKEN確認済み)
+  ```bash
+  # GitHub ドキュメントリポジトリ (tldr-pages/Node.js/cpython/MDN)
+  poetry run python scripts/seed_from_docs.py --source github_docs --max-files 100 --dry-run
+  poetry run python scripts/seed_from_docs.py --source github_docs --max-files 100 --mature --provider openrouter
+  # URLリスト (Arch Wiki / Python docs / Linux Command Line)
+  poetry run python scripts/seed_from_docs.py --source url_list --mature --provider openrouter
+  ```
+- **needs_update 231件の再mature**
+  - arXiv: 178件 / SO: 27件 / Tavily: 26件
+  ```bash
+  poetry run python scripts/remature_needs_update.py --provider openrouter --limit 100
   ```
 
 **残作業 (優先度: 中)**
 - `data/faiss_indices/` へのシードデータ投入継続（目標: 10,000 docs）
-  - 現状: approved **4,134件** / FAISS code **6,056 vectors**
-  - needs_update: 次回確認・再 mature 候補
-  - OpenRouter 日次上限: 950件/日 (UTC)。次回ジョブは UTC Apr 7 (JST 09:00) 以降推奨
+  - 現状: approved **4,586件** / FAISS code **6,562 vectors**
+  - OpenRouter 日次上限: 950件/日 (UTC)。毎日 JST 09:00 以降に起動
   - Tavily は credits 節約のため `--exclude-sources tavily` で除外中
+- **多言語埋め込みモデル移行** (10,000 docs 達成後)
+  - `plan_translate.md` Step 1〜2 参照
+  - 事前に `cp -r data/faiss_indices/ data/faiss_indices_minilm_backup/` でバックアップ
+  - `scripts/reindex_faiss.py` 作成が必要（未実装）
+  - 変更先: `paraphrase-multilingual-MiniLM-L12-v2` / `configs/default.yaml` の model を変更
+- **バージョン対応 Schema 追加** (`plan_version_aware.md` Step 1)
+  - `src/memory/schema.py` に version フィールド追加（既存データは `version_status="unknown"` デフォルト）
+  - `src/memory/metadata_store.py` に ALTER TABLE マイグレーション追加
 - **NEAT 環境検証** (WSL2): `claude_work/neat_trident` の動作確認
   ```bash
   cd /mnt/d/Projects/claude_work/neat_trident

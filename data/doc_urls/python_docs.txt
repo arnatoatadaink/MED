@@ -1,0 +1,43 @@
+# Python Official Documentation
+# Rate: 1.5 seconds between requests
+# Source: docs.python.org (PSF hosted)
+
+# === What's New (Release Notes / Breaking Changes) ===
+https://docs.python.org/3/whatsnew/3.13.html
+https://docs.python.org/3/whatsnew/3.12.html
+https://docs.python.org/3/whatsnew/3.11.html
+https://docs.python.org/3/whatsnew/3.10.html
+https://docs.python.org/3/whatsnew/3.9.html
+
+# === Language Reference ===
+https://docs.python.org/3/reference/datamodel.html
+https://docs.python.org/3/reference/expressions.html
+https://docs.python.org/3/reference/compound_stmts.html
+https://docs.python.org/3/reference/executionmodel.html
+
+# === Core Library ===
+https://docs.python.org/3/library/asyncio.html
+https://docs.python.org/3/library/asyncio-task.html
+https://docs.python.org/3/library/asyncio-stream.html
+https://docs.python.org/3/library/concurrent.futures.html
+https://docs.python.org/3/library/threading.html
+https://docs.python.org/3/library/multiprocessing.html
+https://docs.python.org/3/library/typing.html
+https://docs.python.org/3/library/dataclasses.html
+https://docs.python.org/3/library/abc.html
+https://docs.python.org/3/library/functools.html
+https://docs.python.org/3/library/itertools.html
+https://docs.python.org/3/library/collections.html
+https://docs.python.org/3/library/pathlib.html
+https://docs.python.org/3/library/subprocess.html
+https://docs.python.org/3/library/logging.html
+https://docs.python.org/3/library/logging.handlers.html
+https://docs.python.org/3/library/contextlib.html
+https://docs.python.org/3/library/unittest.html
+
+# === HOWTO Guides ===
+https://docs.python.org/3/howto/logging.html
+https://docs.python.org/3/howto/descriptor.html
+https://docs.python.org/3/howto/regex.html
+https://docs.python.org/3/howto/functional.html
+https://docs.python.org/3/howto/sorting.html
