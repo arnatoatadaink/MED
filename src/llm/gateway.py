@@ -198,6 +198,10 @@ class LLMGateway:
                     daily_request_limit = conf.get("daily_request_limit")
                     if daily_request_limit is not None:
                         daily_request_limit = int(daily_request_limit)
+                    model_rate_limits = conf.get("model_rate_limits") or {}
+                    model_rate_limits = {
+                        m: int(v) for m, v in model_rate_limits.items()
+                    }
                     provider = OpenAICompatibleProvider(
                         name=name,
                         base_url=base_url,
@@ -209,6 +213,7 @@ class LLMGateway:
                         extra_params=extra_params,
                         requests_per_minute=requests_per_minute,
                         daily_request_limit=daily_request_limit,
+                        model_rate_limits=model_rate_limits,
                     )
                     self._providers[name] = provider
                     logger.info(

@@ -161,7 +161,7 @@ async def seed_from_docs(
         from src.memory.maturation.difficulty_tagger import DifficultyTagger
 
         gw = LLMGateway()
-        reviewer = MemoryReviewer(gateway=gw)
+        reviewer = MemoryReviewer(gateway=gw, store=mm.store)
         tagger = DifficultyTagger(gateway=gw)
 
         # 未審査ドキュメントを取得

@@ -65,6 +65,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         extra_params: dict | None = None,
         requests_per_minute: int | None = None,
         daily_request_limit: int | None = None,
+        model_rate_limits: dict[str, int] | None = None,
     ) -> None:
         self._name = name
         self._base_url = base_url.rstrip("/")
@@ -80,13 +81,23 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             self._api_key = os.environ.get(api_key_env, "not-set")
         else:
             self._api_key = "not-set"
-        # レート制限 (requests_per_minute が設定されている場合)
+        # プロバイダ全体のレート制限
         if requests_per_minute and requests_per_minute > 0:
             self._rate_interval = 60.0 / requests_per_minute  # 秒/リクエスト
         else:
             self._rate_interval = 0.0
         self._rate_lock = asyncio.Lock()
         self._last_request_time: float = 0.0
+        # モデル別レート制限: {model_name: interval_seconds}
+        self._model_rate_intervals: dict[str, float] = {
+            m: 60.0 / rpm for m, rpm in (model_rate_limits or {}).items() if rpm > 0
+        }
+        self._model_rate_locks: dict[str, asyncio.Lock] = {
+            m: asyncio.Lock() for m in self._model_rate_intervals
+        }
+        self._model_last_request_time: dict[str, float] = {
+            m: 0.0 for m in self._model_rate_intervals
+        }
         # 日次リクエスト上限 (OpenRouter 等の無料枠保護)
         self._daily_request_limit: int | None = daily_request_limit
 
@@ -117,8 +128,19 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             tracker = await _get_tracker()
             await tracker.check_and_increment(self._name, self._daily_request_limit)
 
-        # レート制限: requests_per_minute が設定されている場合、間隔を守る
-        if self._rate_interval > 0:
+        # レート制限: モデル別 → プロバイダ全体の順で適用（長い方が優先）
+        effective_model = model or self._default_model
+        model_interval = self._model_rate_intervals.get(effective_model, 0.0)
+        if model_interval > 0:
+            lock = self._model_rate_locks[effective_model]
+            async with lock:
+                now = time.monotonic()
+                wait = model_interval - (now - self._model_last_request_time.get(effective_model, 0.0))
+                if wait > 0:
+                    logger.debug("Model rate limit wait: %.2fs for %s/%s", wait, self._name, effective_model)
+                    await asyncio.sleep(wait)
+                self._model_last_request_time[effective_model] = time.monotonic()
+        elif self._rate_interval > 0:
             async with self._rate_lock:
                 now = time.monotonic()
                 wait = self._rate_interval - (now - self._last_request_time)

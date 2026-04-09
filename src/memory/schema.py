@@ -73,6 +73,7 @@ class ReviewStatus(str, Enum):
     APPROVED = "approved"
     REJECTED = "rejected"
     NEEDS_UPDATE = "needs_update"
+    HOLD = "hold"
 
 
 class KnowledgeType(str, Enum):

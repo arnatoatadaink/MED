@@ -165,7 +165,7 @@ class MemoryReviewer:
         elif approved:
             review_status = ReviewStatus.APPROVED
         else:
-            review_status = ReviewStatus.REJECTED
+            review_status = ReviewStatus.HOLD  # REJECTED → HOLD（再審査可能）
 
         # MetadataStore を更新
         try:
@@ -175,14 +175,9 @@ class MemoryReviewer:
                 review_status=review_status.value,
                 confidence=confidence,
             )
-            # rejected 時はブラックリストに登録（同一 URL/タイトルの再取得を防ぐ）
-            if review_status == ReviewStatus.REJECTED:
-                await self._store.add_to_blacklist(
-                    source_type=doc.source.source_type.value if doc.source else "",
-                    source_url=doc.source.url or "" if doc.source else "",
-                    source_title=doc.source.title or "" if doc.source else "",
-                    reason="rejected",
-                )
+            # ブラックリスト自動登録は無効化（HOLD文書は再審査対象のため）
+            # if review_status == ReviewStatus.REJECTED:
+            #     await self._store.add_to_blacklist(...)
         except Exception:
             logger.exception("Failed to update quality for doc=%s", doc.id)
 

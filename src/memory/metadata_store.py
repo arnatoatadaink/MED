@@ -396,22 +396,7 @@ class MetadataStore:
         if "keywords" not in columns:
             await self._db.execute(_MIGRATION_ADD_KEYWORDS)
             logger.info("MetadataStore: migrated — added keywords column")
-        # seed_blacklist への rejected 文書の初期投入（冪等）
-        await self._db.execute("""
-            INSERT OR IGNORE INTO seed_blacklist (source_type, source_url, source_title, reason)
-            SELECT source_type,
-                   COALESCE(source_url, ''),
-                   COALESCE(source_title, ''),
-                   'rejected'
-            FROM documents
-            WHERE review_status = 'rejected'
-              AND (source_url != '' OR source_title != '')
-              AND NOT EXISTS (
-                  SELECT 1 FROM seed_blacklist b
-                  WHERE (source_url != '' AND b.source_url = documents.source_url)
-                     OR (source_title != '' AND b.source_title = documents.source_title)
-              )
-        """)
+        # seed_blacklist エントリ数をログ出力（自動投入は無効化：hold文書は再審査対象）
         cur = await self._db.execute("SELECT COUNT(*) FROM seed_blacklist")
         count = (await cur.fetchone())[0]
         if count:

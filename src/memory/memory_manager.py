@@ -344,6 +344,9 @@ class MemoryManager:
             if doc is None:
                 logger.warning("Doc=%s found in FAISS but not in SQLite; skipping", doc_id)
                 continue
+            # approved 以外（hold / rejected / unreviewed / needs_update）は検索結果から除外
+            if doc.review_status.value != "approved":
+                continue
             results.append(SearchResult(document=doc, score=score, query=query))
 
         return results
@@ -389,6 +392,8 @@ class MemoryManager:
                 fts_docs = await self.store.get_batch(new_fts_ids[:k])
                 for doc, (_, bm25_rank) in zip(fts_docs, fts_hits):
                     if doc is not None and doc.id not in seen_ids:
+                        if doc.review_status.value != "approved":
+                            continue
                         # BM25 rank は負値（-1 が最高）→ 0〜0.8 のスコアに変換
                         fts_score = max(0.0, min(0.8, 1.0 / (1.0 - bm25_rank)))
                         extra_results.append(SearchResult(document=doc, score=fts_score, query=query))
@@ -412,6 +417,8 @@ class MemoryManager:
             alias_docs = await self.store.get_batch(new_alias_ids[:k])
             for doc in alias_docs:
                 if doc is not None and doc.id not in seen_ids:
+                    if doc.review_status.value != "approved":
+                        continue
                     extra_results.append(SearchResult(document=doc, score=0.5, query=query))
                     seen_ids.add(doc.id)
 
