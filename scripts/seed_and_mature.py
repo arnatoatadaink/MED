@@ -39,6 +39,7 @@ import asyncio
 import logging
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 _ROOT = Path(__file__).parent.parent
@@ -100,6 +101,41 @@ _BUILTIN_QUESTIONS = [
     "Query expansion and rewriting for search systems",
     "Curriculum learning for model training difficulty scheduling",
 ]
+
+
+_OPENROUTER_PROVIDERS = {"openrouter"}
+
+
+def _utc_reset_action(provider: str) -> str:
+    """UTC 日次リセット前の停止チェック（OpenRouter のみ対象）。
+
+    Returns:
+        'continue' — 通常処理継続
+        'wait'     — UTC 23:50〜23:55: リセット待機中
+        'stop'     — UTC 23:55 超: 即時停止
+    """
+    if provider not in _OPENROUTER_PROVIDERS:
+        return "continue"
+    now = datetime.now(timezone.utc)
+    h, m = now.hour, now.minute
+    if h == 23 and m >= 55:
+        return "stop"
+    if h == 23 and m >= 50:
+        return "wait"
+    return "continue"
+
+
+async def _wait_for_utc_reset() -> None:
+    """UTC 23:50〜00:00 まで待機してリセットを待つ。"""
+    while True:
+        now = datetime.now(timezone.utc)
+        h, m, s = now.hour, now.minute, now.second
+        if not (h == 23 and m >= 50):
+            logger.info("UTC リセット完了 — 処理を再開します")
+            return
+        remaining = (24 * 3600) - (h * 3600 + m * 60 + s)
+        logger.info("OpenRouter UTC リセット待機中... 残 %ds (UTC 23:%02d)", remaining, m)
+        await asyncio.sleep(30)
 
 
 def _load_seed_filters() -> dict:
@@ -324,6 +360,15 @@ async def seed_and_mature(
     tagger = DifficultyTagger(gateway, provider=provider, model=model)
 
     for i, doc_id in enumerate(new_doc_ids):
+        # UTC リセット前の停止チェック（OpenRouter のみ）
+        action = _utc_reset_action(provider or "")
+        if action == "stop":
+            logger.warning("OpenRouter UTC リセット直前 (23:55+) — mature を中断します [%d/%d]", i, len(new_doc_ids))
+            break
+        if action == "wait":
+            logger.info("OpenRouter UTC リセット待機 (23:50〜23:55) — 00:00 まで一時停止 [%d/%d]", i, len(new_doc_ids))
+            await _wait_for_utc_reset()
+
         doc = await mm.store.get(doc_id)
         if doc is None:
             continue
@@ -406,6 +451,15 @@ async def mature_only(
     tagged = 0
 
     for i, doc in enumerate(docs):
+        # UTC リセット前の停止チェック（OpenRouter のみ）
+        action = _utc_reset_action(provider)
+        if action == "stop":
+            logger.warning("OpenRouter UTC リセット直前 (23:55+) — mature を中断します [%d/%d]", i, len(docs))
+            break
+        if action == "wait":
+            logger.info("OpenRouter UTC リセット待機 (23:50〜23:55) — 00:00 まで一時停止 [%d/%d]", i, len(docs))
+            await _wait_for_utc_reset()
+
         # 審査
         try:
             start = time.monotonic()
