@@ -16,15 +16,22 @@ providers:
   openrouter:
     api_key_env: OPENROUTER_API_KEY
     base_url: https://openrouter.ai/api/v1
-    default_model: nvidia/nemotron-nano-12b-v2-vl:free  # gemma-4-*:free は Google AI Studio upstream 429 多発のため退避
+    default_model: nvidia/nemotron-3-nano-30b-a3b:free  # Apr10実績: 承認率65%・429ゼロ
     type: openai_compatible
     timeout: 120
     max_tokens: 4096
-    requests_per_minute: 20
+    requests_per_minute: 1     # デフォルト 1 RPM（全モデル共通の安全設定）
     daily_request_limit: 950   # OpenRouter 無料枠は 1000/日。50 リクエストのバッファ
     model_rate_limits:
-      "google/gemma-4-31b-it:free": 1   # Google AI Studio upstream: rate limited
-      "google/gemma-4-26b-a4b-it:free": 5   # 初期設定、様子を見て調整
+      # Google AI Studio upstream: 429 多発。1 RPM でも不安定
+      "google/gemma-4-31b-it:free": 1
+      "google/gemma-4-26b-a4b-it:free": 1
+      # NVIDIA (priority models)
+      "nvidia/nemotron-3-super-120b-a12b:free": 1
+      "nvidia/nemotron-3-nano-30b-a3b:free": 1
+      "nvidia/nemotron-nano-12b-v2-vl:free": 1
+      # MiniMax
+      "minimax/minimax-m2.5:free": 1
 task_routing:
   code_generation: sonnet
   error_analysis: sonnet

@@ -1,6 +1,6 @@
 # OpenRouter 無料モデル 調査記録
 
-最終更新: 2026-04-10
+最終更新: 2026-04-11
 
 本ドキュメントは MED プロジェクトの `mature` ジョブ（MemoryReviewer / DifficultyTagger）に使用する
 OpenRouter 無料モデルのベンチマーク結果と運用上の知見をまとめる。
@@ -25,10 +25,10 @@ OpenRouter 無料モデルのベンチマーク結果と運用上の知見をま
 
 | モデル ID | コンテキスト | speed | quality | conf | approved | overall | 備考 |
 |-----------|-------------|-------|---------|------|----------|---------|------|
-| `nvidia/nemotron-nano-12b-v2-vl:free` | 128K | 10.2s | 0.70 | 0.90 | ✓ | **best** | 強み/弱点を的確に指摘。速度と品質のバランス最良。**デフォルト推奨** |
-| `nvidia/nemotron-3-super-120b-a12b:free` | 262K | 13.4s | 0.72 | 0.81 | ✓ | good | 簡潔だが的確。高水準。やや低信頼 |
-| `arcee-ai/trinity-large-preview:free` | 131K | 9.1s | 0.80 | 0.90 | ✓ | good | 品質高いが **2026-04-03 に期限切れ**。使用不可 |
-| `nvidia/nemotron-3-nano-30b-a3b:free` | 256K | 2.0s | 0.78 | 0.86 | ✓ | fair | 最速（1.7〜2s）。理由が短い |
+| `nvidia/nemotron-3-nano-30b-a3b:free` | 256K | 2.0s | 0.78 | 0.86 | ✓ | **best** | **現デフォルト**。Apr 10 バッチ実績: 237件・承認率65%・429ゼロ。速度最速 |
+| `nvidia/nemotron-nano-12b-v2-vl:free` | 128K | 10.2s | 0.70 | 0.90 | ✓ | good | 強み/弱点を的確に指摘。フォールバック用途 |
+| `nvidia/nemotron-3-super-120b-a12b:free` | 262K | 13.4s | 0.72 | 0.81 | ✓ | fair | Apr 10 バッチ実績: 63件・承認率33%（厳格すぎ）。429なし |
+| `arcee-ai/trinity-large-preview:free` | 131K | 9.1s | 0.80 | 0.90 | ✓ | NG | 品質高いが **2026-04-03 に期限切れ**。使用不可 |
 | `arcee-ai/trinity-mini:free` | 131K | 38.8s | 0.80 | 0.90 | ✓ | fair | 品質高いが速度不安定（3s〜39s）。1行理由 |
 | `liquid/lfm-2.5-1.2b-thinking:free` | 32K | 14.4s | 0.60 | 0.60 | ✓ | poor | 1.2B thinking。理由が3語と極端に短い。小さすぎる |
 | `liquid/lfm-2.5-1.2b-instruct:free` | 32K | 2.2s | 0.00 | 0.00 | ✓ | poor | 出力が意味不明。使用不可 |
@@ -51,7 +51,7 @@ OpenRouter 無料モデルのベンチマーク結果と運用上の知見をま
 | `qwen/qwen3-next-80b-a3b-instruct:free` | 429 Rate Limited | Venice |
 | `qwen/qwen3-coder:free` | 429 Rate Limited | Venice |
 | `nvidia/nemotron-nano-9b-v2:free` | TypeError (NoneType) | 不安定（テスト時クラッシュ） |
-| `minimax/minimax-m2.5:free` | 404 No endpoints | データポリシーにより利用不可 |
+| `minimax/minimax-m2.5:free` | 429 Rate Limited | 2026-04-10 確認: OpenInference upstream 429（以前は 404 No endpoints）|
 | `openai/gpt-oss-120b:free` | 404 No endpoints | 同上 |
 | `openai/gpt-oss-20b:free` | 404 No endpoints | 同上 |
 | `cognitivecomputations/dolphin-mistral-24b-venice-edition:free` | Venice endpoint | テスト未完 |
@@ -115,28 +115,37 @@ BYOKでなければ回避困難。
 | 2026-04-07 | 953 | 950 | 上限超過 → 自動停止 |
 | 2026-04-08 | 385 | 950 | 正常（途中停止） |
 | 2026-04-09 | 437 | 950 | 正常（Gemma 4 429 問題で低調） |
+| 2026-04-10 | 479 | 950 | 正常（nemotron-3-nano-30b で安定稼働） |
 
 ---
 
-## 推奨設定（2026-04-10 時点）
+## 推奨設定（2026-04-11 時点）
 
 ```yaml
 # configs/llm_config.yaml
 providers:
   openrouter:
-    default_model: nvidia/nemotron-nano-12b-v2-vl:free  # ← 推奨
-    requests_per_minute: 20
+    default_model: nvidia/nemotron-3-nano-30b-a3b:free  # ← 現デフォルト
+    requests_per_minute: 1   # 全モデル共通 1 RPM（安全設定）
     daily_request_limit: 950
+    model_rate_limits:
+      "nvidia/nemotron-3-nano-30b-a3b:free": 1
+      "nvidia/nemotron-nano-12b-v2-vl:free": 1
+      "nvidia/nemotron-3-super-120b-a12b:free": 1
+      "google/gemma-4-31b-it:free": 1
+      "minimax/minimax-m2.5:free": 1
 ```
 
-### mature ジョブのプロバイダー選択
+### mature ジョブのプロバイダー優先順位
 
-| 優先度 | プロバイダー | モデル | 備考 |
-|--------|-----------|--------|------|
-| 1 | `fastflowlm` | `qwen3.5:9b` (NPU Q4_1) | ローカル。オフライン時は使用不可 |
-| 2 | `openrouter` | `nvidia/nemotron-nano-12b-v2-vl:free` | 安定稼働実績あり |
-| 3 | `openrouter` | `nvidia/nemotron-3-super-120b-a12b:free` | 高品質だが若干低速 |
-| NG | `openrouter` | `google/gemma-4-*:free` | 429 レートリミット多発 |
+| 優先度 | プロバイダー | モデル | 承認率 | 備考 |
+|--------|-----------|--------|--------|------|
+| 1 | `fastflowlm` | `qwen3.5:9b` (NPU Q4_1) | - | ローカル。オフライン時は使用不可 |
+| 2 | `openrouter` | `nvidia/nemotron-3-nano-30b-a3b:free` | **65%** | **現デフォルト**。429なし・速度最速 |
+| 3 | `openrouter` | `nvidia/nemotron-nano-12b-v2-vl:free` | - | フォールバック。429なし |
+| 4 | `openrouter` | `nvidia/nemotron-3-super-120b-a12b:free` | 33% | 429なしだが厳格すぎ |
+| NG | `openrouter` | `google/gemma-4-*:free` | - | 429 多発。BYOKなしでは安定利用不可 |
+| NG | `openrouter` | `minimax/minimax-m2.5:free` | - | OpenInference 429 |
 
 ---
 

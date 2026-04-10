@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-04-09
+> 最終更新: 2026-04-11
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_translate.md` / `plan_version_aware.md` / `plan_neat_hyp_e.md` / `plan_programming_seed.md`
 
 ---
@@ -87,18 +87,22 @@
 ## F. メモリ品質目標（シード継続）
 > 📄 `plan_programming_seed.md`
 
-**現状: approved 4,834件 / FAISS code 6,813 vectors（2026-04-09）**
+**現状: approved 5,044件 / FAISS code 11,813 vectors（2026-04-11）**
 
 ### F-1. 日次 seed_and_mature ジョブ 🔴
-- 🔴 **Apr 9 ジョブ起動**（UTC 00:00 / JST 09:00以降・gemma-4-31b-it:free）
+- ✅ Apr 9: approved +302件（gemma-4-31b 429問題で低調）
+- ✅ Apr 10: approved +175件（nemotron-3-nano-30b で安定稼働・承認率65%）
+- 🔴 **Apr 11 ジョブ起動**（JST 09:00以降）
   ```bash
   poetry run python scripts/seed_and_mature.py \
     --questions scripts/questions.txt \
     --exclude-sources tavily \
-    --top-k 5 --limit 150
+    --top-k 5 --limit 150 \
+    --provider openrouter \
+    --model nvidia/nemotron-3-nano-30b-a3b:free
   ```
 - OpenRouter 日次上限: 950件/UTC日。毎日 JST 09:00 以降に起動
-- 目標: approved **10,000件**
+- 目標: approved **10,000件**（現状 5,044件）
 
 ### F-2. seed_from_docs.py 本番実行 🔴
 > 📄 `plan_programming_seed.md` カテゴリ I〜L（見込み 2,150〜4,200件）
@@ -113,9 +117,9 @@
   ```
 
 ### F-3. needs_update 再mature 🟡
-- 現状: needs_update **188件**（arXiv中心）
+- 現状: needs_update **326件**（arXiv中心）
   ```bash
-  poetry run python scripts/remature_needs_update.py --provider fastflowlm --limit 200
+  poetry run python scripts/remature_needs_update.py --provider openrouter --model nvidia/nemotron-3-nano-30b-a3b:free --limit 200
   ```
 
 ### F-4. seed_blacklist ✅ **完了（2026-04-09）**
@@ -127,7 +131,7 @@
 
 ---
 
-## G. ローカル Teacher 設定 ✅ **完了（2026-04-09）**
+## G. ローカル Teacher 設定 ✅ **完了（2026-04-09）** / OpenRouterモデル調査 ✅ **完了（2026-04-11）**
 
 ### FastFlowLM (NPU)
 - ✅ `configs/llm_config.local.yaml` — `fastflowlm` プロバイダー追加
@@ -139,6 +143,11 @@
 ### LM Studio
 - ✅ `configs/llm_config.local.yaml` — `lmstudio` プロバイダー設定済み
   - `qwen3.5-9b`（BF16 IFBench 64.5%）推奨
+
+### OpenRouter モデル調査
+- ✅ `docs/openrouter_models.md` — 無料モデルベンチマーク・429問題・FastFlowLM評価を記録
+- ✅ デフォルト変更: `nemotron-nano-12b` → `nemotron-3-nano-30b-a3b:free`（Apr10実績: 承認率65%）
+- ✅ `model_rate_limits` 実装（全モデル 1 RPM・`openai_compatible.py` / `gateway.py`）
 
 ---
 
