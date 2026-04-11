@@ -431,6 +431,43 @@ KG訓練統合タスク（将来）:
 
 **作業ブランチ**: `main`
 
+---
+
+**日次運用コマンド（セッション開始時に確認）**
+
+```bash
+# 1. 状態確認（DB / FAISS / OpenRouter使用量）
+bash scripts/sh/check_progress.sh
+
+# 2. ジョブ起動（mature-only — 既存 unreviewed を処理）
+bash scripts/sh/run_job.sh openrouter nvidia/nemotron-3-nano-30b-a3b:free 20 --mature-only --limit 400
+
+# 2b. seed+mature（新規取得 → 審査）
+bash scripts/sh/run_job.sh openrouter nvidia/nemotron-3-nano-30b-a3b:free 20 --seed-mature --limit 150
+
+# 3. FastFlowLM が起動している場合（ローカル NPU）
+bash scripts/sh/run_job.sh fastflowlm qwen3.5:9b 15 --mature-only --limit 200
+
+# 4. needs_update 再審査
+poetry run python scripts/remature_needs_update.py --provider openrouter --model nvidia/nemotron-3-nano-30b-a3b:free --limit 200
+
+# 5. 新モデルを試す場合（3件比較テスト）
+bash scripts/sh/test_models.sh model1:free model2:free
+```
+
+**OpenRouter 運用ルール:**
+- 日次上限: **950件/UTC日**。JST 09:00（UTC 00:00）にリセット
+- `seed_and_mature.py` は UTC 23:50 に待機、23:55 超で自動停止
+- デフォルトモデル: `nvidia/nemotron-3-nano-30b-a3b:free`（承認率65%・429なし・Apr10実績）
+- 詳細は `docs/openrouter_models.md` / スクリプト詳細は `docs/scripts_guide.md` 参照
+
+**現状（2026-04-11）:**
+- approved: **5,197件** / FAISS code: **11,965 vectors**
+- unreviewed: 4,168件 / needs_update: 498件 / hold: 526件
+- 目標: approved **10,000件**
+
+---
+
 **完了済み（直近セッション — 2026-04-08）**
 - **日本語 manual ドキュメント 5件 英訳完了**
   - content + source_title を英語に更新 (metadata.db)
@@ -559,25 +596,18 @@ OPENROUTER_API_KEY=...  # Teacher (openrouter) ✅ 設定済み
 ```
 
 **残作業 (優先度: 高)**
-- **Apr 8 seed_and_mature ジョブ起動** (UTC 00:48 / JST 09:48 以降)
+- **日次 seed_and_mature ジョブ**（JST 09:00 以降に起動）
   ```bash
-  poetry run python scripts/seed_and_mature.py \
-    --questions scripts/questions.txt \
-    --exclude-sources tavily \
-    --top-k 5 --limit 150
+  bash scripts/sh/run_job.sh openrouter nvidia/nemotron-3-nano-30b-a3b:free 20 --mature-only --limit 400
   ```
 - **seed_from_docs.py 本番実行** (GITHUB_TOKEN確認済み)
   ```bash
-  # GitHub ドキュメントリポジトリ (tldr-pages/Node.js/cpython/MDN)
-  poetry run python scripts/seed_from_docs.py --source github_docs --max-files 100 --dry-run
   poetry run python scripts/seed_from_docs.py --source github_docs --max-files 100 --mature --provider openrouter
-  # URLリスト (Arch Wiki / Python docs / Linux Command Line)
   poetry run python scripts/seed_from_docs.py --source url_list --mature --provider openrouter
   ```
-- **needs_update 231件の再mature**
-  - arXiv: 178件 / SO: 27件 / Tavily: 26件
+- **needs_update 498件の再mature**
   ```bash
-  poetry run python scripts/remature_needs_update.py --provider openrouter --limit 100
+  poetry run python scripts/remature_needs_update.py --provider openrouter --model nvidia/nemotron-3-nano-30b-a3b:free --limit 200
   ```
 
 **残作業 (優先度: 中)**
