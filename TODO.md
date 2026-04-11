@@ -106,9 +106,10 @@
 
 ### F-2. seed_from_docs.py 本番実行 🔴
 > 📄 `plan_programming_seed.md` カテゴリ I〜L（見込み 2,150〜4,200件）
-- 🔴 GitHub ドキュメントリポジトリ（tldr-pages / Node.js / cpython / MDN）
+- 🔴 GitHub ドキュメントリポジトリ（**Node.js 除く**・tldr-pages / cpython / MDN）
+  - ⚠️ `data/doc_urls/github_doc_repos.yaml` の Node.js を `enabled: false` に変更済み（2026-04-11）
+  - 再有効化は F-5 の Chunker 改善後
   ```bash
-  poetry run python scripts/seed_from_docs.py --source github_docs --max-files 100 --dry-run
   poetry run python scripts/seed_from_docs.py --source github_docs --max-files 100 --mature --provider openrouter
   ```
 - 🔴 URLリスト（Arch Wiki / Python docs / Linux Command Line）
@@ -128,6 +129,38 @@
 - ✅ `seed_and_mature.py` — fetch後・dedup前にblacklistチェック
 - ✅ `seed_from_docs.py` — Phase 1.5 にblacklistフィルタ挿入
 - 現状: 172件登録済み（既存rejected文書から自動投入）
+
+### F-5. Chunker 改善 — API リファレンス形式への対応 🟡
+
+**背景:** Node.js API ドキュメント（`nodejs/node doc/api/`）を seed したところ
+大量の HOLD が発生（承認率 31%）。原因は2つ：
+
+1. **内部リンク記法の残存** — Markdown の `[関数名][]` 形式リンクが未解決のまま残り、
+   LLM が「他セクションへの参照を含む断片」と判定して `needs_supplement=true` にする
+2. **チャンク単独での文脈不足** — API リファレンスは前後のセクションを前提に書かれており、
+   分割後のチャンクが単独では意味が完結しない
+
+**対応方針:**
+
+- 🟡 **前処理クリーナーの強化** (`src/rag/chunker.py` または `github_docs_fetcher.py`)
+  - `[xxx][]` / `[xxx][yyy]` 形式の未解決内部リンクを除去または展開
+  - `> Stability: N - ...` のような Node.js 固有メタ行を除去
+  - `**See also:**` / `**History:**` セクションのみのチャンクを除外
+
+- 🟡 **セクション境界を考慮したチャンク分割**
+  - API リファレンス形式（`### func(args)` の見出し単位）を1チャンクとして扱う
+  - 見出し＋直下の説明文が最小単位。3文未満になる見出しは次のセクションと結合する
+
+- 🟡 **min_meaningful_sentences フィルタ**
+  - 実質的な文が3文未満のチャンクを fetch 段階で除外
+  - 現行の `min_chunk_len=100` は文字数のみでコンテンツ密度を見ていない
+
+**再有効化手順:**
+```bash
+# F-5 実装後に Node.js を再有効化
+# data/doc_urls/github_doc_repos.yaml の nodejs/node を enabled: true に変更してから実行
+poetry run python scripts/seed_from_docs.py --source github_docs --max-files 80 --dry-run
+```
 
 ---
 

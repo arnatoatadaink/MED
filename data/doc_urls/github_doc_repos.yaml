@@ -16,6 +16,10 @@ repos:
     enabled: true
 
   # ── Node.js API ドキュメント ───────────────────────────────────────────
+  # ⚠️ 2026-04-11 無効化: API リファレンス形式のチャンクが単独で完結せず HOLD 多発
+  # 原因1: [関数名][] 形式の内部リンク記法が残存し LLM が断片と判定する
+  # 原因2: 前後セクション前提の記述がチャンク分割後に文脈を失う
+  # 再有効化条件: chunker の内部参照除去 + セクション境界分割の実装後（TODO F-5 参照）
   - repo: nodejs/node
     label: "Node.js API"
     paths:
@@ -23,7 +27,7 @@ repos:
     ref: main
     extensions: [".md"]
     max_files: 80
-    enabled: true
+    enabled: false
 
   # ── Python 標準ライブラリドキュメント（RST）───────────────────────────
   - repo: python/cpython
