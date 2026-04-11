@@ -133,6 +133,8 @@ class GitHubDocsFetcher:
 
         logger.info("%s: %d files to fetch", repo, len(file_paths))
 
+        cleaner_profile = repo_cfg.get("cleaner_profile", "default")
+
         # ファイル内容を順次取得（レート制限付き）
         results: list[RawResult] = []
         for i, file_path in enumerate(file_paths):
@@ -141,7 +143,15 @@ class GitHubDocsFetcher:
                 continue
 
             ext = Path(file_path).suffix.lower()
-            clean = self._clean_content(content, ext)
+
+            # プロファイル別クリーニング + メタ抽出
+            if cleaner_profile == "nodejs_api" and ext == ".md":
+                doc_meta = self._extract_nodejs_meta(content)
+                clean = self._clean_nodejs_markdown(content)
+            else:
+                doc_meta = {}
+                clean = self._clean_content(content, ext)
+
             if len(clean) < 100:
                 continue
 
@@ -161,6 +171,7 @@ class GitHubDocsFetcher:
                     "format": _EXT_FORMAT.get(ext, "text"),
                     "label": label,
                     "content_type": "documentation",
+                    **doc_meta,
                 },
             ))
 
@@ -262,6 +273,49 @@ class GitHubDocsFetcher:
         self._last_request = time.monotonic()
 
     # ── コンテンツクリーナー ──────────────────────────────────────────────
+
+    @staticmethod
+    def _extract_nodejs_meta(text: str) -> dict:
+        """Node.js API Markdown から属性メタデータを抽出する（クリーニング前に呼ぶ）。
+
+        抽出対象:
+        - ``<!-- YAML\\nadded: vX.X.X\\n-->`` コメントブロック → ``added_in``
+        - ``> Stability: N - Label`` ブロック引用 → ``stability_level`` / ``stability_label``
+
+        Returns:
+            source_extra に格納するキー辞書。
+        """
+        meta: dict = {}
+
+        # <!-- YAML ... --> ブロックから added_in を取得（クリーニング前のみ存在）
+        yaml_blocks = re.findall(r'<!--\s*YAML\s*(.*?)-->', text, re.DOTALL)
+        for block in yaml_blocks:
+            m = re.search(r'^added:\s*(v[\d.]+(?:-\w+)?)', block, re.MULTILINE)
+            if m:
+                meta.setdefault("added_in", m.group(1))
+                break
+
+        # > Stability: N - Label
+        m = re.search(r'^>\s*Stability:\s*(\d)\s*[-\u2013]\s*(.+)$', text, re.MULTILINE)
+        if m:
+            meta["stability_level"] = int(m.group(1))
+            meta["stability_label"] = m.group(2).strip()
+
+        return meta
+
+    @staticmethod
+    def _clean_nodejs_markdown(text: str) -> str:
+        """Node.js API Markdown 専用クリーナー。
+
+        標準 ``_clean_markdown()`` に加え、Node.js 固有のメタ行を除去する:
+        - ``> Stability: N - ...`` ブロック引用
+        """
+        text = GitHubDocsFetcher._clean_markdown(text)
+        # Stability ブロック引用を除去
+        text = re.sub(r'^>\s*Stability:\s*\d\s*[-\u2013]\s*.+$', '', text, flags=re.MULTILINE)
+        # 連続空行を正規化
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        return text.strip()
 
     @staticmethod
     def _clean_content(text: str, ext: str) -> str:

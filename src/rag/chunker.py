@@ -36,6 +36,10 @@ _SENTENCE_END_RE = re.compile(r'(?<=[.!?])\s+')
 _PARA_SPLIT_RE = re.compile(r'\n\n+')
 # 行区切り（単一改行）
 _LINE_SPLIT_RE = re.compile(r'\n')
+# Markdown 見出し（# / ## / ###）
+_HEADING_RE = re.compile(r'^(#{1,3})\s+(.+)$', re.MULTILINE)
+# 実質的な文を数えるための簡易パターン（コードブロック・見出し・空行を除く）
+_MEANINGFUL_LINE_RE = re.compile(r'^(?!#|```|\s*$).{20,}', re.MULTILINE)
 
 
 class Chunker:
@@ -155,6 +159,81 @@ class Chunker:
 
         return chunks
 
+    def chunk_markdown(self, text: str, min_body_lines: int = 3) -> list[str]:
+        """Markdown 見出し単位でチャンク分割する（GITHUB_DOCS 向け）。
+
+        各 # / ## / ### セクションを基本チャンク単位とする。
+        本文が短いセクションは次のセクションと結合し、chunk_size を超える場合は
+        既存の chunk_text() にフォールバックする。
+
+        Args:
+            text: クリーニング済みの Markdown テキスト。
+            min_body_lines: これ未満の実質行数のセクションは次と結合する。
+
+        Returns:
+            チャンク文字列のリスト。
+        """
+        if not text:
+            return []
+
+        # 見出し位置を特定
+        heading_matches = list(_HEADING_RE.finditer(text))
+        if not heading_matches:
+            return self.chunk_text(text)
+
+        # セクションテキストのリストを構築
+        sections: list[str] = []
+        preamble = text[:heading_matches[0].start()].strip()
+        if preamble and len(preamble) >= self._min_chunk_len:
+            sections.append(preamble)
+
+        for i, m in enumerate(heading_matches):
+            end = heading_matches[i + 1].start() if i + 1 < len(heading_matches) else len(text)
+            section = text[m.start():end].strip()
+            if section:
+                sections.append(section)
+
+        # セクションを結合・分割してチャンクを生成
+        chunks: list[str] = []
+        buffer = ""
+
+        for section in sections:
+            # chunk_size を超えるセクション: 見出し行 + body を chunk_text() で分割
+            if len(section) > self._chunk_size:
+                if buffer and len(buffer) >= self._min_chunk_len:
+                    chunks.append(buffer)
+                    buffer = ""
+                lines = section.split('\n', 1)
+                heading_line = lines[0]
+                body = lines[1].strip() if len(lines) > 1 else ""
+                for sub in self.chunk_text(body):
+                    chunks.append(f"{heading_line}\n\n{sub}")
+                continue
+
+            # 本文の実質行数が min_body_lines 未満なら次のセクションと結合
+            body_lines = len(_MEANINGFUL_LINE_RE.findall(section))
+            if body_lines < min_body_lines:
+                buffer = (buffer + "\n\n" + section).strip() if buffer else section
+                # バッファが chunk_size を超えたら確定
+                if len(buffer) > self._chunk_size:
+                    chunks.append(buffer)
+                    buffer = ""
+                continue
+
+            # 通常: バッファに追加して chunk_size 以内なら結合
+            candidate = (buffer + "\n\n" + section).strip() if buffer else section
+            if len(candidate) <= self._chunk_size:
+                buffer = candidate
+            else:
+                if buffer and len(buffer) >= self._min_chunk_len:
+                    chunks.append(buffer)
+                buffer = section
+
+        if buffer and len(buffer) >= self._min_chunk_len:
+            chunks.append(buffer)
+
+        return chunks
+
     def chunk_result(
         self,
         result: RawResult,
@@ -172,7 +251,11 @@ class Chunker:
             チャンク化された Document のリスト。
         """
         full_text = f"{result.title}\n\n{result.content}".strip()
-        chunks = self.chunk_text(full_text)
+        # GITHUB_DOCS は見出し単位チャンキングを使用
+        if result.source == "github_docs":
+            chunks = self.chunk_markdown(full_text)
+        else:
+            chunks = self.chunk_text(full_text)
 
         if not chunks:
             return []

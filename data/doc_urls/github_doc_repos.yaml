@@ -27,7 +27,8 @@ repos:
     ref: main
     extensions: [".md"]
     max_files: 80
-    enabled: false
+    cleaner_profile: "nodejs_api"   # Stability 除去 + YAML meta 抽出 (added_in, stability_level)
+    enabled: false                  # F-5 実装完了後に再有効化
 
   # ── Python 標準ライブラリドキュメント（RST）───────────────────────────
   - repo: python/cpython
