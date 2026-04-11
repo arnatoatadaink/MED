@@ -114,7 +114,18 @@ class DailyUsageTracker:
         now = _now_iso()
 
         async with self._lock:
-            # ── daily_usage を upsert ──
+            # ── 現在値を先に確認（インクリメント前に上限チェック）──
+            cur = await self._db.execute(
+                "SELECT total_requests FROM daily_usage WHERE date=? AND provider=?",
+                (today, provider),
+            )
+            row = await cur.fetchone()
+            current = row["total_requests"] if row else 0
+
+            if current >= daily_limit:
+                raise DailyLimitExceeded(provider, daily_limit, current)
+
+            # ── 上限以内の場合のみインクリメント ──
             await self._db.execute(
                 """
                 INSERT INTO daily_usage (date, provider, total_requests, updated_at)
@@ -140,18 +151,7 @@ class DailyUsageTracker:
             )
 
             await self._db.commit()
-
-            # 最新値を取得
-            cur = await self._db.execute(
-                "SELECT total_requests FROM daily_usage WHERE date=? AND provider=?",
-                (today, provider),
-            )
-            row = await cur.fetchone()
-            total = row["total_requests"] if row else 1
-
-        # 上限チェック
-        if total > daily_limit:
-            raise DailyLimitExceeded(provider, daily_limit, total)
+            total = current + 1
 
         # 警告（90%）
         if total >= daily_limit * _WARN_THRESHOLD and not self._warned.get(provider):
