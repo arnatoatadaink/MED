@@ -37,16 +37,6 @@ TIMESTAMP="$(date '+%Y%m%d_%H%M%S')"
 SAFE_MODEL="$(echo "$MODEL" | tr '/:' '__')"
 LOG="/tmp/med_job_${PROVIDER}_${SAFE_MODEL}_${TIMESTAMP}.log"
 
-echo "========================================"
-echo "  MED Job Runner [FOREGROUND]"
-echo "  Provider : $PROVIDER"
-echo "  Model    : $MODEL"
-echo "  Mode     : ${MODE_FLAG:---seed-mature}"
-echo "  Log      : $LOG"
-echo "  $(date '+%Y-%m-%d %H:%M:%S JST')"
-echo "  Ctrl+C で停止"
-echo "========================================"
-
 # ── コマンド構築 ─────────────────────────────────────────────
 CMD=(poetry run python scripts/seed_and_mature.py
     --provider "$PROVIDER"
@@ -58,15 +48,28 @@ CMD=(poetry run python scripts/seed_and_mature.py
 [[ -n "$MODE_FLAG" ]] && CMD+=("$MODE_FLAG")
 CMD+=("${EXTRA_ARGS[@]}")
 
+# ── ヘッダーをログファイルと端末の両方に出力 ────────────────
+{
+echo "========================================"
+echo "  MED Job Runner [FOREGROUND]"
+echo "  Provider : $PROVIDER"
+echo "  Model    : $MODEL"
+echo "  Mode     : ${MODE_FLAG:---seed-mature}"
+echo "  Log      : $LOG"
+echo "  $(date '+%Y-%m-%d %H:%M:%S JST')"
+echo "  Ctrl+C で停止"
+echo "  CMD: ${CMD[*]}"
+echo "========================================"
 echo ""
-echo "CMD: ${CMD[*]}"
-echo ""
+} | tee "$LOG"
 
 # ── フォアグラウンドで実行（tee でログ保存 + 端末表示）──────
-"${CMD[@]}" 2>&1 | tee "$LOG"
+"${CMD[@]}" 2>&1 | tee -a "$LOG"
 
+{
 echo ""
 echo "========================================"
 echo "  Job completed  $(date '+%Y-%m-%d %H:%M:%S JST')"
 echo "  Log saved: $LOG"
 echo "========================================"
+} | tee -a "$LOG"
