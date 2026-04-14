@@ -170,6 +170,7 @@ async def seed_and_mature(
     dedup_threshold: float,
     model: str | None = None,
     exclude_sources: list[str] | None = None,
+    interval: float = 0.0,
 ) -> dict:
     """外部RAG取得 → 重複排除 → 関連性フィルタ → FAISS投入 → Teacher成熟。"""
     import numpy as np
@@ -410,6 +411,11 @@ async def seed_and_mature(
             except Exception as e:
                 logger.warning("    Tagging error: %s", e)
 
+        # インターバルスリープ（最終件はスキップ）
+        if interval > 0 and i < len(new_doc_ids) - 1:
+            logger.debug("  Interval sleep: %.1fs", interval)
+            await asyncio.sleep(interval)
+
     logger.info(
         "Phase 2 done: reviewed=%d, approved=%d, tagged=%d",
         stats["reviewed"], stats["approved"], stats["tagged"],
@@ -421,6 +427,7 @@ async def seed_and_mature(
 
 async def mature_only(
     limit: int, domain: str | None, provider: str, model: str | None = None,
+    interval: float = 0.0,
 ) -> None:
     """既存の未審査ドキュメントのみ成熟させる。"""
     from src.llm.gateway import LLMGateway
@@ -495,6 +502,11 @@ async def mature_only(
             except Exception as e:
                 logger.warning("    Tagging error: %s", e)
 
+        # インターバルスリープ（最終件はスキップ）
+        if interval > 0 and i < len(docs) - 1:
+            logger.debug("  Interval sleep: %.1fs", interval)
+            await asyncio.sleep(interval)
+
     logger.info(
         "Done: reviewed=%d, approved=%d, needs_supplement=%d, tagged=%d",
         reviewed, approved, needs_supplement, tagged,
@@ -547,6 +559,7 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=100, help="Max docs for --mature-only")
     parser.add_argument("--dedup-threshold", type=float, default=0.95, help="Near-dup cosine threshold")
     parser.add_argument("--exclude-sources", type=str, default="", help="除外するソース (カンマ区切り, e.g. tavily,github)")
+    parser.add_argument("--interval", type=float, default=0.0, help="各レビュー間のスリープ秒数（発熱対策）")
 
     args = parser.parse_args()
 
@@ -554,7 +567,7 @@ def main() -> None:
     if args.mature_only:
         if not args.provider:
             parser.error("--mature-only requires --provider")
-        asyncio.run(mature_only(args.limit, args.domain, args.provider, model=args.model))
+        asyncio.run(mature_only(args.limit, args.domain, args.provider, model=args.model, interval=args.interval))
         return
 
     questions = load_questions(args)
@@ -573,6 +586,7 @@ def main() -> None:
         dedup_threshold=args.dedup_threshold,
         model=args.model,
         exclude_sources=exclude_sources or None,
+        interval=args.interval,
     ))
 
     # サマリー
