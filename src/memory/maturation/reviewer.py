@@ -29,9 +29,9 @@ from src.memory.schema import Document, ReviewStatus
 
 logger = logging.getLogger(__name__)
 
-# Qwen3系 thinking モデルを使うプロバイダー: /no_think プレフィックスで thinking を無効化する
+# thinking モデルの無効化は llm_config.local.yaml の extra_params で制御
+# (fastflowlm: chat_template_kwargs.enable_thinking=false)
 # thinking ON のまま低 temperature を指定すると合理化推論が発生し過承認の原因になる
-_NO_THINK_PROVIDERS: frozenset[str] = frozenset({"fastflowlm"})
 
 _REVIEW_SYSTEM = """\
 You are a quality reviewer for a technical knowledge base.
@@ -135,11 +135,7 @@ class MemoryReviewer:
             text=text,
         )
 
-        # Qwen3系 thinking モデルは /nothink を user メッセージ先頭に付与して thinking を無効化
-        # ※ system ロールでは Qwen3 のソフトスイッチが機能しないため user 先頭に置く
         system = _REVIEW_SYSTEM
-        if self._provider in _NO_THINK_PROVIDERS:
-            prompt = "/nothink\n\n" + prompt
 
         try:
             response = await self._gateway.complete(
