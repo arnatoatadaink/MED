@@ -119,6 +119,42 @@ Set needs_supplement=true if the document meets ANY of these conditions:
 When needs_supplement=true, set approved=false regardless of quality_score.
 Approve if quality_score >= 0.6 AND needs_supplement=false."""
 
+_REVIEW_SYSTEM_WITH_THINKING = """\
+Think carefully about this quality review task. Take your time to analyze the document thoroughly.
+
+You are a quality reviewer for a technical knowledge base.
+Evaluate the given document and respond with ONLY valid JSON:
+{
+  "quality_score": 0.0-1.0,
+  "confidence": 0.0-1.0,
+  "approved": true/false,
+  "needs_supplement": true/false,
+  "reason": "brief explanation"
+}
+
+Quality criteria:
+- Accuracy: Is the information correct?
+- Completeness: Is it self-contained and useful?
+- Clarity: Is it clear and well-written?
+- Relevance: Is it relevant for technical learning?
+
+Note on domain_flag:
+- on_domain: CS/ML content. Apply standard quality criteria.
+- off_domain: Non-CS/ML field (physics, math, etc.). This content is intentionally
+  retained for associative memory diversity. Approve if the document is high-quality
+  within its own field, even if not directly CS/ML relevant. Lower the relevance
+  weight and focus on accuracy and clarity instead.
+
+Set needs_supplement=true if the document meets ANY of these conditions:
+1. Fragment / incomplete: truncated mid-sentence, missing context to be understood
+   standalone, or is clearly a partial excerpt needing surrounding content.
+2. Thin / shallow: fewer than ~3 meaningful sentences of substance, only contains
+   a title/header/install command with no explanation, or is a navigation/UI
+   description with no actual knowledge content.
+
+When needs_supplement=true, set approved=false regardless of quality_score.
+Approve if quality_score >= 0.6 AND needs_supplement=false."""
+
 _REVIEW_PROMPT = """\
 Document metadata:
 - content_type: {content_type}
@@ -531,6 +567,165 @@ def select_nemotron_docs() -> list[TestDoc]:
 
 _STRICT_PERSONA = "You are a strict and uncompromising reviewer. Apply the quality criteria rigorously without giving benefit of the doubt."
 
+
+def _parse_response(content: str) -> dict:
+    """JSON レスポンスを抽出・パースする。"""
+    import re
+    m = re.search(r"\{[\s\S]*\}", content)
+    if m:
+        try:
+            return json.loads(m.group())
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
+async def run_system_thinking_test(gateway: LLMGateway, result_conn: sqlite3.Connection,
+                                   seed: int = 99) -> None:
+    """system prompt に thinking 指示を含める場合と含めない場合を比較。
+
+    4パターン:
+    1. No thinking instruction + thinking OFF (fastflowlm)
+    2. No thinking instruction + thinking ON (fastflowlm_think)
+    3. With thinking instruction + thinking OFF (fastflowlm)
+    4. With thinking instruction + thinking ON (fastflowlm_think)
+    """
+    run_at = datetime.now(UTC).isoformat()
+    test_docs = select_fragment_docs(n=5, seed=seed)
+    if not test_docs:
+        logger.error("テスト文書が見つかりません")
+        return
+
+    print(f"\n{'='*80}")
+    print("System Context Thinking Test: thinking指示 有無 × enable_thinking ON/OFF")
+    print(f"{'='*80}\n")
+
+    all_records: list[ReviewRecord] = []
+    patterns = [
+        ("No thinking", _REVIEW_SYSTEM, False),           # (label, system, has_thinking_instruction)
+        ("With thinking", _REVIEW_SYSTEM_WITH_THINKING, True),
+    ]
+    providers = [
+        ("fastflowlm", "qwen3.5:9b", False),             # (provider, model, thinking_enabled)
+        ("fastflowlm_think", "qwen3.5:9b", True),
+    ]
+
+    total = len(test_docs) * len(patterns) * len(providers)
+    counter = 0
+
+    def _save(rec: ReviewRecord, doc: TestDoc) -> None:
+        result_conn.execute(
+            "INSERT INTO results VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (run_at, rec.doc_id, rec.category, rec.provider, rec.model,
+             rec.quality_score, rec.confidence,
+             int(rec.approved), int(rec.needs_supplement),
+             rec.reason, rec.raw_response, rec.elapsed_s, rec.error,
+             doc.original_status, doc.original_quality, doc.original_confidence)
+        )
+        result_conn.commit()
+
+    def _print_rec(rec: ReviewRecord, idx: int, total: int, context: str) -> None:
+        status = "APPROVED" if rec.approved else ("NEEDS_SUPP" if rec.needs_supplement else "HOLD")
+        print(f"[{idx:2d}/{total}] {context:30s} {rec.doc_id[:8]}... "
+              f"q={rec.quality_score:.2f} conf={rec.confidence:.2f} {status} ({rec.elapsed_s:.1f}s)", flush=True)
+        if rec.error:
+            print(f"         ERROR: {rec.error[:200]}", flush=True)
+        elif rec.reason:
+            print(f"         {rec.reason[:100]}", flush=True)
+
+    # 4パターンの組み合わせで実行
+    for pattern_label, system_prompt, _ in patterns:
+        for prov, model, _ in providers:
+            thinking_label = "THINK" if prov == "fastflowlm_think" else "NOTHINK"
+            print(f"\n--- {pattern_label:15s} + {thinking_label} (fastflowlm) ---\n")
+
+            for i, doc in enumerate(test_docs):
+                counter += 1
+                prompt = _REVIEW_PROMPT.format(
+                    content_type=doc.content_type,
+                    categories=doc.categories,
+                    domain_flag=doc.domain_flag,
+                    text=doc.content[:1200],
+                )
+                t0 = time.time()
+                error = ""
+                raw = ""
+                quality = 0.0
+                confidence = 0.0
+                approved = False
+                needs_supp = False
+                reason = ""
+
+                try:
+                    resp = await gateway.complete(
+                        prompt,
+                        system=system_prompt,
+                        provider=prov,
+                        model=model,
+                        temperature=0.0,
+                    )
+                    raw = resp.content if hasattr(resp, "content") else str(resp)
+                    parsed = _parse_response(raw)
+                    quality = float(parsed.get("quality_score", 0.0))
+                    confidence = float(parsed.get("confidence", 0.5))
+                    approved = bool(parsed.get("approved", False))
+                    needs_supp = bool(parsed.get("needs_supplement", False))
+                    reason = str(parsed.get("reason", ""))
+                except Exception as e:
+                    error = f"{type(e).__name__}: {str(e)[:150]}"
+                    logger.exception("Review failed for doc=%s", doc.id)
+
+                elapsed = time.time() - t0
+                rec = ReviewRecord(
+                    doc_id=doc.doc_id,
+                    category=doc.category,
+                    provider=prov,
+                    model=model,
+                    quality_score=quality,
+                    confidence=confidence,
+                    approved=approved,
+                    needs_supplement=needs_supp,
+                    reason=reason,
+                    raw_response=raw[:500],
+                    elapsed_s=elapsed,
+                    error=error,
+                )
+                all_records.append(rec)
+                context = f"{pattern_label} + {thinking_label}"
+                _print_rec(rec, counter, total, context)
+                _save(rec, doc)
+
+    # ── 比較サマリー ─────────────────────────────────────────────────────────
+    print(f"\n{'='*80}")
+    print("System Context Thinking Test — 比較サマリー")
+    print(f"{'='*80}\n")
+
+    # 4グループに分割
+    no_think_off = [r for r in all_records if r.provider == "fastflowlm"][:len(test_docs)]
+    no_think_on = [r for r in all_records if r.provider == "fastflowlm_think"][:len(test_docs)]
+    with_think_off = [r for r in all_records if r.provider == "fastflowlm"][len(test_docs):len(test_docs)*2]
+    with_think_on = [r for r in all_records if r.provider == "fastflowlm_think"][len(test_docs):len(test_docs)*2]
+
+    # 各グループの統計
+    print(f"{'Pattern':<30s} {'Avg Time':>10s} {'Approval':>10s} {'Avg Quality':>12s}")
+    print("-" * 65)
+
+    for label, group in [
+        ("No thinking + OFF", no_think_off),
+        ("No thinking + ON", no_think_on),
+        ("With thinking + OFF", with_think_off),
+        ("With thinking + ON", with_think_on),
+    ]:
+        if group:
+            avg_time = sum(r.elapsed_s for r in group) / len(group)
+            approval = sum(1 for r in group if r.approved) / len(group) * 100
+            avg_quality = sum(r.quality_score for r in group) / len(group)
+            print(f"{label:<30s} {avg_time:>10.1f}s {approval:>9.1f}% {avg_quality:>12.2f}")
+
+    print(f"{'='*80}\n")
+    print(f"結果保存: {RESULT_DB}\n")
+
+
 async def run_nemotron_test(gateway: LLMGateway, result_conn: sqlite3.Connection,
                              strict_persona: bool = False) -> None:
     """compare_think.md Section8 の5文書で nemotron 3種を直列評価。
@@ -852,6 +1047,8 @@ async def main() -> None:
                     help="think全件→llama3.2:1bダミー→nothink全件 直列実行（モード状態確認）")
     ap.add_argument("--interleaved-test", action="store_true",
                     help="think[i]→nothink[i] を文書ごとに交互実行（nothink伝播の確認）")
+    ap.add_argument("--system-thinking-test", action="store_true",
+                    help="system prompt に thinking指示 有無 × enable_thinking ON/OFF の4パターン比較")
     ap.add_argument("--nemotron-test", action="store_true",
                     help="nemotron 3種 OpenRouter テスト（compare_think.md の5文書固定）")
     ap.add_argument("--strict-persona", action="store_true",
@@ -877,6 +1074,11 @@ async def main() -> None:
 
     if args.interleaved_test:
         await run_interleaved_test(gateway, result_conn, seed=seed)
+        result_conn.close()
+        return
+
+    if args.system_thinking_test:
+        await run_system_thinking_test(gateway, result_conn, seed=seed)
         result_conn.close()
         return
 
