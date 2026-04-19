@@ -119,9 +119,7 @@ Set needs_supplement=true if the document meets ANY of these conditions:
 When needs_supplement=true, set approved=false regardless of quality_score.
 Approve if quality_score >= 0.6 AND needs_supplement=false."""
 
-_REVIEW_SYSTEM_WITH_THINKING = """\
-Think carefully about this quality review task. Take your time to analyze the document thoroughly.
-
+_REVIEW_SYSTEM_THINK_PAYLOAD = """\
 You are a quality reviewer for a technical knowledge base.
 Evaluate the given document and respond with ONLY valid JSON:
 {
@@ -578,6 +576,140 @@ def _parse_response(content: str) -> dict:
         except json.JSONDecodeError:
             return {}
     return {}
+
+
+_PROMPT_VARIATIONS = {
+    "baseline": _REVIEW_PROMPT,
+    "with_think": "think about the following document carefully.\n\n" + _REVIEW_PROMPT,
+    "with_think_lowercase": "think about the following document.\n\n" + _REVIEW_PROMPT,
+    "with_analyze": "analyze the following document carefully.\n\n" + _REVIEW_PROMPT,
+}
+
+
+async def run_payload_think_test(gateway: LLMGateway, result_conn: sqlite3.Connection,
+                                 seed: int = 99) -> None:
+    """payload に 'think' キーワード を含める場合の4パターン比較。
+
+    - baseline: 通常プロンプト
+    - with_think: "think about the following document carefully."
+    - with_think_lowercase: "think about the following document." (carefully なし)
+    - with_analyze: "analyze the following document carefully." (think なし)
+
+    'carefully' vs 'think' キーワードの効果を分離。
+    """
+    run_at = datetime.now(UTC).isoformat()
+    test_docs = select_fragment_docs(n=5, seed=seed)
+    if not test_docs:
+        logger.error("テスト文書が見つかりません")
+        return
+
+    print(f"\n{'='*80}")
+    print("Payload 'think' Keyword Test: 'think' / 'carefully' の効果分離")
+    print(f"{'='*80}\n")
+
+    all_records: list[ReviewRecord] = []
+    total = len(test_docs) * len(_PROMPT_VARIATIONS)
+    counter = 0
+
+    def _save(rec: ReviewRecord, doc: TestDoc) -> None:
+        result_conn.execute(
+            "INSERT INTO results VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (run_at, rec.doc_id, rec.category, rec.provider, rec.model,
+             rec.quality_score, rec.confidence,
+             int(rec.approved), int(rec.needs_supplement),
+             rec.reason, rec.raw_response, rec.elapsed_s, rec.error,
+             doc.original_status, doc.original_quality, doc.original_confidence)
+        )
+        result_conn.commit()
+
+    def _print_rec(rec: ReviewRecord, idx: int, total: int, label: str) -> None:
+        status = "APPROVED" if rec.approved else ("NEEDS_SUPP" if rec.needs_supplement else "HOLD")
+        print(f"[{idx:2d}/{total}] {label:30s} {rec.doc_id[:8]}... "
+              f"q={rec.quality_score:.2f} conf={rec.confidence:.2f} {status} ({rec.elapsed_s:.1f}s)", flush=True)
+        if rec.error:
+            print(f"         ERROR: {rec.error[:200]}", flush=True)
+
+    # 4つのプロンプトバリエーションをテスト
+    for var_label, prompt_template in _PROMPT_VARIATIONS.items():
+        print(f"\n--- {var_label:30s} ---\n")
+
+        for i, doc in enumerate(test_docs):
+            counter += 1
+            prompt = prompt_template.format(
+                content_type=doc.content_type,
+                categories=doc.categories,
+                domain_flag=doc.domain_flag,
+                text=doc.content[:1200],
+            )
+            t0 = time.time()
+            error = ""
+            raw = ""
+            quality = 0.0
+            confidence = 0.0
+            approved = False
+            needs_supp = False
+            reason = ""
+
+            try:
+                resp = await gateway.complete(
+                    prompt,
+                    system=_REVIEW_SYSTEM,
+                    provider="fastflowlm",
+                    model="qwen3.5:9b",
+                    temperature=0.0,
+                )
+                raw = resp.content if hasattr(resp, "content") else str(resp)
+                parsed = _parse_response(raw)
+                quality = float(parsed.get("quality_score", 0.0))
+                confidence = float(parsed.get("confidence", 0.5))
+                approved = bool(parsed.get("approved", False))
+                needs_supp = bool(parsed.get("needs_supplement", False))
+                reason = str(parsed.get("reason", ""))
+            except Exception as e:
+                error = f"{type(e).__name__}: {str(e)[:150]}"
+                logger.exception("Review failed for doc=%s", doc.id)
+
+            elapsed = time.time() - t0
+            rec = ReviewRecord(
+                doc_id=doc.doc_id,
+                category=doc.category,
+                provider="fastflowlm",
+                model="qwen3.5:9b",
+                quality_score=quality,
+                confidence=confidence,
+                approved=approved,
+                needs_supplement=needs_supp,
+                reason=reason,
+                raw_response=raw[:500],
+                elapsed_s=elapsed,
+                error=error,
+            )
+            all_records.append(rec)
+            _print_rec(rec, counter, total, var_label)
+            _save(rec, doc)
+
+    # ── 比較サマリー ─────────────────────────────────────────────────────────
+    print(f"\n{'='*80}")
+    print("Payload 'think' Keyword Test — 比較サマリー")
+    print(f"{'='*80}\n")
+
+    print(f"{'Prompt Variation':<30s} {'Avg Time':>10s} {'Approval':>10s} {'Avg Quality':>12s}")
+    print("-" * 65)
+
+    for var_label in _PROMPT_VARIATIONS.keys():
+        group = [r for r in all_records if r.provider == "fastflowlm"]
+        # グループを分割
+        idx = list(_PROMPT_VARIATIONS.keys()).index(var_label)
+        group = group[idx * len(test_docs):(idx + 1) * len(test_docs)]
+
+        if group:
+            avg_time = sum(r.elapsed_s for r in group) / len(group)
+            approval = sum(1 for r in group if r.approved) / len(group) * 100
+            avg_quality = sum(r.quality_score for r in group) / len(group)
+            print(f"{var_label:<30s} {avg_time:>10.1f}s {approval:>9.1f}% {avg_quality:>12.2f}")
+
+    print(f"{'='*80}\n")
+    print(f"結果保存: {RESULT_DB}\n")
 
 
 async def run_system_thinking_test(gateway: LLMGateway, result_conn: sqlite3.Connection,
@@ -1049,6 +1181,8 @@ async def main() -> None:
                     help="think[i]→nothink[i] を文書ごとに交互実行（nothink伝播の確認）")
     ap.add_argument("--system-thinking-test", action="store_true",
                     help="system prompt に thinking指示 有無 × enable_thinking ON/OFF の4パターン比較")
+    ap.add_argument("--payload-think-test", action="store_true",
+                    help="payload に 'think' キーワード を含める場合の4パターン比較（'think'/'carefully' 効果分離）")
     ap.add_argument("--nemotron-test", action="store_true",
                     help="nemotron 3種 OpenRouter テスト（compare_think.md の5文書固定）")
     ap.add_argument("--strict-persona", action="store_true",
@@ -1079,6 +1213,11 @@ async def main() -> None:
 
     if args.system_thinking_test:
         await run_system_thinking_test(gateway, result_conn, seed=seed)
+        result_conn.close()
+        return
+
+    if args.payload_think_test:
+        await run_payload_think_test(gateway, result_conn, seed=seed)
         result_conn.close()
         return
 
