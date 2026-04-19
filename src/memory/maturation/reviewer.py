@@ -29,6 +29,10 @@ from src.memory.schema import Document, ReviewStatus
 
 logger = logging.getLogger(__name__)
 
+# Qwen3系 thinking モデルを使うプロバイダー: /no_think プレフィックスで thinking を無効化する
+# thinking ON のまま低 temperature を指定すると合理化推論が発生し過承認の原因になる
+_NO_THINK_PROVIDERS: frozenset[str] = frozenset({"fastflowlm"})
+
 _REVIEW_SYSTEM = """\
 You are a quality reviewer for a technical knowledge base.
 Evaluate the given document and respond with ONLY valid JSON:
@@ -119,7 +123,6 @@ class MemoryReviewer:
         Returns:
             ReviewResult オブジェクト。
         """
-        import json as _json
         text = doc.content[:self._max_text]
         extra = doc.source.extra or {}
         content_type = extra.get("content_type", "unknown")
@@ -132,10 +135,16 @@ class MemoryReviewer:
             text=text,
         )
 
+        # Qwen3系 thinking モデルは /nothink を user メッセージ先頭に付与して thinking を無効化
+        # ※ system ロールでは Qwen3 のソフトスイッチが機能しないため user 先頭に置く
+        system = _REVIEW_SYSTEM
+        if self._provider in _NO_THINK_PROVIDERS:
+            prompt = "/nothink\n\n" + prompt
+
         try:
             response = await self._gateway.complete(
                 prompt,
-                system=_REVIEW_SYSTEM,
+                system=system,
                 provider=self._provider,
                 model=self._model,
                 temperature=0.0,
@@ -167,6 +176,15 @@ class MemoryReviewer:
         else:
             review_status = ReviewStatus.HOLD  # REJECTED → HOLD（再審査可能）
 
+        # composite_score: teacher_quality * 0.6 + confidence * 0.4
+        composite_score = round(quality_score * 0.6 + confidence * 0.4, 4)
+
+        # teacher_id: "provider/model" 形式で審査モデルを記録
+        teacher_id: str | None = None
+        if self._provider or self._model:
+            parts = [p for p in (self._provider, self._model) if p]
+            teacher_id = "/".join(parts)
+
         # MetadataStore を更新
         try:
             await self._store.update_quality(
@@ -174,6 +192,8 @@ class MemoryReviewer:
                 teacher_quality=quality_score,
                 review_status=review_status.value,
                 confidence=confidence,
+                composite_score=composite_score,
+                teacher_id=teacher_id,
             )
             # ブラックリスト自動登録は無効化（HOLD文書は再審査対象のため）
             # if review_status == ReviewStatus.REJECTED:
