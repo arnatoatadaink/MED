@@ -100,7 +100,7 @@ CREATE TABLE thought_logs (
 ---
 
 ### IDEA-002: FAISS k-value Calibration（k値チューニング）
-- **Source**: S2 | **Priority**: A | **Status**: `draft` | **担当**: MED
+- **Source**: S2 + **S6（RLVR知見により重要度昇格）** | **Priority**: **A（昇格）** | **Status**: `draft` | **担当**: MED
 
 Posterior Variance が O(e^{-ck}) で指数的減少。k=3〜5で実用的収束。
 
@@ -110,9 +110,23 @@ k = 3〜5: 実用的収束ゾーン（理論値）← 推奨
 k > 7: コンテキスト消費増 / 収束余剰
 ```
 
+**RLVR知見による重要度昇格（S6）**:
+```
+RLVRモデル（知識外付け・推論特化）を採用する場合、
+FAISSのk値とコンテキスト品質がStudentの「見かけの賢さ」を決定する。
+浅いStudentでも深いTransformer相当の出力が得られるかどうかは
+k値と検索精度の実験で検証可能。
+
+検証すべき仮説:
+  「k=5 + Hyperbolic距離 + context_emb」の組み合わせで
+  ベースモデルの深さを補完できるか
+  → IDEA-002はMEDの中核仮説の検証実験になる
+```
+
 **実装ギャップ**:
 - [ ] k値を config.yaml に外出し
 - [ ] k=3/5/7/10での精度比較実験
+- [ ] Observer（FAISS検索精度）とSolver（Student推論精度）を**独立評価**する実験設計
 
 ---
 
@@ -171,7 +185,7 @@ IDEA-003のVerifyループ:
 ---
 
 ### IDEA-004: GRPO Reward from Self-Evaluation（自己評価→報酬変換）
-- **Source**: S1 + S3 | **Priority**: B | **Status**: `draft` | **担当**: MED
+- **Source**: S1 + S3 + **S6（Observer/Solver）** + **S7（RLTF）** | **Priority**: B | **Status**: `draft` | **担当**: MED
 
 ```python
 def compute_reward(output, reference, verifier_result, style_target=None):
@@ -186,6 +200,59 @@ def compute_reward(output, reference, verifier_result, style_target=None):
                              style_target.personal)
         return 0.7 * base + 0.3 * style_score
     return base
+```
+
+#### 拡張案A: Observer/Solver分離報酬（S6）
+
+```python
+def compute_reward_obs_solver(
+    observation_accuracy: float,   # FAISSが正しい根拠を取得できたか
+    solver_accuracy: float,        # Studentが根拠から正しく推論できたか
+    verifier_result,
+    w_obs=0.4, w_sol=0.6           # 重みは調整可能
+) -> float:
+    """
+    Observer（FAISS検索精度）とSolver（Student推論精度）を独立評価。
+    どちらの能力が不足しているかを分離して診断できる。
+    
+    observation_accuracy低 → FAISSのk値・Hyperbolic距離を改善（IDEA-002）
+    solver_accuracy低      → StudentのRLVR訓練を強化（IDEA-003）
+    """
+    if not verifier_result.passed:
+        return -1.0
+    return w_obs * observation_accuracy + w_sol * solver_accuracy
+```
+
+#### 拡張案B: テキスト批評報酬（S7 RLTF）
+
+```python
+def compute_reward_rltf(
+    output: str,
+    teacher_critique: str,         # Teacherのテキスト批評
+    second_attempt: str,           # 批評を受けた後の2回目の回答
+    verifier_result
+) -> float:
+    """
+    1ビット（良/悪）の代わりに、テキスト批評による高次元報酬。
+    「どこが・なぜ違うか」をRLTFで転写する。
+    
+    実装順序:
+      Phase 1: Teacher批評をログに記録（IDEA-001の拡張）
+      Phase 2: 批評 → 改善率をスコア化
+      Phase 3: 改善能力を1回目の回答に転写（本来のRLTF）
+    """
+    if not verifier_result.passed:
+        return -1.0
+    improvement = similarity(second_attempt, reference) \
+                - similarity(output, reference)
+    return max(0.0, improvement)   # 改善した分だけ報酬
+```
+
+**統合方針**:
+```
+Phase 2まで: 拡張案Aを先行実装（Observer/Solver分離）
+Phase 3以降: 拡張案Bを追加（RLTF・より実装コストが高い）
+現状の基本報酬関数は維持・拡張案はオプション
 ```
 
 ---
@@ -348,11 +415,24 @@ IDEA-010の切り替えロジック:
 
 ```
 Phase 0（現在）: FAISS + SQL + KG の基本構造
+
 Phase 1: IDEA-001, IDEA-002 → 思考ログ確定、k値外出し
+  + IDEA-002拡張: Observer/Solver独立評価の実験設計
+
 Phase 2: IDEA-003, IDEA-004, IDEA-005 → カリキュラム・報酬・KG+Hyperbolic
+  + IDEA-004拡張A: Observer/Solver分離報酬（S6）
+  + IDEA-005拡張: SC1対応 trust_score + Provenance記録
+
 Phase 3: IDEA-008, IDEA-009, IDEA-010 → 曖昧さ対応・IN-DEDUCTIVE
+  + grounded/ungrounded分離（S5 BP理論）
+
 Phase 4: TRIDENT連携 → trident_plan_hyp_e.md（CPPN連想関数）
+  ← RLVR知見によりNEAT開始タイミングをPhase 2並行に前倒し検討
+     「RLVRのフィットネス関数が確定したらNEATをすぐ始めてよい」
+
 Phase 5: スタイル統合 → med_hyp_style_g.md（StyleExtractor）
+
+Phase 6（追加）: RLTF統合 → IDEA-004拡張B（テキスト批評報酬）
 ```
 
 ---
@@ -364,6 +444,9 @@ Phase 5: スタイル統合 → med_hyp_style_g.md（StyleExtractor）
 - Hyperbolicの float64計算が推論速度に与える影響
 - scale（Chance-Level Threshold）の最適値をAblationでどう探索するか
 - StyloMetrixの日本語対応状況（要確認）
+- **Observer/Solver分離評価で「どちらが弱いか」が判明した場合の優先改善順序**
+- **IDEA-002（k値）とStudent能力の相互作用: k値拡張で浅いモデルを補完できる上限は?**
+- **NEAT開始のタイミング: Phase 2のRLVRフィットネス関数が安定したら即開始でよいか**
 
 ---
 
@@ -375,3 +458,4 @@ Phase 5: スタイル統合 → med_hyp_style_g.md（StyleExtractor）
 | 2026-03-26 | Added IDEA-008, IDEA-009（コードレビュー済み）, IDEA-010 |
 | 2026-03-26 | 全体最新化: MED/TRIDENT分離マップ、Hyperbolic実装方針、Roadmap更新 |
 | 2026-04-04 | IDEA-003/010にhantani記事の実装パターンをsketchとして追記 |
+| 2026-04-26 | IDEA-002優先度昇格（RLVR知見）、IDEA-004にObserver/Solver分離報酬とRLTFを追加、RoadmapにNEAT前倒し検討を追記 |
