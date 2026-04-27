@@ -1,0 +1,28 @@
+# med_seed_papers.md 由来の arXiv ID リスト
+# 形式: arXiv ID （コメントは # で始まる行）
+# 参照: med_seed_papers.md / med_enhancement_seed.md
+
+# ── Section 1: note.com 論文レビュー（MED 直結） ──────────────────────────
+2510.26493   # S1: Context Engineering 2.0 ★★★★★ (IDEA-001,004,005)
+2510.10981   # S2: ICL is Provably Bayesian Inference ★★★★★ (IDEA-002)
+2512.18160   # S3: Propose, Solve, Verify (self-play) ★★★★ (IDEA-003)
+2511.16043   # S4: Agent0: Self-Evolving from Zero Data ★★★★ (IDEA-003)
+
+# ── Section 2: LLM 不確実性・曖昧さ研究 (IDEA-008) ──────────────────────
+2304.14399   # A1: We're afraid LMs aren't modeling ambiguity (EMNLP 2023)
+2505.11679   # A2: Ambiguity in LLMs is a concept missing problem (2025)
+
+# ── Section 3: 損失関数・学習安定化 (IDEA-009) ───────────────────────────
+2410.16682   # L2: Methods of Improving LLM Training Stability (2024)
+
+# ── Section 5: 著者帰属・スタイル抽出 (med_hyp_style_g.md) ──────────────
+2509.14543   # ST3: LLMs Still Struggle to Imitate Implicit Writing Styles
+
+# ── Section 6: Hyperbolic Embedding (仮説B / KGエッジ) ──────────────────
+2005.02819   # HE1: geoopt — PyTorch Riemannian optimization
+2305.07303   # HE2: Multi-Relational Hyperbolic Word Embeddings (EACL 2024)
+2412.01023   # HE3: HypStructure — NeurIPS 2024
+
+# ── Section 7: 新規論文（4/26 追加） ─────────────────────────────────────
+2603.17063   # S5: Transformer = Belief Propagation (構造同型) ★★★★★ (IDEA-008/010)
+2602.02482   # S7: RLTF — Reinforcement Learning from Textual Feedback ★★★★ (IDEA-004)

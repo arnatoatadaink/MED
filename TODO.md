@@ -1,7 +1,7 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-04-11
-> 参照元: `CLAUDE.md` / `plan.md` / `plan_translate.md` / `plan_version_aware.md` / `plan_neat_hyp_e.md` / `plan_programming_seed.md`
+> 最終更新: 2026-04-27
+> 参照元: `CLAUDE.md` / `plan.md` / `plan_translate.md` / `plan_version_aware.md` / `plan_neat_hyp_e.md` / `plan_programming_seed.md` / `med_enhancement_seed.md` / `med_seed_papers.md`
 
 ---
 
@@ -255,6 +255,258 @@ poetry run python scripts/seed_from_docs.py --source github_docs --max-files 80 
 - `src/memory/maturation/seed_builder.py` — Teacher API 呼び出し部分はスタブ
 - `src/training/algorithms/` — 骨格実装のみ、VERL/trl 実統合が必要
 - `tests/unit/test_alias_extractor.py` — pytest-asyncio 設定問題で1件失敗（既知）
+
+---
+
+---
+
+## N. med_enhancement_seed.md 起源タスク
+> 📄 `med_enhancement_seed.md` / `med_seed_papers.md`
+> 論文出所: S1〜S4（note.com レビュー）+ A1〜HE3（セッション調査）
+> 実装ロードマップ: Phase 1 → Phase 2 → Phase 3 の順に着手
+
+---
+
+### N-Phase1: 思考ログ + k値 外出し（IDEA-001, 002）
+
+#### N-1. Structured Thought Log（IDEA-001）🔴
+> 根拠: S1（Context Engineering 2.0, 2510.26493）
+
+- 🔴 `thought_logs` テーブル作成
+  ```sql
+  CREATE TABLE thought_logs (
+      id TEXT PRIMARY KEY, timestamp TEXT,
+      input TEXT, reasoning JSON, output TEXT,
+      reward REAL, self_eval JSON, pattern_id TEXT
+  );
+  ```
+  - `reasoning`: `[{step, thought, confidence}]` 形式
+  - `self_eval`: `{accuracy, relevance, completeness, improvement_notes}`
+- 🔴 `self_evaluate()` の出力を GRPO 報酬値（0.0〜1.0）に変換するパイプライン実装
+- 🔴 パターン抽出ロジック: `success_rate > 0.9` → KG へ自動登録（NetworkX ノード追加）
+- **接続先**: A-2（ReasoningTrace ✅）/ D（KG ✅）/ E（GRPO）
+
+#### N-2. FAISS k-value Calibration（IDEA-002）🔴
+> 根拠: S2（ICL is Provably Bayesian, 2510.10981）— k=3〜5 で指数収束 O(e^{-ck})
+> **RLVR知見（S6）により優先度昇格**: k値とコンテキスト品質がStudentの「見かけの賢さ」を決定
+
+- 🔴 FAISS 取得数 `k` を `configs/default.yaml` に外出し（現状ハードコード）
+  ```yaml
+  retrieval:
+    k: 5  # 推奨範囲: 3〜5（理論値）
+  ```
+- 🟡 k=3/5/7/10 での検索精度比較実験スクリプト作成（MRR / Recall@k 計測）
+- 🟡 Observer（FAISS検索精度）と Solver（Student推論精度）を**独立評価**する実験設計
+  - `observation_accuracy`（正しい根拠を取得できたか）と `solver_accuracy`（根拠から正しく推論できたか）を分離
+  - どちらが弱いかを診断 → k値調整 vs RLVR訓練強化の意思決定に使用（N-OQ-6参照）
+- **接続先**: F（シード継続）/ K（CRAG QueryRewriter）/ N-4拡張案A
+
+---
+
+### N-Phase2: カリキュラム + 報酬 + KG 自動更新（IDEA-003〜005）
+
+#### N-3. Teacher Curriculum Generator（IDEA-003）🟡
+> 根拠: S3（PSV self-play, 2512.18160）+ S4（Agent0, 2511.16043）+ S6（COvolve: 環境自動生成+難化）
+
+- 🟡 `TeacherCurriculumGenerator` クラス実装（`src/memory/maturation/` 配下）
+  - `generate_problem(difficulty: "easier"|"frontier"|"harder") → Problem`
+  - 難易度判定は `student_success_rate` と Chance-Level Threshold（IDEA-009）を参照
+  - COvolve の「Teacher=環境生成役 / Student=ポリシー役」分業と同構造
+- 🟡 Verifier 実装（まずルールベース: 形式チェック + 正解照合）
+  - 将来: LLM-as-judge へ移行（タイミングは Open Question N-OQ-1）
+  - SC1対応: Teacher入力のサニタイズ層を Verifier 前段に挿入（教育的・仮説的表現でラッピングされた汚染入力への警戒）
+- 🟡 Student 成功率 EMA トラッカー実装
+  - `ema = α * current_success + (1-α) * ema_prev`（α=0.1 推奨）
+  - 設計参照: hantani記事「1問題ごとに即Verify → 不明点ログ → 修正してから次へ」
+- **接続先**: E（TrainingDataGate ✅）/ Phase B（CurriculumController ✅）/ N-4拡張案A
+
+#### N-4. GRPO Reward from Self-Evaluation（IDEA-004）🟡
+> 根拠: S1 + S3 + S6（Observer/Solver分業）+ S7（RLTF: テキストフィードバックRL, 2602.02482）
+
+- 🟡 **基本実装**: `compute_reward()` （`src/training/rewards/` 配下）
+  ```python
+  # 仮重みは暫定値; N-OQ-2 で Ablation して最適化
+  base = 0.5 * accuracy + 0.3 * relevance + 0.2 * completeness
+  ```
+  - Verifier 不合格時は `-1.0` を返す（早期ペナルティ）
+  - `style_target` が渡された場合: `0.7 * base + 0.3 * style_score`（med_hyp_style_g.md 連携）
+- 🟡 `AccuracyEvaluator` / `RelevanceEvaluator` / `CompletenessEvaluator` のスタブ実装
+
+- 🟡 **拡張案A（Phase2優先）: Observer/Solver分離報酬** （S6 COvolve/Observer-Solver知見）
+  ```python
+  # observation_accuracy低 → FAISSのk値・Hyperbolic距離を改善（IDEA-002へフィードバック）
+  # solver_accuracy低      → StudentのRLVR訓練を強化（IDEA-003へフィードバック）
+  def compute_reward_obs_solver(observation_accuracy, solver_accuracy, verifier_result,
+                                 w_obs=0.4, w_sol=0.6) -> float
+  ```
+  - Phase2 で先行実装。N-2の独立評価実験結果を受けて重みを調整
+
+- 🟢 **拡張案B（Phase3以降）: テキスト批評報酬** （S7 RLTF）
+  ```python
+  # Teacher批評 → 改善率をスコア化 → 改善能力を1回目に転写
+  def compute_reward_rltf(output, teacher_critique, second_attempt, verifier_result) -> float
+  ```
+  - Phase1: Teacher批評をthought_logsに記録（N-1の拡張）
+  - Phase2: 批評 → 改善率をスコア化
+  - Phase3: 改善能力を1回目に転写（RLTF本来）
+  - MED_INTEGRATION.md Phase5の「Teacher批評フィードバックAPI」と同一
+
+- **接続先**: E（GRPO ✅骨格）/ N-3（Verifier）/ N-2（Observer診断）/ Phase 5（StyleExtractor）
+
+#### N-5. Knowledge Graph Auto-Update（IDEA-005）🟡
+> 根拠: S1（Context Engineering 2.0）+ **SC1（AI Agent Traps, SSRN 6372438）— RAG汚染対策**
+
+- 🟡 KG 自動更新トリガー実装（`src/knowledge_graph/` 配下）
+  - `thought_logs.reward > 0.9` かつ 類似パターン未登録 → 新ノード追加
+  - 重複検出: FAISS 近傍検索で cos_sim > 0.95 なら既存ノードへのエッジのみ追加
+- 🟡 Hyperbolic エッジ重み実装（KGエッジ生成時のみ）
+  ```python
+  import geoopt
+  manifold = geoopt.PoincareBall(c=1.0)
+  edge_weight = 1.0 / (1.0 + manifold.dist(h_a, h_b))
+  ```
+  - float64 使用（数値安定性確保）。推論速度影響は N-OQ-3 で測定
+- 🟡 `pyproject.toml` に `geoopt` 追加（`poetry add geoopt`）
+- 🟡 **SC1対応: SourceTrustScore + Provenance記録**（自動登録前の検証ゲート）
+  ```python
+  @dataclass
+  class SourceTrustScore:
+      source_url: str
+      domain_type: str   # "arxiv" | "github" | "web" | "user_input"
+      provenance: str    # 出所の追跡チェーン
+      sanitized: bool
+      trust_score: float # 0.0〜1.0
+  ```
+  - `trust_score < threshold` → 自動KG登録をブロックして手動確認キューに追加
+  - KGエッジ生成時に `provenance` を記録（Latent Memory Poisoning対策）
+  - `thought_logs` と共に記録（N-1と連携）
+- **接続先**: D（KG ✅）/ HE1（2005.02819 seed済み）/ HE2/HE3（seed済み）/ N-9（セキュリティ）
+
+---
+
+### N-Phase3: 曖昧さ認識 + IN-DEDUCTIVE（IDEA-008〜010）
+
+#### N-6. Ambiguity-Aware RAG（IDEA-008）🟢
+> 根拠: A1（2304.14399 seed済み）/ A2（2505.11679 seed済み）/ A3, A4（未seed）
+> **S5（Transformer=BP, 2603.17063）**: grounded/ungrounded分離の理論的根拠確立
+
+- 🟢 **grounded/ungrounded分離設計**（S5知見）
+  - FAISSで根拠が得られる場合（grounded）とそうでない場合（ungrounded）を明示的に区別
+  - ungroundedクエリに対して「根拠未定義」を明示する応答パスを設計
+  - BP理論: 「LLMは間違っているのではなく、正誤が存在しない空間で動いている」
+- 🟢 `compute_semantic_entropy(query: str) → float` 実装
+  - Kuhn et al. 2023 "Semantic Uncertainty" を参照（arXiv ID 要確認: N-S-1）
+- 🟢 `generate_interpretations(query: str) → list[str]` — 複数解釈生成
+- 🟢 `merge_and_rerank(results_list, k) → list[SearchResult]` — RRF で統合
+- 🟢 `ambiguity_aware_search()` を `RetrieverRouter` に組み込み
+  - SC1対応: Webコンテンツ取込時のHTMLソース vs レンダリング差分検出（Content Injection対策）
+- **接続先**: K（CRAG QueryRewriter）/ N-7/8/ S5（2603.17063 seed予定）
+
+#### N-7. Chance-Level Threshold 再設計（IDEA-009）🟢
+> 根拠: 個人実験 + L1（Gemma2）/ L2（2410.16682 seed済み）/ L3（Focal Loss）
+> Status: needs-redesign（Hard版 → Soft版への移行が必要）
+
+- 🟢 Soft版（Chance-Focal）実装:
+  ```python
+  weight = max(0, 1 - p * n_classes) ** gamma  # γ=2 から Ablation
+  ```
+- 🟢 `scale` 最適値の Ablation 実験設計（N-OQ-4）
+- 🟢 `n_classes` の動的決定ロジック（タスク種別ごとに変動）
+- **接続先**: N-6（閾値設計）/ N-8（ルーティング）/ E（GRPO報酬）
+
+#### N-8. IN-DEDUCTIVE Hybrid 推論（IDEA-010）🟢
+> 根拠: H1（IN-DEDUCTIVE LSHTC3）/ H2（MoE Shazeer 2017）/ H3（DID ACL 2025）
+> **S5（Transformer=BP）**: 演繹パス=Attention（メッセージ伝播）、帰納パス=FFN（ベイズ更新）と構造同型
+> N-6/7 実装後に着手
+
+- 🟢 `teacher_classifier` — グループ確率を出力する分類器
+  - SC1対応: Teacher演繹パスの入力段階でフィルタリング（汚染されたTeacher判定が全下流を誤誘導するリスク）
+- 🟢 `inductive_deductive_search()` — 確信度 ≥ Chance-Level で演繹パス、そうでなければ帰納パス
+  - 設計参照: hantani記事「レビュー依頼→Codex CLI直接実行（演繹）/ SPEC.md不足→段階的設計（帰納）」
+- 🟢 IDEA-008/009/010 の統合テスト設計
+- **接続先**: K（CRAG）/ L（NEAT）/ TRIDENT（ルーティング）/ S5（BP理論的根拠）
+
+---
+
+---
+
+### N-9. RAG/KG セキュリティ強化（SC1 AI Agent Traps）🟡
+> 根拠: SC1（Franklin et al. 2026, Google DeepMind, SSRN 6372438）
+> 「自律AIエージェントがウェブを行動するとき、情報環境そのものが脆弱性になる」
+
+SC1が特定した6種類のトラップのうちMEDに直接影響するもの:
+
+| 攻撃種別 | 影響するコンポーネント | 対策タスク |
+|---------|------------------|-----------|
+| RAG Knowledge Poisoning | IDEA-005（KG自動更新） | SourceTrustScore実装（N-5に統合） |
+| Latent Memory Poisoning | IDEA-005, KG全般 | KGエッジ生成時のProvenance記録（N-5に統合） |
+| Contextual Learning Traps | IDEA-003（Verifier） | Teacher入力のサニタイズ層（N-3に統合） |
+| Content Injection | IDEA-008（曖昧さ認識RAG） | HTMLソース vs レンダリング差分検出（N-6に統合） |
+| Semantic Manipulation | IDEA-010（演繹パス） | Teacher入力フィルタリング（N-8に統合） |
+| Oversight & Critic Evasion | IDEA-003（Verifier全般） | 教育的表現でラッピングされた汚染入力への警戒 |
+
+- 🟡 **SourceTrustScore** データクラス実装（`src/memory/schema.py` に追加）— N-5と同時実施
+- 🟡 **seed_from_docs.py** に trust_score チェックゲートを追加
+  - `domain_type="web"` のコンテンツは trust_score 評価必須
+  - `domain_type="arxiv" | "github"` は高信頼ソースとして default trust_score=0.9
+- 🟡 **メモ**: SC1はSSRN 6372438のみ（arXiv未登録）→ seed不可
+
+- **接続先**: N-5（SourceTrustScore）/ N-3（サニタイズ）/ N-6（Content Injection）/ N-8（演繹パスフィルタ）
+
+---
+
+### N-Seed: 未取得論文の seed 追加
+
+#### N-S-0. 新規追加済み論文（4/27 seed可能）🟡
+
+`data/doc_urls/med_papers.txt` 追記済み。`seed_arxiv_ids.py` で投入予定:
+
+| 論文 | arXiv ID | セクション | 状態 |
+|------|---------|-----------|------|
+| Transformer = Belief Propagation | 2603.17063 | S5 ★★★★★ | ✅ txt追加済み |
+| RLTF (Textual Feedback RL) | 2602.02482 | S7 ★★★★ | ✅ txt追加済み |
+| AI Agent Traps (SC1) | SSRN 6372438 | SC1 ★★★★★ | ❌ arXiv未登録・seed不可 |
+
+```bash
+poetry run python scripts/seed_arxiv_ids.py
+```
+
+#### N-S-1. 未 arXiv ID 論文の調査・追加 🟡
+
+以下は `med_seed_papers.md` に記載されているが arXiv ID が不明。調査後 `data/doc_urls/med_papers.txt` に追記して `seed_arxiv_ids.py` で投入：
+
+| 論文 | セクション | 調査状況 |
+|------|-----------|---------|
+| Kuhn et al. 2023 "Semantic Uncertainty" ICLR | IDEA-008 根拠 | arXiv ID 未確認 |
+| "Can LLMs Faithfully Express Their Uncertainty?" EMNLP 2024 | A3 | arXiv ID 未確認 |
+| "Do LLMs Estimate Uncertainty Well?" ICLR 2025 | A4 | arXiv ID 未確認 |
+| Gemma 2 Technical Report (Google DeepMind 2024) | L1 | 2408.00118 候補（要確認） |
+| Focal Loss (Lin et al., ICCV 2017) | L3 | 1708.02002 候補（要確認） |
+| MoE (Shazeer et al., 2017) | H2 | 1701.06538 候補（要確認） |
+| DID Framework (ACL 2025) | H3 | arXiv ID 未確認 |
+| ST2: "Can LLMs Identify Authorship?" (Huang 2024) | ST2 | arXiv ID 未確認 |
+| S6: COvolve / Observer-Solver / Medical AI Scientist | S6 | 記事まとめのみ・個別ID要調査 |
+
+**追加コマンド** （ID 確認後）:
+```bash
+# data/doc_urls/med_papers.txt に ID を追記してから
+poetry run python scripts/seed_arxiv_ids.py
+```
+
+---
+
+### N-OQ: Open Questions（調査・実験が必要）
+
+| ID | 問い | 関連 IDEA |
+|----|------|----------|
+| N-OQ-1 | Verifier を ルールベース→LLM-as-judge に移行するタイミング | IDEA-003 |
+| N-OQ-2 | GRPO 報酬重み最適値（0.5/0.3/0.2 は仮設定）の Ablation | IDEA-004 |
+| N-OQ-3 | Hyperbolic float64 計算が推論速度に与える影響（実測） | IDEA-005 |
+| N-OQ-4 | Chance-Level Threshold の `scale` 最適値 Ablation 設計 | IDEA-009 |
+| N-OQ-5 | StyloMetrix の日本語対応状況確認（pip install + 動作テスト） | med_hyp_style_g.md |
+| N-OQ-6 | Observer/Solver分離評価で「どちらが弱いか」が判明した場合の優先改善順序 | IDEA-002/004 |
+| N-OQ-7 | k値拡張で浅いStudentモデルを補完できる上限はどこか（RLVR環境での実測） | IDEA-002 |
+| N-OQ-8 | NEAT開始タイミング: Phase2のRLVRフィットネス関数が安定したら即開始でよいか | TRIDENT Phase4 |
 
 ---
 
