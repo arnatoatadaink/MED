@@ -510,6 +510,174 @@ poetry run python scripts/seed_arxiv_ids.py
 
 ---
 
+## O. 埋め込み空間診断・arXiv↔実装ブリッジング
+
+> **現状の問題**: academic=11ベクトル / code=25,389ベクトル（2026-04-27時点）
+> FAISSのacademic空間とcode空間が断絶している。
+> UMAPで構造を可視化してから、2つのドメインを接続するSEEDと設問を設計する。
+
+---
+
+### O-1. FAISS 埋め込み分布 UMAP 可視化 🔴
+> TRIDENT「埋め込み空間最適化 Task 2」の前提条件
+
+- 🔴 `scripts/visualize_faiss.py` を作成
+  ```
+  入力: data/faiss_indices/{academic,code,general}/ + data/metadata.db
+  処理:
+    1. 各ドメインのFAISSインデックスからembeddingをnp.array取得
+    2. metadata.dbからタイトル・source_type・domainを結合
+    3. UMAP (n_neighbors=15, min_dist=0.1, n_components=2) で384次元→2次元
+    4. matplotlib散布図（カラーリング軸: domain / source_type / status）
+  出力: data/analysis/faiss_umap_{date}.png
+  ```
+- 🔴 確認すべき4点:
+  1. **断絶度**: academic 11点とcode 25k点が空間的に分離しているか
+  2. **code内クラスター**: Python/GitHub/SOが混在しているか、言語別に分かれているか
+  3. **孤立点**: 最近傍との距離が大きいアウトライアー文書の特定
+  4. **ブリッジ候補**: academicとcodeの中間に位置する文書（一般化の糸口）
+- 🟡 `poetry add umap-learn matplotlib` （依存追加）
+- **接続先**: TRIDENT Task 2（埋め込み空間最適化）/ O-2（SEEDに反映）
+
+---
+
+### O-2. arXiv↔実装ブリッジング SEED 設計 🟡
+> O-1の可視化結果を受けて実施
+
+#### ブリッジSEED 3種別
+
+**種別A: 実装ドキュメント（理論の実装側）**
+
+| 対象 | URL / arXiv | 橋渡しする概念 | 優先度 |
+|------|------------|--------------|--------|
+| sentence-transformers公式ドキュメント | GitHub/README | 384次元埋め込み ↔ all-MiniLM-L6-v2 | 🔴 |
+| FAISS公式ドキュメント | GitHub/README | ベクトル検索理論 ↔ faiss.IndexFlatIP | 🔴 |
+| geoopt使い方ガイド | GitHub/README | Poincaré Ball理論 ↔ geoopt.PoincareBall | 🟡 |
+| GRPO実装解説 | GitHub/README | GRPO報酬理論 ↔ TRL/VERLコード | 🟡 |
+| NetworkX チュートリアル | docs.networkx | KGグラフ理論 ↔ nx.DiGraph操作 | 🟡 |
+
+**種別B: ペーパー+実装ペア（seed済みarXivの公式コード）**
+
+| 論文 | arXiv | 公式実装 | 状態 |
+|------|-------|---------|------|
+| HypStructure | 2412.01023 ✅seed済 | github.com/... | 🟡 実装リポを追加seed |
+| geoopt | 2005.02819 ✅seed済 | github.com/geoopt/geoopt | 🟡 実装リポを追加seed |
+| sentence-BERT | — | sbert.net | 🟡 調査・seed |
+
+**種別C: 変換型ドキュメント（数式↔コードのマッピング）**
+
+以下のようなドキュメントが空間上で最も効果的なブリッジになる見込み:
+- 「ICLのPosterior Variance をFAISS k値で実装するには」（S2→code実装説明）
+- 「Belief Propagation のAttentionとしての実装」（S5→Transformer実装説明）
+- 「Hyperbolic距離のgeooptでの計算手順」（HE1→コード）
+
+これらは既存ドキュメントにない場合、**Teacherによる合成ドキュメント生成**で補完できる。
+
+#### ブリッジSEED 追加コマンド（O-1後に実施）
+```bash
+# 種別A/B: github_docs_fetcher でREADME等を取得
+poetry run python scripts/seed_from_docs.py --source github_docs --mature --provider openrouter
+
+# 種別A: URLリストに追加してから実行
+# data/doc_urls/url_list.txt に sentence-transformers / FAISS docs を追記
+poetry run python scripts/seed_from_docs.py --source url_list --mature --provider openrouter
+```
+
+---
+
+### O-3. arXiv↔実装横断設問の設計 🟡
+> O-1の可視化で「空白地帯」を特定してから最終化
+
+横断設問は「理論用語 + 実装要求」を同一質問に含めることで、
+FAISSがacademic・code両ドメインを検索する必要が生じる問いを作る。
+
+#### 設問テンプレート（5パターン）
+
+**パターン1: 理論→実装変換型**
+```
+「[論文名/理論概念] の [特定の数式/アルゴリズム] を
+ Python で実装するには？コード例を含めて説明してください」
+
+例: 「ICL の Posterior Variance O(e^{-ck}) を FAISS k=5 の検索結果で
+     実際に下げられるか、サンプルコードで確認する方法は？」
+```
+
+**パターン2: 実装→理論説明型**
+```
+「[ライブラリ/コード] の [特定の機能] の背後にある
+ 理論的な根拠を説明してください」
+
+例: 「faiss.IndexFlatIP が内積検索で cosine similarity に相当するのはなぜか、
+     線形代数的に説明してください」
+```
+
+**パターン3: 比較型（論文Aと実装B）**
+```
+「[論文の提案手法] と [既存実装] の違いを実装レベルで説明してください」
+
+例: 「HypStructure の双曲空間正則化と通常のL2正則化を
+     geoopt と torch でそれぞれ実装した場合の違いは？」
+```
+
+**パターン4: デバッグ・最適化型**
+```
+「[理論的に期待される挙動] に対して [実装で観察される問題] が
+ 起きている。原因と対処法を教えてください」
+
+例: 「Poincaré Ball の expmap0 で float32 を使うと NaN が出る。
+     理論的な数値安定性の観点から原因と float64 への切り替え方法を説明してください」
+```
+
+**パターン5: 設計判断型（理論的根拠を要求）**
+```
+「[実装上の設計選択] について、[理論]の観点からどの選択が正しいか説明してください」
+
+例: 「FAISS で k=3 と k=7 どちらを選ぶべきか。
+     ICL の Bayesian 収束理論と検索コストのトレードオフを踏まえて判断してください」
+```
+
+#### 設問リスト（初期20問案）
+
+MED の現在のSEED内容（code 25k + academic 11）を踏まえた具体的な横断設問:
+
+| # | 設問 | 要求ドメイン |
+|---|------|------------|
+| Q1 | ICL Posterior Variance を下げるために k=5 で十分か検証するコードは？ | academic+code |
+| Q2 | sentence-transformers の all-MiniLM-L6-v2 が 384次元を選んだ理由は？ | academic+code |
+| Q3 | FAISS IndexFlatIP と IndexFlatL2 の精度差を余弦類似度の理論から説明 | academic+code |
+| Q4 | geoopt PoincaréBall で float32/float64 切り替えが必要な数値的理由 | academic+code |
+| Q5 | GRPO の報酬関数を TRL で実装する際の accuracy/relevance 分離方法 | academic+code |
+| Q6 | Belief Propagation と Transformer Attention の対応をコードで確認するには？ | academic+code |
+| Q7 | HypStructure の正則化損失を PyTorch で実装する最小コード例 | academic+code |
+| Q8 | IN-DEDUCTIVE パス切り替えを FAISS の group_probs で実装する方法 | academic+code |
+| Q9 | NetworkX に Hyperbolic エッジ重みを追加するとグラフ探索がどう変わるか | academic+code |
+| Q10 | Focal Loss の γ=2 を Chance-Level Threshold に変換するコードは？ | academic+code |
+| Q11 | CRAG Query Rewriter の flan-t5 モデルを locally ロードする最短コード | code+general |
+| Q12 | FAISS に add する前の L2 正規化が inner_product = cosine になる数学的証明 | academic+code |
+| Q13 | Semantic Entropy を LLM の複数出力から計算する Python 実装 | academic+code |
+| Q14 | aiosqlite で thought_logs を非同期挿入するベストプラクティス | code |
+| Q15 | EMA トラッカー（α=0.1）を numpy で実装してStudent成功率を追跡するコード | code+academic |
+| Q16 | TensorNEAT の NeatIndexer を FAISS の DomainIndex に接続するアダプタ実装 | code |
+| Q17 | geoopt manifold.dist の計算コストをプロファイルして float64 影響を測定するスクリプト | code+academic |
+| Q18 | Transformer の層数と推論深さの対応（BP理論）を実験的に確認するには？ | academic+code |
+| Q19 | RAG で grounded/ungrounded を自動分類する FAISS 類似度閾値の設定方法 | academic+code |
+| Q20 | KG の trust_score < 0.5 の文書を SQLite でフィルタリングするクエリ | code |
+
+- 🟡 設問リストを `scripts/questions_bridge.txt` として保存し `seed_and_mature.py` で使用
+- 🟡 O-1 可視化後に「空白地帯」を補完する追加設問を生成
+
+---
+
+### O-OQ: Open Questions
+
+| ID | 問い |
+|----|------|
+| O-OQ-1 | UMAP後の空白地帯に対して種別Cの合成ドキュメントを生成する場合、Teacher APIのコストとSEEDの多様性のバランスをどうとるか |
+| O-OQ-2 | academicとcodeの中間に意図的に置く「ブリッジ文書」の最適な粒度（1概念1文書 vs 複数概念まとめ）|
+| O-OQ-3 | TRIDENTのAssociationFn重み進化において、academic↔codeブリッジ文書がcontext_embとして機能するか |
+
+---
+
 ## 完了済みモジュール一覧
 
 | モジュール | 状態 |
