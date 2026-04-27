@@ -1,0 +1,536 @@
+doc_id,umap_x,umap_y,domain,source_type,review_status,title
+499af8fec553497384a92cc6c1039baf,2.2040,3.5260,academic,manual,approved,VERL vs trl: RL frameworks for LLM training
+84e0e4822b99471f8e4f1a500ffae816,1.8806,5.3003,academic,manual,approved,Quantization quality degradation: Q8 to Q1 empirical analysis
+027ca6698aed42ecbbfa8d4a26e67676,1.8973,5.3781,academic,manual,approved,Research: weight redundancy protects against quantization degradation
+4c5ed65b0c204d6ca937e228f9394f96,1.8971,5.4027,academic,manual,approved,"Mixed-precision quantization: Protecting the Edges, MixLLM, LUQ"
+8448b963e6144e22892c108ed25580b9,1.9829,5.3057,academic,manual,approved,imatrix quantization: data-driven precision allocation
+81e6d755a8ef4d9f8f319b384e15d9d7,1.9089,5.3408,academic,manual,approved,Teacher model selection: 72B Q8 vs 120B Q4 for 128GB RAM
+e41ca18dbaee488480510e74ff98a0f9,2.2450,4.1619,academic,manual,approved,"TinyLoRA: 13 parameters, knowledge-use skill via RL"
+e67e52b25a1b4f5eaf03587ecc38b8d3,1.6798,2.1824,academic,arxiv,unreviewed,We're Afraid Language Models Aren't Modeling Ambiguity
+76ae42d169a449469cb4d3b662f9300f,2.4703,2.5540,academic,arxiv,unreviewed,Context Engineering 2.0: The Context of Context Engineering
+281ab4d2fe6845cbaded83ed4c8fdd70,0.8289,3.3296,academic,arxiv,unreviewed,In-Context Learning Is Provably Bayesian Inference: A Generalization Theory for 
+79bcf3435dda4f05b30b1bb9593e2e31,1.8450,1.5878,academic,arxiv,unreviewed,Learning Structured Representations with Hyperbolic Embeddings
+e391f446d41248b6966036adaeae1eca,2.3775,1.1050,code,tavily,approved,HybridRAG and Why Combine Vector Embeddings with Knowledge ...
+42c37395ff394de8be0c30138f4c7d2b,1.8359,1.0067,code,arxiv,approved,"Embedding Atlas: Low-Friction, Interactive Embedding Visualization"
+eb1705ac33624e79aef89b7298f30000,0.9600,4.5195,code,arxiv,approved,GWTC-4.0: Methods for Identifying and Characterizing Gravitational-wave Transien
+021791dc1ffc47a08629e593d928780a,1.7446,2.8520,code,arxiv,approved,GRPO-CARE: Consistency-Aware Reinforcement Learning for Multimodal Reasoning
+faa2c8e576654f4486c617dcd32f51ed,6.0228,6.1992,code,tavily,approved,Asyncio concepts and design patterns | by Kanak Singh - Medium
+c4f08e9fe5eb4acb830d5b7db3c89437,2.0706,1.1674,code,,,
+5e41654674a340adb74808fc9701c880,3.9157,5.4813,code,,,
+0f8cd816966c4827ac90c5cd33edc09c,5.8428,6.1044,code,,,
+0c0db35b9c9741c295c743d6a14162d0,8.7594,4.1227,code,,,
+e2ed695a84a342538f13a68873bd273f,2.5170,1.2841,code,,,
+15cf4c0ef66340688a4c9dacd64b6cd8,5.7750,6.1843,code,,,
+71ebe78914484490a58369bbb3ba4628,5.8163,6.1366,code,,,
+cc8c6405bf8747699d96a0daedf5bf9f,5.7804,6.1643,code,stackoverflow,approved,How to convert lots of HTML to JSON with asyncio in Python
+0799eaf1e3c545a9acc4676886b422a3,5.9463,6.0822,code,stackoverflow,approved,How to timeout an async test in pytest with fixture?
+e56ee3c1071a4460831e8b991d9151b0,2.6076,5.3330,code,tavily,approved,Mixed Precision — PyTorch Training Performance Guide
+19fd3ac566384ec2bc01694c68d477ce,2.7223,1.6555,code,arxiv,approved,Ontological Queries: Rewriting and Optimization (Extended Version)
+ab33c7b931d343c8a04a26f18cb36ea7,2.0142,0.8523,code,tavily,approved,Real-Time Hybrid Search Using RRF - Spice AI
+a733f92bd5884e1a8811a0fa05741a8f,2.4890,0.9447,code,arxiv,approved,Meta-learning: searching in the model space
+807171a033164807a45dddff0ce70418,1.3080,1.5837,code,arxiv,approved,Trans-Encoder: Unsupervised sentence-pair modelling through self- and mutual-dis
+66c0e6567f384698bd528af1636c6175,1.7983,3.1390,code,arxiv,approved,SED-SFT: Selectively Encouraging Diversity in Supervised Fine-Tuning
+88fd30d37209465a82a2f3192f6e834d,3.1901,4.8896,code,arxiv,approved,Designing an Adaptive Application-Level Checkpoint Management System for Malleab
+1174d3e684684cee9c170651c93642b0,2.5297,4.7196,code,arxiv,approved,Optimal Gradient Checkpointing for Sparse and Recurrent Architectures using Off-
+10b5d9f85df74943a813ad4b961b1143,2.7305,5.0188,code,tavily,approved,The AI Gradient Checkpointing Premium: Memory ...
+fba8bb01a69f47769d07c7388c7758f1,2.1779,0.7108,code,arxiv,approved,SOAR: Improved Indexing for Approximate Nearest Neighbor Search
+2c626d68796542d9985691a87500aef5,1.4944,3.8115,code,arxiv,approved,Efficient AutoML Pipeline Search with Matrix and Tensor Factorization
+4e9604bb304847568494201a244f585d,2.7840,2.9535,code,arxiv,approved,Searching for Programmatic Policies in Semantic Spaces
+61bf9c6a5f4a428a9c592522d4d9fc7a,2.2185,1.0879,code,arxiv,approved,Template-Based Graph Clustering
+b596cbc253394f9a887f9a798d09c110,1.9762,3.2623,code,arxiv,approved,RL Fine-Tuning Heals OOD Forgetting in SFT
+b1f27b4ce3ed4e44b81c79a931b0d5c1,2.2854,4.4407,code,arxiv,approved,Robust short-term memory without synaptic learning
+ca25ca54064a4f6e889abb0034747c5c,1.1665,1.0153,code,arxiv,approved,NEXT-EVAL: Next Evaluation of Traditional and LLM Web Data Record Extraction
+3be35916abc94deaaf13dfc5fcc21f38,2.0054,2.7788,code,tavily,approved,[PDF] Constitutional AI: Harmlessness from AI Feedback - arXiv
+ff6bdff51d09442b9d09dbc7f0c147e8,2.2304,2.8897,code,tavily,approved,Constitutional AI: Harmlessness from AI Feedback - arXiv
+28d8ffc042e84fcbadc3c4aec1b9ded3,1.1720,3.1685,code,arxiv,approved,ID-Booth: Identity-consistent Face Generation with Diffusion Models
+5a907390d9b54f0597d67f02a1844360,1.4956,1.1943,code,arxiv,approved,SmartChunk Retrieval: Query-Aware Chunk Compression with Planning for Efficient 
+7bb377da1d6e4ca195afec8ab06f011e,1.9902,0.9560,code,arxiv,approved,On Single and Multiple Representations in Dense Passage Retrieval
+4f781c62c8304c25a36761b1302fa24a,0.7230,3.3366,code,tavily,approved,In-Context Learning (ICL) Theory Overview
+bd8d30c40ea04334a9db6e29a072b0ab,2.1250,4.4822,code,arxiv,hold,Less is more -- the Dispatcher/ Executor principle for multi-task Reinforcement 
+0ae4b54c20174f358b1566c9251676d5,1.0414,4.3453,code,arxiv,hold,Progressive Growing of Patch Size: Curriculum Learning for Accelerated and Impro
+93aab09f59544ba3923a35db5e66b4d1,2.1881,1.3267,code,arxiv,hold,Knowledge Graph Embeddings and Explainable AI
+8dcdabceb04444ceac1aa5d9a58c6800,1.7370,0.9821,code,arxiv,hold,Sobolev embeddings with weights in complete riemannian manifolds
+5a072cb81c864950879679990af1124b,0.8315,0.7864,code,tavily,approved,[2305.07303] Multi-Relational Hyperbolic Word Embeddings ... - arXiv
+2e628c4f152e4659b0074abe27e08606,1.1616,1.8685,code,arxiv,approved,Catch Me If You Can? Not Yet: LLMs Still Struggle to Imitate the Implicit Writin
+8f5572c8395944a49bf62326315c1775,1.3648,3.2327,code,arxiv,approved,An Implicit Physical Face Model Driven by Expression and Style
+6d57571904fa43859675784549bf10ad,1.4107,2.1248,code,tavily,approved,Applied-Machine-Learning-Lab/Awesome-Personalized-RAG-Agent
+900fe456bc9b438f896a6c3d608eb94f,2.0929,0.7856,code,tavily,approved,How to Choose Between IVF and HNSW for ANN Vector Search
+06fd08eaf7c744418a2dcc0463aeb970,1.3854,1.5107,code,arxiv,approved,Improving the Domain Adaptation of Retrieval Augmented Generation (RAG) Models f
+afe1e0c6e776422ea7c8b531f7eadb39,1.7105,1.3933,code,arxiv,approved,An Exploration of Data Augmentation and Sampling Techniques for Domain-Agnostic 
+5c744a5d1eec4c27b6dc598a91f84263,2.6077,5.2847,code,stackoverflow,approved,CUDA out of memory error during PEFT LoRA fine tuning
+a2ebb7bd5d764d31a90558993b76361f,2.0752,5.2051,code,arxiv,approved,Quantum Curriculum Learning
+6fc4a1bdd47a40d49c8cd125b4f45df2,1.9559,3.8431,code,arxiv,approved,Low-Rank Adaptation with Task-Relevant Feature Enhancement for Fine-tuning Langu
+df1fda9bd0c44138ad927140e4722ca5,2.9559,5.4406,code,arxiv,approved,Mixed-precision finite element kernels and assembly: Rounding error analysis and
+8882f1d9be49412bacd264e752ebc352,1.9580,5.1258,code,arxiv,approved,Compensate Quantization Errors+: Quantized Models Are Inquisitive Learners
+b2606b2995844dcd8ea1e7d01858e591,2.1669,5.2596,code,arxiv,approved,Exploring Layer-wise Information Effectiveness for Post-Training Quantization in
+9e306bc0bf7b4719bb721e207623fb43,7.6923,4.3105,code,arxiv,approved,Testing with Jupyter notebooks: NoteBook VALidation (nbval) plug-in for pytest
+7239117ed3cc458dbae6552bf00638b9,2.0782,4.8102,code,arxiv,approved,Increasing biases can be more efficient than increasing weights
+da21b8b0c92e4c72837c8e076bcbadbf,1.0069,0.9267,code,arxiv,approved,Beyond Chunk-Then-Embed: A Comprehensive Taxonomy and Evaluation of Document Chu
+5f0391059c3a4a908b92a3b1862c5322,0.9935,3.7103,code,arxiv,approved,On the Efficacy of Generalization Error Prediction Scoring Functions
+d03d55e57f3a4c8eb7317d3dc59dd87f,2.5526,0.9779,code,arxiv,approved,"The Anatomy of Relevance: Topical, Snippet and Perceived Relevance in Search Res"
+24e2e9a2b064423abc42359b774d1b59,0.8635,1.2228,code,arxiv,approved,Using Generative Text Models to Create Qualitative Codebooks for Student Evaluat
+f92c101eceae4abcaaacefee3e0ebe05,3.9360,5.4797,code,arxiv,approved,Replicable Parallel Branch and Bound Search
+b487e794f5ae4dccbee9b2ce00878e18,2.2437,4.8928,code,arxiv,approved,Online normalizer calculation for softmax
+f58467f85c6b41b496a289b58de5c4e8,1.9145,0.8012,code,arxiv,approved,Fast and Scalable Gene Embedding Search: A Comparative Study of FAISS and ScaNN
+afd0b16a7082493097a1ccf957049d67,1.6364,1.6187,code,arxiv,approved,"RAG over Tables: Hierarchical Memory Index, Multi-Stage Retrieval, and Benchmark"
+24518247b42e4a5dbf0b35e43500f51e,0.7888,0.7423,code,arxiv,approved,RAG System for Supporting Japanese Litigation Procedures: Faithful Response Gene
+924e195df00f4be0a24ef8fb98e7a4f7,1.1079,0.9259,code,stackoverflow,approved,How do I embed json documents using embedding models like sentence-transformer o
+40a1c30aa1544ed2aed1271c2670fb7e,2.3235,0.6439,code,arxiv,needs_update,SortNet: Learning To Rank By a Neural-Based Sorting Algorithm
+7c79f8a429b44111bceca2c8fa6a2a6c,1.1875,3.7697,code,arxiv,approved,Learning Causal Models Online
+c9174e0a37dd4e26ab30a68c7e617675,1.7812,0.9841,code,arxiv,approved,Jina-ColBERT-v2: A General-Purpose Multilingual Late Interaction Retriever
+a5cecbf438184ccebd971c49546152a6,3.1835,4.9190,code,arxiv,approved,Designing an Adaptive Application-Level Checkpoint Management System for Malleab
+51609b8004564650b9d17d23719e02c1,2.5405,5.4456,code,stackoverflow,approved,Finetuning a huggingface LLM on two Books using LoRa
+c6e1c645340844528e4daa310dd1ffc4,3.1569,3.7486,code,arxiv,approved,Comparative Analysis of Large Language Model Inference Serving Systems: A Perfor
+053b0457f060449fa3ee66946804ef6c,3.0771,5.0085,code,arxiv,approved,vAttention: Dynamic Memory Management for Serving LLMs without PagedAttention
+86568e85d2624a1fa8542090514ec1db,3.4463,3.8516,code,arxiv,approved,MineDraft: A Framework for Batch Parallel Speculative Decoding
+919338666af044908c701aae24a399b8,3.4792,3.8604,code,arxiv,approved,Accelerating LLM Inference with Staged Speculative Decoding
+ba7ed3c28f3245b780d877ebdbda3115,1.6692,1.9922,code,arxiv,approved,On Theoretically-Driven LLM Agents for Multi-Dimensional Discourse Analysis
+8fafdb18f85e46018cbe2dabbe27b1d2,1.5559,1.6845,code,arxiv,approved,How and Where to Translate? The Impact of Translation Strategies in Cross-lingua
+15c803434ac54c5394e726f7b0e32193,1.7338,1.1875,code,tavily,needs_update,Using SQLite Full-Text Search with Python
+52b5fd5cb86742f68f21fccfe135075d,0.9577,0.9331,code,arxiv,approved,Beyond Chunk-Then-Embed: A Comprehensive Taxonomy and Evaluation of Document Chu
+2278843a5b8946b59a7f46598cc42288,1.0618,1.9903,code,arxiv,approved,Thus Spake Long-Context Large Language Model
+6d98acd104a04f1d99d3c8c025b9b0f2,1.8022,2.3086,code,tavily,approved,[PDF] CER: Confidence Enhanced Reasoning in LLMs - ACL Anthology
+5ffd785647e64d0ea9315720ef650780,0.8071,3.3598,code,tavily,approved,In-Context Learning Is Provably Bayesian Inference - OpenReview
+7c1b2c3ab10042839aabb177fcbbe386,2.1888,5.0663,code,arxiv,approved,Methods of improving LLM training stability
+35ec9839a1e64de09720773d32e0949a,1.8288,0.6505,code,arxiv,approved,Reranking with Compressed Document Representation
+868778dba03d40b89db8787486ab6020,2.0114,0.8867,code,arxiv,approved,ColBERT: Efficient and Effective Passage Search via Contextualized Late Interact
+af4b76a086ee472abb369344b4dd9ca0,2.5437,1.2592,code,arxiv,approved,Semantic Jira - Semantic Expert Finder in the Bug Tracking Tool Jira
+d5fc6a5b431743f585937b697074dce1,6.5837,7.1589,code,stackoverflow,needs_update,"Is it possible to query a Neo4J db using Cypher, via the REST API, and return th"
+8828a4250e994685a6eb7c2606f4c1c0,2.7500,1.1076,code,arxiv,approved,Walking without a Map: Optimizing Response Times of Traversal-Based Linked Data 
+e702b8fbeea64fd899d6dbe65fd0d66b,1.8807,3.4213,code,arxiv,hold,Inductive-bias-driven Reinforcement Learning For Efficient Schedules in Heteroge
+2044fb9f9dff47228578fa5ea883bb7b,2.1651,3.9935,code,arxiv,approved,LoRA-FAIR: Federated LoRA Fine-Tuning with Aggregation and Initialization Refine
+8ae7071fce6b45e393e66abb2ea688e7,1.8396,2.9434,code,arxiv,approved,Interpretable Preferences via Multi-Objective Reward Modeling and Mixture-of-Exp
+d3b5989da1e144f2a313b38ec1bd7273,2.1315,5.2546,code,arxiv,approved,Exploring Layer-wise Information Effectiveness for Post-Training Quantization in
+a9c86733b9884c9ba376f91565ba890e,1.8478,2.3468,code,arxiv,approved,ReAct: Synergizing Reasoning and Acting in Language Models
+a429ec3ccd924c00a2599b9ba4f3cb7d,2.2170,2.6070,code,arxiv,approved,Architecting Agentic Communities using Design Patterns
+91a7cc5543a843819474a645e42bf484,1.6375,4.1819,code,arxiv,approved,PyTorch Metric Learning
+05b93d1e2ff74f3497137850753a9298,2.1138,4.8517,code,arxiv,approved,Increasing biases can be more efficient than increasing weights
+55005976248640feb1925e30d10d6dd0,1.4919,1.2283,code,arxiv,approved,SmartChunk Retrieval: Query-Aware Chunk Compression with Planning for Efficient 
+e79ccabb84bf40d8ac646f89f1222450,1.2735,1.2732,code,arxiv,approved,Reconstructing Context: Evaluating Advanced Chunking Strategies for Retrieval-Au
+7e61d3f66ab5464a97410c65b07e3d7d,1.5830,0.9913,code,arxiv,approved,Rethinking Chunk Size For Long-Document Retrieval: A Multi-Dataset Analysis
+48f5a28545ae4dcf819da46c9e0be8b7,1.0683,4.2911,code,arxiv,approved,Progressive Growing of Patch Size: Curriculum Learning for Accelerated and Impro
+69b8eb6616bc450ca5cbd633ef5b4f28,2.7152,5.3929,code,arxiv,approved,GPU-Acceleration of Tensor Renormalization with PyTorch using CUDA
+a2d53cdc89534ec788c57516173594cc,2.0505,2.7609,code,arxiv,approved,RAG-Gym: Systematic Optimization of Language Agents for Retrieval-Augmented Gene
+4c649b7ee0e7452a9638ab19c66b8bcd,1.8006,0.7065,code,arxiv,approved,Ahead of the Text: Leveraging Entity Preposition for Financial Relation Extracti
+8457947f5881477ba831e982679eb302,1.8811,3.2827,code,arxiv,approved,Efficient RLHF: Reducing the Memory Usage of PPO
+1848c647288640e6a0917e32a1373fef,1.5911,3.0266,code,arxiv,approved,Improving LLM Safety and Helpfulness using SFT and DPO: A Study on OPT-350M
+695bdece8f2e4e9fb061656cdac56c7a,2.0989,5.1643,code,arxiv,approved,PTQTP: Post-Training Quantization to Trit-Planes for Large Language Models
+c0de5e78419e4fca92c4d6bcc6e2fae5,2.5213,5.4926,code,stackoverflow,approved,Finetuning a huggingface LLM on two Books using LoRa
+da5b25e0ee5a476890457573cb9e40e0,3.4238,3.9063,code,arxiv,approved,Tutorial Proposal: Speculative Decoding for Efficient LLM Inference
+ac37ff97631248cea7de8163be72151d,1.4964,2.2964,code,arxiv,approved,Student Perceptions of Large Language Models Use in Self-Reflection and Design C
+a4878b3e414345e6a80e430a202d6e1c,1.0531,1.7398,code,arxiv,approved,Filler Word Detection with Hard Category Mining and Inter-Category Focal Loss
+b9a36a5cc77448eaa028f37cd6cb7d69,2.3647,0.6886,code,arxiv,approved,Online Learning to Rank in Stochastic Click Models
+a6f73a477d03435480c3d6e2108020d4,1.3657,4.2111,code,arxiv,approved,Optimal Linear Decay Learning Rate Schedules and Further Refinements
+5489207872db4d89ac10d6ac5fe11c23,2.2636,4.1258,code,arxiv,approved,LoRA-XS: Low-Rank Adaptation with Extremely Small Number of Parameters
+f16d49e6507a4128947308e8757253e2,1.9107,4.7619,code,arxiv,approved,Low-rank methods for high-dimensional approximation and model order reduction
+c43793f293164f6b95a6fbed1a8acbe2,1.9692,3.8276,code,arxiv,approved,Low-Rank Adaptation with Task-Relevant Feature Enhancement for Fine-tuning Langu
+e5c82f10b5694023846fe2fb96c75b47,2.1299,5.2265,code,arxiv,approved,AWQ: Activation-aware Weight Quantization for LLM Compression and Acceleration
+3195102f83344c5e86cc0c3a213da39e,1.1910,3.6186,code,arxiv,approved,Top-Related Meta-Learning Method for Few-Shot Object Detection
+04d19c39cc3241d68be02f606973f7fa,3.6543,4.1251,code,arxiv,approved,C2HLSC: Can LLMs Bridge the Software-to-Hardware Design Gap?
+5f2aa378aabd428c8d67edd98faf88af,2.5859,0.9643,code,arxiv,approved,Semantic Evolutionary Concept Distances for Effective Information Retrieval in Q
+f078b5c349124085aee5506d99993aa4,1.0935,1.1620,code,arxiv,approved,Meta-Chunking: Learning Text Segmentation and Semantic Completion via Logical Pe
+d0578aa1a6ad4639accef18ce42c2cbe,0.6718,3.4351,code,arxiv,approved,Bayesian Doubly Robust Causal Inference via Posterior Coupling
+732c33fa576a4a58b4f84219557252ce,2.1766,2.7651,code,arxiv,approved,Agent0: Unleashing Self-Evolving Agents from Zero Data via Tool-Integrated Reaso
+9a90e0fe4e7b427fb48bbeb62841257e,1.4750,2.2247,code,arxiv,approved,LLM Agents in Interaction: Measuring Personality Consistency and Linguistic Alig
+fb99e6ca590748118f8723ad0ab7a52e,1.1083,1.5900,code,arxiv,approved,Effective writing style imitation via combinatorial paraphrasing
+c978831f1d9842bc83ebfd03d49bd475,1.1706,3.2469,code,arxiv,approved,On the Similarities of Embeddings in Contrastive Learning
+65fa098d64df4e8985c3e17e9c688694,1.9550,4.8688,code,arxiv,approved,Low-rank methods for high-dimensional approximation and model order reduction
+5e7e32d6cc9d4f058d948588adfdbc97,1.0298,4.3772,code,arxiv,approved,Bridging Performance Gaps for ECG Foundation Models: A Post-Training Strategy
+9454440926ad45c1a5bff3c2fd74c7e6,1.6694,3.3026,code,arxiv,approved,Learning Dexterous In-Hand Manipulation
+41e52e1c8dfa4df2ab149b72a98d45fa,0.8925,2.0851,code,arxiv,approved,Zero- and Few-Shot Prompting with LLMs: A Comparative Study with Fine-tuned Mode
+9a1605b9b1e3461c87682d7079e7c7ad,3.2005,3.0640,code,arxiv,approved,StruQ: Defending Against Prompt Injection with Structured Queries
+53cdf61a33f44eb0a49c555158f8a3aa,1.8624,2.9166,code,arxiv,approved,DIVA-GRPO: Enhancing Multimodal Reasoning through Difficulty-Adaptive Variant Ad
+adc5f7861cb54d19b96e059f2dd9d928,3.9727,5.4431,code,arxiv,approved,Replicable Parallel Branch and Bound Search
+19e011895ea34d8b8730e2429560a43e,1.7032,3.9304,code,arxiv,approved,Small Sample Learning in Big Data Era
+0c0e509c37914f6588bf1efcdd61605e,1.3880,2.2991,code,arxiv,approved,Augmenting Dialog with Think-Aloud Utterances for Modeling Individual Personalit
+c239724042594f75acbb7a6080c0b3f7,1.1022,1.6123,code,arxiv,approved,Towards Improved Model Design for Authorship Identification: A Survey on Writing
+8cccd63bcdac42a6a64a3112f31d5967,2.8954,5.4536,code,arxiv,approved,Performance Comparison Between OpenCV Built in CPU and GPU Functions on Image Pr
+50adf1b1496a415ba3a0eeb393de2cde,3.3958,5.3213,code,arxiv,approved,Index Search Algorithms for Databases and Modern CPUs
+fafcae554f69475388df8c6cac065569,1.8992,0.7877,code,arxiv,approved,Fast and Scalable Gene Embedding Search: A Comparative Study of FAISS and ScaNN
+8d599f06416c4c52bdcb8d3142fe6417,0.8177,0.7452,code,arxiv,approved,RAG System for Supporting Japanese Litigation Procedures: Faithful Response Gene
+c7d5c03dafd745afbc21215b816bb348,0.9185,1.8224,code,arxiv,approved,Simple Context Compression: Mean-Pooling and Multi-Ratio Training
+99415e41909c443986bddc8719a24e03,1.9903,0.6978,code,arxiv,approved,Rider: Reader-Guided Passage Reranking for Open-Domain Question Answering
+9d551024753c4e45bfe53dca68df3409,2.3327,0.6233,code,arxiv,approved,SortNet: Learning To Rank By a Neural-Based Sorting Algorithm
+49fe23c9cd554f77b2634cebdc565b74,2.2893,0.6805,code,arxiv,approved,Beyond Sequential Reranking: Reranker-Guided Search Improves Reasoning Intensive
+c755df8e4bb342f19ec8dee3973c3417,1.9265,2.6425,code,arxiv,approved,Step-DPO: Step-wise Preference Optimization for Long-chain Reasoning of LLMs
+53878542a38d42aa93473908835ca144,1.9739,3.0386,code,arxiv,hold,SimPO: Simple Preference Optimization with a Reference-Free Reward
+45187b383738439ab44d858077cd5b6f,2.4326,5.2586,code,arxiv,approved,Which Quantization Should I Use? A Unified Evaluation of llama.cpp Quantization 
+6c6acdbf355d4f95b53463e45905fad7,3.4794,3.8319,code,arxiv,approved,Accelerating LLM Inference with Staged Speculative Decoding
+d3227e14fa1146e5a15641e0271a7866,3.1811,3.0382,code,arxiv,approved,Live API-Bench: 2500+ Live APIs for Testing Multi-Step Tool Calling
+c83f3ba63660468b8a10aa6805e7b681,3.3594,4.7685,code,arxiv,needs_update,Caching with rental cost and zapping
+63b3bbb8ea2d481b9730d3ec1ee9990e,0.8821,2.0809,code,arxiv,approved,Zero- and Few-Shot Prompting with LLMs: A Comparative Study with Fine-tuned Mode
+dbaada2dc4e34d8aaa4ca8ade42c2521,1.3982,3.8488,code,arxiv,approved,Pytorch-Wildlife: A Collaborative Deep Learning Framework for Conservation
+c54b276406b841c7bdf0ec91fe540b39,2.5850,1.0006,code,arxiv,approved,Semantic Evolutionary Concept Distances for Effective Information Retrieval in Q
+1641c8518f3243e280723a51bd3f92df,1.5655,3.3059,code,arxiv,approved,Learning Long-Context Diffusion Policies via Past-Token Prediction
+4c396d37af5d49c4af7cbea9b56e6f34,1.4917,2.3973,code,arxiv,approved,Mapping Clinical Doubt: Locating Linguistic Uncertainty in LLMs
+2b76fa72be8e4f408f9ecc3ab4dd267c,3.9136,5.5037,code,arxiv,approved,Replicable Parallel Branch and Bound Search
+dc40e2db5e2a4fb8b35506fffd2f01aa,1.2082,3.8526,code,arxiv,approved,Loss Rank Mining: A General Hard Example Mining Method for Real-time Detectors
+df1236312ba5416e8bef24be8c78a7c5,0.9156,2.0373,code,arxiv,approved,"""Thy algorithm shalt not bear false witness"": An Evaluation of Multiclass Debias"
+8c4decd208564d628405a4c690ee7278,2.0671,1.1054,code,arxiv,approved,Music Recommendations in Hyperbolic Space: An Application of Empirical Bayes and
+d5975c0388404e5a89a13d143a4ba5bb,1.1726,0.8580,code,arxiv,hold,Writing Style Aware Document-level Event Extraction
+737e8c22a3194827be7292a5d606784b,5.8576,4.5240,code,github,approved,security_master_gradio_interface.py
+67c97de5b29b41f08c0a03f0d7e1706e,0.8941,0.6235,code,github,approved,rag-retrieval.mdx
+7803142723b344dc83974ebd5e39594f,0.6483,3.4431,code,arxiv,approved,Bayesian Doubly Robust Causal Inference via Posterior Coupling
+ed30bb3a26034353b9174507bb1defab,2.5385,2.8277,code,arxiv,approved,"Propose, Solve, Verify: Self-Play Through Formal Verification"
+20131469f2dd4ed285b3f94747b28620,1.7244,1.8809,code,arxiv,approved,The generalised word problem in hyperbolic and relatively hyperbolic groups
+f7f591a70e4340198bb8d8d8839363ae,2.6952,4.5612,code,arxiv,approved,Mixed-Timescale Precoding and Cache Control in Cached MIMO Interference Network
+b6e9a4442ed045b8a2103ec09482bf29,4.7874,5.8686,code,arxiv,approved,Introduction to probabilistic concurrent systems
+51d79da1bb1f47fc92681bc95774ad5c,2.6787,3.9191,code,arxiv,hold,AlayaDB: The Data Foundation for Efficient and Effective Long-context LLM Infere
+933ccda9f1374776bf8ad5ff2db1ec3b,3.7172,3.1376,code,arxiv,hold,Exploring API Capabilities with Fieldwire
+9045ca709ea74db08a2135c49c44ee2e,1.8608,2.2909,code,arxiv,hold,Towards Reasoning Era: A Survey of Long Chain-of-Thought for Reasoning Large Lan
+6e65789868184fa9a936fbf372ebe3ff,1.7064,1.1848,code,stackoverflow,hold,String similarity with Python + Sqlite (Levenshtein distance / edit distance)
+25b5cf64d73f495fbaaf2afc61a0472f,1.7161,2.8833,code,arxiv,hold,DIVA-GRPO: Enhancing Multimodal Reasoning through Difficulty-Adaptive Variant Ad
+8c50806ffae44afc84e6bfec7e19a605,0.7952,3.2998,code,github,hold,Understanding In-Context Learning in Transformers and LLMs by Learning to Learn 
+97611003918f43c0a29e0a7157a8a901,2.4517,0.9275,code,arxiv,hold,Label-dependent Feature Extraction in Social Networks for Node Classification
+71c4c85b944b4d4bb7d2205beeea75f6,3.3101,3.3674,code,arxiv,hold,Automated Update of Android Deprecated API Usages with Large Language Models
+1e2a7d4bc0684e83b312e62f8a78575e,7.4260,5.3166,code,github_docs,approved,tldr-pages Linux: apt-cache
+d73dc271442f4afd8c4ad289cce404e0,9.2704,5.1151,code,,,
+5ced88f3431c4b91917bde3b2edc6a49,7.1917,7.2019,code,,,
+9c3af66f98f648ec81d0cc13e3d8c7e1,7.3663,7.2179,code,,,
+f6ae3f6f109c4c62b215fc27e4dd021f,5.6801,6.1398,code,,,
+44c729c36d9b448e8cf5725a00961721,7.1170,7.1581,code,,,
+383dafdaf64b479a8ef537c743e73076,7.2374,7.0977,code,,,
+829b218ce29d4aab8b227f24a3c74056,6.3020,8.2802,code,,,
+fc91c22218754d07a0c15691f91d1868,6.3327,8.2500,code,,,
+0d77025d313b45059316fc70727d7932,6.1309,7.7531,code,,,
+a6c656ad3da841e7ba91aae506d57455,6.5404,8.3520,code,,,
+aebc5ca79ef8433487479d004b6e24b6,6.4837,8.3807,code,,,
+06808b1ded764e619b5eb78079b7d779,6.4308,8.3921,code,,,
+747e22184b8f4cef9a6501338677deab,7.2283,7.7602,code,,,
+73569b0af18f40aba85da505e9fd6b02,7.1844,6.0264,code,web_docs,approved,systemd - ArchWiki
+560bc591bb2c4cfc952d7f3c65d9ec16,6.0164,5.9829,code,web_docs,needs_update,cron - ArchWiki
+b3225ec074b04e079248a19507198737,7.5031,5.9935,code,web_docs,needs_update,fstab - ArchWiki
+002c00a9b8b643fd81f01796623ee146,7.7165,6.1423,code,web_docs,needs_update,Learning the shell - Lesson 5: Manipulating Files
+74ab66debb3e48caa247d376a4f2030c,7.6790,6.3655,code,web_docs,needs_update,Writing shell scripts - Lesson 1: Writing your first script and getting it to wo
+5b615ad75303401cbb96ff24a715b736,1.8202,3.3680,code,arxiv,hold,Evaluating Long-Term Memory in 3D Mazes
+0f81c9e4d24049b4a1718f7bb0d99631,0.9142,0.9667,code,arxiv,hold,Adaptive Chunking: Optimizing Chunking-Method Selection for RAG
+976d557306d84c1692d3223d8b0211d8,1.8248,2.2284,code,arxiv,hold,LLMs as Models for Analogical Reasoning
+294734d99fe8486f9f2b58bcc0cfdee9,1.8625,2.9828,code,arxiv,hold,How to Evaluate Reward Models for RLHF
+37421cf661124a9c868cbf74b0b4f68a,1.9961,2.0348,code,arxiv,approved,FAIR-RAG: Faithful Adaptive Iterative Refinement for Retrieval-Augmented Generat
+b4cf797fffe14f34b9162373ad4f18cb,0.8121,1.0430,code,arxiv,approved,Scale-free Characteristics of Multilingual Legal Texts and the Limitations of LL
+fdd3ead3ee5843c69c7049dcb1b65601,1.3803,3.4039,code,arxiv,needs_update,Point-PEFT: Parameter-Efficient Fine-Tuning for 3D Pre-trained Models
+17f99b268fe641208f088bc55703f4ab,1.0150,4.3609,code,arxiv,approved,Bridging Performance Gaps for ECG Foundation Models: A Post-Training Strategy
+1c77ac0f873442d5893751422f382848,0.8034,0.9987,code,arxiv,approved,Adaptive Chunking: Optimizing Chunking-Method Selection for RAG
+f1003c43c5ce4781921da1eb04bc9b91,1.1048,1.2970,code,arxiv,approved,Probabilistic distances-based hallucination detection in LLMs with RAG
+4640a74e1bca4e3da7d68899132c8a25,1.1546,3.7891,code,arxiv,approved,Graceful Degradation and Related Fields
+0b7016c4bdb0469bb2f9d5f443f96462,3.4655,3.3817,code,arxiv,needs_update,Generating API Parameter Security Rules with LLM for API Misuse Detection
+df731bf1f9fa45e687ec5d2520c1c3ae,1.1238,3.6381,code,arxiv,approved,Metalic: Meta-Learning In-Context with Protein Language Models
+d5d81d37cf2449299f66c47844907cf2,2.0590,5.3833,code,arxiv,approved,Pareto-Optimal Quantized ResNet Is Mostly 4-bit
+98141e75939f4ee496d9e637840ac005,2.5224,2.5560,code,arxiv,approved,"""We Need Structured Output"": Towards User-centered Constraints on Large Language"
+0c29eef1f8b941b88c2e97b9cdb6769f,2.1610,2.7829,code,arxiv,approved,Constitutional AI: Harmlessness from AI Feedback
+6984c658c6b04b5e88aabf5b07550399,1.8447,1.9612,code,arxiv,approved,"Lost in the Middle, and In-Between: Enhancing Language Models' Ability to Reason"
+d8f3aea85701482dbc77b0a774ea94aa,0.9518,3.6428,code,arxiv,needs_update,On the Efficacy of Generalization Error Prediction Scoring Functions
+3cf11c81bf5f40a382dcdf0dc0238a7e,5.2604,4.4583,code,arxiv,approved,An Empirical Study of the Evolution of GitHub Actions Workflows
+8eb5f507a8e344039228e3409348f8ed,0.7631,0.6756,code,github,needs_update,13-rag-evaluation-patterns.md
+05c1b67105af4ba5b57e6b639ff9e752,2.1888,3.9884,code,arxiv,approved,LoRA-FAIR: Federated LoRA Fine-Tuning with Aggregation and Initialization Refine
+178f0f8c342c4f3da2ec41a1b5515138,2.3789,4.0186,code,arxiv,needs_update,Federated Sketching LoRA: A Flexible Framework for Heterogeneous Collaborative F
+acc7b6b149fa4ca998ce1b40824c2af7,2.1012,4.0906,code,arxiv,needs_update,LoRA-C: Parameter-Efficient Fine-Tuning of Robust CNN for IoT Devices
+1396cd96a93c4adf8d705b511851320b,1.9321,5.3595,code,arxiv,needs_update,LLM-FP4: 4-Bit Floating-Point Quantized Transformers
+b9673a44f04d4d8eaaba5fa84cd44fa2,3.0745,3.0114,code,arxiv,needs_update,InterCode: Standardizing and Benchmarking Interactive Coding with Execution Feed
+be63cf643ca14485ab3dcb49c7bab84c,2.0138,5.2359,code,arxiv,approved,Quantum Curriculum Learning
+da726cd4efa24b3f8571d536c0a2656b,3.1991,4.4435,code,arxiv,approved,Is the Web ready for HTTP/2 Server Push?
+76c9183dd7034c05b71723b2a3d054a2,3.1828,5.1295,code,arxiv,approved,On Benchmarking Embedded Linux Flash File Systems
+4d203d351662434091117c40b2e7e5c4,1.8205,1.0554,code,arxiv,approved,Smart Routing for Multimodal Video Retrieval: When to Search What
+c1f78fa09a12442087285189469b3c52,1.9090,3.1402,code,arxiv,approved,Value Bonuses using Ensemble Errors for Exploration in Reinforcement Learning
+c256a87e30cf422cb064c251c1ca83bc,2.8774,3.1752,code,github,needs_update,context-engineering-optimizing-tokens-for-llm-apps.md
+f04ee71d02644cc5bb4fd3ea23812414,3.3039,3.2258,code,arxiv,approved,Fixturize: Bridging the Fixture Gap in Test Generation
+84e619624bfd4603993b36f1ccfd9caa,1.3741,1.4998,code,arxiv,approved,Trans-Encoder: Unsupervised sentence-pair modelling through self- and mutual-dis
+0d0d83b8068844eeaf574d8b747676cf,0.8109,0.6940,code,github,needs_update,roomylee_awesome-relation-extraction.md
+a533a2ddb08741dfb4bb6f43a7ced3a9,1.6923,2.4706,code,arxiv,approved,Evaluating and Steering Modality Preferences in Multimodal Large Language Model
+2e6287f703454c1eb7af85ebeb1583ce,1.9035,5.3966,code,arxiv,approved,LLM-FP4: 4-Bit Floating-Point Quantized Transformers
+75caae19c43841acadb90857484c45b0,3.3940,3.7912,code,arxiv,approved,MineDraft: A Framework for Batch Parallel Speculative Decoding
+1f083509312345e6bbdb3195e28eb286,2.0877,2.8602,code,arxiv,approved,Constitutional AI: Harmlessness from AI Feedback
+b276c965aa32424bb673ab6c989dffc8,0.8801,0.9781,code,arxiv,approved,Adaptive Chunking: Optimizing Chunking-Method Selection for RAG
+849059b5b09b4587a9f167577643aa78,1.8213,1.9358,code,arxiv,approved,"Lost in the Middle, and In-Between: Enhancing Language Models' Ability to Reason"
+2ee1206d646c460b908c145bcb856fce,1.5293,2.5116,code,arxiv,approved,Self-Alignment for Factuality: Mitigating Hallucinations in LLMs via Self-Evalua
+e2f7182d92434eb8bdaf5bcb1bcd6bfc,2.2241,1.9330,code,arxiv,needs_update,RouteMark: A Fingerprint for Intellectual Property Attribution in Routing-based 
+2a600e141fe549d588d05bd6e6367d28,1.2502,3.1061,code,arxiv,approved,Ctrl-X: Controlling Structure and Appearance for Text-To-Image Generation Withou
+476d1fc55f1840ff83986f512dec5fc9,3.2910,4.9562,code,arxiv,approved,A Comparative Study of Load Balancing Algorithms in Cloud Computing Environment
+34b6ece33e3d4b7285abc7dd0b8d75f7,2.2224,5.1189,code,arxiv,approved,The Geometry of LLM Quantization: GPTQ as Babai's Nearest Plane Algorithm
+66ec99c2412f4082808d92dab534c46a,2.2408,5.2261,code,arxiv,needs_update,Exploring Layer-wise Information Effectiveness for Post-Training Quantization in
+f20905b54f684ffdb09d9396f9396bd2,1.7991,3.3452,code,arxiv,needs_update,Evaluating Long-Term Memory in 3D Mazes
+a5e5c72601c341e78fccfc58437d85e2,1.2258,3.5972,code,arxiv,approved,Tabular Few-Shot Generalization Across Heterogeneous Feature Spaces
+6db244964fa84bb79c7fbbcb641db109,0.9622,1.6297,code,arxiv,approved,Style Transfer from Non-Parallel Text by Cross-Alignment
+f8f487dc42864d80823850f9881289c1,1.1682,3.1312,code,arxiv,approved,Ctrl-X: Controlling Structure and Appearance for Text-To-Image Generation Withou
+a6d1aad5c4da4558bf53ac41c260cf53,2.3491,2.3121,code,arxiv,approved,Enhanced Accessibility for Mobile Indoor Navigation
+ec2d687bfe094a9c86354878f318d52a,1.4650,1.9094,code,arxiv,needs_update,Knowledge-Driven Agentic Scientific Corpus Distillation Framework for Biomedical
+fd78cddb3d8e46a08a58c8eba2cfb620,7.7798,3.9289,code,arxiv,approved,Array Programming with NumPy
+bec7660342f04e45aa31b362f61ef60e,1.7675,1.6478,code,arxiv,approved,Multi-Relational Hyperbolic Word Embeddings from Natural Language Definitions
+fe27ff67a4664a819453ea9716c2ce50,2.3707,1.4604,code,arxiv,approved,Knowledge Graph Curation: A Practical Framework
+da6dc6925ac0457d833f3fc4f53c31fd,0.9537,1.4412,code,arxiv,approved,Exploring Methods for Cross-lingual Text Style Transfer: The Case of Text Detoxi
+9cc0d108b747472da091d27c20ea1d94,1.4250,1.9152,code,arxiv,needs_update,Speakers Fill Lexical Semantic Gaps with Context
+50b5fdf5dec64ab097dd9a99041c7fd8,3.2501,4.6621,code,arxiv,approved,Experimental Analysis of Server-Side Caching for Web Performance
+f2f11f7ab9ba4940aa9e9808ff7dc2a1,5.0378,4.2799,code,arxiv,needs_update,Unpacking Security Scanners for GitHub Actions Workflows
+c5f9eb6c93e34674a092574d1a37f1b1,6.6009,6.7873,code,github_docs,approved,tldr-pages Linux: aa-unconfined
+1b46bab204944656a47ea4d09fd1ab69,8.7140,6.4329,code,github_docs,approved,tldr-pages Linux: apptainer-run-help
+c43064e9778840c6a61906878167c4c7,7.2537,4.9811,code,github_docs,approved,tldr-pages Linux: audit2allow
+7bf694e42ca64dd5a7e0dbc100c69702,1.0070,0.5271,code,github_docs,approved,tldr-pages Linux: balooctl
+332687721ecc47e789ac283638343345,6.1827,6.6623,code,github_docs,approved,tldr-pages Linux: bluetoothctl
+72d7929683d4474c91b82ffeed636108,6.8320,6.3582,code,github_docs,approved,tldr-pages Linux: bpftrace
+d9fa38211b8646929308060a41a7aa10,10.1104,6.1253,code,github_docs,approved,The Rust Programming Language: ch01-02-hello-world
+f7e783eaf29341c9b56db9fac4aa13d6,8.0596,6.0495,code,github_docs,approved,The Rust Programming Language: ch01-03-hello-cargo
+bd4d80ddb3304b388b6b65308f7f9a99,4.4606,5.0255,code,github_docs,needs_update,The Rust Programming Language: ch02-00-guessing-game-tutorial
+9225ff1f9aad4411bd161d8b11b6bd0c,9.9865,6.1387,code,github_docs,approved,The Rust Programming Language: ch03-03-how-functions-work
+0875823851cc4c26be12356e63edbdff,8.2206,7.4115,code,github_docs,approved,The Rust Programming Language: ch04-02-references-and-borrowing
+4db30c02ae4d4afba7563feffde5fe7f,9.9361,6.1066,code,github_docs,needs_update,The Rust Programming Language: ch04-03-slices
+815dbe16a5744c21b8b902a29128340d,10.1655,6.2360,code,github_docs,approved,The Rust Programming Language: ch06-02-match
+3919dd4a95194afdafb22d82c84863ce,7.8949,5.9654,code,github_docs,approved,The Rust Programming Language: ch07-03-paths-for-referring-to-an-item-in-the-mod
+071f78e692fb4cd59dd11fa62216d147,9.9087,6.1578,code,github_docs,approved,The Rust Programming Language: ch08-01-vectors
+83e1f02c980a485fa3a611f0d1c00e99,9.9616,6.0743,code,github_docs,approved,The Rust Programming Language: ch10-03-lifetime-syntax
+7a907406c4024c89b08a07dcb6602524,9.9128,6.1064,code,github_docs,approved,The Rust Programming Language: ch12-03-improving-error-handling-and-modularity
+d38d4180f9b1474bba99c7d10f2665e6,9.9763,6.0697,code,github_docs,needs_update,The Rust Programming Language: ch15-01-box
+50c419466bdb447b8616e24f8a6e3a5c,9.9640,6.1970,code,github_docs,approved,The Rust Programming Language: ch15-01-box
+3ce8af81d77240c9a4cd50cb0e39b264,9.9315,6.2129,code,github_docs,needs_update,The Rust Programming Language: ch15-05-interior-mutability
+fc1fc40aef134c7fa2537c330a075133,10.0120,6.1658,code,github_docs,needs_update,The Rust Programming Language: ch15-06-reference-cycles
+3157374717fe498dad3ec44e9be1a88c,10.2186,6.3123,code,github_docs,approved,The Rust Programming Language: ch17-01-futures-and-syntax
+b5a27956bfac4a0aa72166f05f91777e,6.2734,6.0844,code,github_docs,approved,The Rust Programming Language: ch17-02-concurrency-with-async
+8a4fb0c65ce947a79882a02d25b10966,10.1566,6.2614,code,github_docs,needs_update,The Rust Programming Language: ch18-03-oo-design-patterns
+983e62dad05348888d36e15efd56b6a4,10.2179,6.1969,code,github_docs,approved,The Rust Programming Language: ch18-03-oo-design-patterns
+44f51ef512674bb18b56d62985a5ae9d,10.2044,6.2761,code,github_docs,approved,The Rust Programming Language: ch18-03-oo-design-patterns
+08ad1ec8b7c745189c5f5d09a7bd690f,10.0747,6.1424,code,github_docs,approved,The Rust Programming Language: ch18-03-oo-design-patterns
+d390ad7225754c84944abffa1e5538ea,4.1179,5.5420,code,github_docs,needs_update,FastAPI docs: async
+32b9cfab9a04428e80b89e8cf2890706,5.6273,4.4450,code,github_docs,needs_update,FastAPI docs: fastapi-people
+a54c71da3ceb4f88abde69d62a9d9fbb,5.7602,4.5303,code,github_docs,approved,FastAPI docs: features
+42922bf48c3644eca859a3c9eea8bac2,5.9032,4.5363,code,github_docs,approved,FastAPI docs: features
+58f93c48e9ae4cd4a36f3c5f7f51f8b0,5.8899,4.5015,code,github_docs,needs_update,FastAPI docs: index
+ac2b19065e1a406e9fc64598b7806996,5.7130,4.3717,code,github_docs,approved,FastAPI docs: management-tasks
+7dd8e97a60b04834b1ecbf9e72928dc1,5.6989,4.4616,code,github_docs,needs_update,FastAPI docs: release-notes
+7025ae8375cb48a19ff8c86ccf8a4b96,5.8048,4.4193,code,github_docs,approved,FastAPI docs: release-notes
+b42f78575f09460d9096218ea32dbc0c,5.7886,4.3061,code,github_docs,needs_update,FastAPI docs: release-notes
+008da348885848d289b4841935540ea3,5.8086,4.1659,code,github_docs,needs_update,FastAPI docs: release-notes
+e7518133c8c3424d8f61442017c518fd,5.8913,4.1674,code,github_docs,needs_update,FastAPI docs: release-notes
+b84ff86c5a8a4c03baaf9c7cfae30ba8,5.8108,4.1602,code,github_docs,needs_update,FastAPI docs: release-notes
+8e48fdc6feea49fea62a79cdfbf86140,6.0707,4.4954,code,github_docs,needs_update,FastAPI docs: release-notes
+709220dcde454642879ca333a04c12fa,5.9346,4.3107,code,github_docs,needs_update,FastAPI docs: release-notes
+cc71d868acda4343a4d2fe0f0d314433,5.6906,4.7952,code,github_docs,needs_update,FastAPI docs: release-notes
+7652ec5555e040d8b85a361ce0be5850,8.8591,8.0166,code,github_docs,approved,Vue.js docs: application
+e5f3fc7c6c3849b882e85ab29ad5937a,8.7290,8.0214,code,github_docs,approved,Vue.js docs: compile-time-flags
+d5ee3796879b4086986bff0bdead9573,8.8705,8.0181,code,github_docs,approved,Vue.js docs: composition-api-dependency-injection
+48bb3b03f72442be81efe6e1fe55abb6,8.8731,8.0209,code,github_docs,approved,Vue.js docs: custom-elements
+c98f0935d36a414b82dc74ca4e6ea5a2,8.9178,8.0582,code,github_docs,approved,Vue.js docs: options-composition
+95392facc8c64735bec5f65ab69a2bfb,8.8849,7.9775,code,github_docs,approved,Vue.js docs: reactivity-utilities
+7f6ed0edff1a41628e71148786ff9658,8.7570,7.8561,code,github_docs,approved,Vue.js docs: reactivity-utilities
+7ac36ae211b249c285b838c481bdc8d1,4.0439,4.2304,code,github_docs,approved,Go language docs: asm
+d064cec4b4964a6cbfb630e3e2a5e53a,9.2173,5.6775,code,github_docs,needs_update,Go language docs: go_spec
+961a825e1a8d4043ba262dfeb9f816bc,8.8708,5.6769,code,github_docs,needs_update,Go language docs: go_spec
+e614ba9e6fd54aafab6631150aa1d87e,8.9989,5.7104,code,github_docs,needs_update,Go language docs: go_spec
+5513784fc734424e85ccac5c53a2f311,9.0706,5.6938,code,github_docs,needs_update,Go language docs: go_spec
+75a664b05cf44ad39f76b3f41dc6305c,7.4953,6.0403,code,github_docs,approved,nodejs/node: fs
+f2a13c05180d4c29ab0b6645b49fe35e,7.9105,6.4889,code,github_docs,needs_update,nodejs/node: fs
+248f7ed7287548599fef58e452d57dec,8.0766,7.9048,code,github_docs,needs_update,nodejs/node: fs
+05f0b21490214988b82c68d79558fadd,6.9572,6.1951,code,github_docs,needs_update,python/cpython: os
+bcee2c2701354cf8936cde0258df082f,7.7680,4.5023,code,github_docs,approved,python/cpython: os
+8a661bfc56e94cc98d724851dbcd04a9,7.6563,5.7941,code,github_docs,needs_update,python/cpython: os
+d1ccf1b32c0a48df9bb84b7096fa8dbb,6.6662,6.2694,code,github_docs,needs_update,python/cpython: os
+f59630d98d084288b7e6d43e1c01bf11,8.0878,4.7361,code,github_docs,needs_update,python/cpython: ctypes
+6ee4983f119348f4bfdd40e6f414e2e0,8.5440,4.2094,code,github_docs,needs_update,python/cpython: ast
+c51884ec1ef846098955c6b8afe01a8a,7.2673,5.9140,code,github_docs,needs_update,python/cpython: ast
+3c3237aa91c14eeab17cd5650574b683,8.4610,5.5828,code,github_docs,needs_update,python/cpython: codecs
+b94582884b234d53be4a77a30b9cb354,6.4574,8.3370,code,github_docs,needs_update,nodejs/node: crypto
+48dbd5adccf44c68b81843fe033e6f62,6.4448,8.4292,code,github_docs,needs_update,nodejs/node: crypto
+e0022515d533404e9a074e5780e5a9c7,6.7404,8.1134,code,github_docs,approved,nodejs/node: crypto
+c917c2f36b164bd58db611cbad261dee,6.8363,7.9933,code,github_docs,approved,nodejs/node: crypto
+ef01be6b58624f3497a9d6998b5e8833,8.2542,5.3982,code,github_docs,needs_update,python/cpython: curses
+49760b887ee0461983e88764871e30e0,8.2836,5.2370,code,github_docs,approved,python/cpython: curses
+103b18f13dd041d7bd0d73e6ec69cb82,8.0558,7.3632,code,github_docs,needs_update,nodejs/node: n-api
+25be2d6b01ea4aa8b1510eb40e3ee221,8.4060,7.2662,code,github_docs,needs_update,nodejs/node: n-api
+d79293b654984b1dbb4e3f4783c064b1,8.4328,7.2865,code,github_docs,needs_update,nodejs/node: n-api
+31351e4e03b340ea98f6c92890dcda31,8.4610,7.2587,code,github_docs,approved,nodejs/node: n-api
+96cc63f1387a4ca986c3c2e57a538b1c,8.4595,7.2736,code,github_docs,approved,nodejs/node: n-api
+3899ace11cf64ebf9d3cf5ff66bd5827,8.2742,7.5302,code,github_docs,needs_update,nodejs/node: n-api
+55f72af0ec184aeb8e45724af454024f,8.6576,6.0421,code,github_docs,approved,python/cpython: configparser
+55d86e57663048a4ae9dccbebce803f8,7.9201,4.9131,code,github_docs,approved,python/cpython: configparser
+e4baf1327ed24b94822b574c54ffe2a8,8.5061,5.0825,code,github_docs,approved,python/cpython: collections
+580cf9268c8a466b9e5d7ae11e717935,8.8709,4.2091,code,github_docs,needs_update,python/cpython: collections
+2ce40c5715c24557a36de158047206b7,6.6418,7.4862,code,github_docs,needs_update,nodejs/node: http2
+bbe16bb36c7942af8ffc346e5ed8c914,6.6331,7.6009,code,github_docs,needs_update,nodejs/node: http2
+6075f28a97374a45949443914c4539f7,6.6634,7.5394,code,github_docs,approved,nodejs/node: http2
+fc958ca11ed043b38cbd29a9b4a82c04,6.7842,5.6535,code,github_docs,approved,nodejs/node: test
+52edd32c96de424fb3eb717493bbf199,6.9576,5.5993,code,github_docs,needs_update,nodejs/node: test
+0c93c088f8d24f55a436592b3f7ab084,6.6431,7.5839,code,github_docs,needs_update,nodejs/node: http
+effd68fc305348f1bbb2098e957d83f0,6.5905,7.4016,code,github_docs,approved,nodejs/node: http
+d7cf0965c18e43fbbdc93a1b3d4757a0,6.5463,7.3776,code,github_docs,needs_update,nodejs/node: http
+c04bf1effbdd4e96b0a6538817534ee5,8.1363,4.5108,code,github_docs,needs_update,python/cpython: doctest
+3c37688719494a9697538aafc0bc9ad3,7.7397,7.8347,code,github_docs,needs_update,nodejs/node: vm
+b475b104160445d089c40ed4c254be58,7.8547,7.9980,code,github_docs,needs_update,nodejs/node: vm
+05cccb1eb359484e985e1f35add3e9d9,7.7409,5.2552,code,github_docs,needs_update,python/cpython: datetime
+143ae85a93b24db5855215bbe08090a4,7.9611,4.7847,code,github_docs,needs_update,python/cpython: argparse
+21f0c2746e9e4f69994b38304fecea97,8.2929,4.6728,code,github_docs,approved,python/cpython: argparse
+2f3a65a26945483e807909fd9b7cbf9a,7.8915,4.6087,code,github_docs,approved,python/cpython: argparse
+4a134366faaf41749e7466e2ff68d163,7.9069,4.8965,code,github_docs,needs_update,python/cpython: argparse
+c829cd97ca5f4655b037f4da98b47fcb,8.5477,7.8334,code,github_docs,needs_update,nodejs/node: util
+e2aa8fd20c1e476e93ba46e302677212,8.1182,8.0306,code,github_docs,approved,nodejs/node: util
+dbcad4bfd1634be59cf02bb3698b8d7d,7.8578,7.5913,code,github_docs,needs_update,nodejs/node: util
+b3b6ac29cabe4e7191f7bc49e73a0ea9,7.0333,7.2291,code,github_docs,approved,nodejs/node: process
+40b889e7794d40eaba62f0b368ab06e7,6.6386,6.4596,code,github_docs,needs_update,nodejs/node: process
+b4c4ec9fb9884da9b723fcb97a100074,7.5023,7.4057,code,github_docs,needs_update,nodejs/node: process
+7af80137559c416ab09c1b29178e5001,6.3010,8.3970,code,github_docs,needs_update,nodejs/node: webcrypto
+6395353064354582ae0d8eea5dc10f4e,6.1713,8.3492,code,github_docs,needs_update,nodejs/node: webcrypto
+3ca4193543dd4b3884fcdd25a6470133,6.1999,8.4252,code,github_docs,needs_update,nodejs/node: webcrypto
+ad8de8fbc0524afc8b9cd9f637c736e0,6.0154,6.0881,code,github_docs,needs_update,python/cpython: asyncio-task
+fb58766012a445bb8f0fe304fa4c1dc4,6.0823,6.1714,code,github_docs,needs_update,python/cpython: asyncio-eventloop
+f8072f7a861947a796859fb036f111f8,6.2320,6.5793,code,github_docs,needs_update,python/cpython: asyncio-eventloop
+665346e71e51442d909cc1084e2eb80f,6.1190,7.5208,code,github_docs,needs_update,python/cpython: asyncio-eventloop
+7bbb2d21108a46f188d49f54c0ed6001,7.0524,7.5822,code,github_docs,needs_update,nodejs/node: stream
+ae3fb6ded3fe4522a3a6b8b8b753c62e,7.0586,7.5266,code,github_docs,needs_update,nodejs/node: stream
+b393aa8e64cd499fad693af79f8b3143,7.0960,7.0825,code,github_docs,approved,nodejs/node: errors
+21859c16d5d44d0a8457732bb21e0dbe,7.1424,6.5205,code,github_docs,approved,nodejs/node: errors
+f3d137e7cd624a379f10e4213c21ade7,6.9787,6.6988,code,github_docs,needs_update,nodejs/node: errors
+095140df21584d46808375ca06e5ac54,7.8094,4.4546,code,github_docs,needs_update,python/cpython: functions
+4e60b59df95142b58a986de0c5c562cf,8.8069,5.6296,code,github_docs,needs_update,python/cpython: functions
+e9ea29f562b248248bc94d824d90152a,8.8789,4.8591,code,github_docs,needs_update,python/cpython: functions
+21c0a50b4dbf4cc1b0d21d86f9f647e9,8.8279,4.2202,code,github_docs,needs_update,python/cpython: itertools
+0f0d9900265840388a82e857a82e314d,7.9515,5.2039,code,github_docs,approved,python/cpython: logging
+a715d6341fbc49e9a2ee413f96370e85,7.7242,5.1449,code,github_docs,approved,python/cpython: logging
+c172dda6ee384088bdc0a9b91626d2d9,7.6313,5.1450,code,github_docs,needs_update,python/cpython: logging
+3ca0ff352d204747ae2633156c1ebbad,6.1503,7.8832,code,github_docs,needs_update,nodejs/node: tls
+13a4851c55f0457c808888e94769f06b,6.1787,7.7609,code,github_docs,needs_update,nodejs/node: tls
+c6e16acf1edf4ab7ba724159bb19de00,6.3161,7.8365,code,github_docs,needs_update,nodejs/node: tls
+617ad30f76724b9798085ca0f6561ae5,8.1504,4.2955,code,github_docs,approved,python/cpython: inspect
+487cabe1525f4f228d7038c626dd4bfb,8.3903,4.7243,code,github_docs,needs_update,python/cpython: inspect
+c26d85c51c5a4669a501899c83500209,7.8469,5.2565,code,github_docs,needs_update,python/cpython: calendar
+b9006eaf36494072b857682bdd6ba4c6,7.7858,8.1755,code,github_docs,approved,nodejs/node: module
+ff0baefdcb2543f69f5cb13ee7332f99,7.7832,8.1462,code,github_docs,needs_update,nodejs/node: module
+f32fe21ccd4244d8969b818755fac2b3,7.6701,7.9983,code,github_docs,needs_update,nodejs/node: module
+c5994862c44744c483cc915241d8d91b,7.0786,5.4907,code,github_docs,needs_update,python/cpython: dis
+4e694830b0274708a2cfea704ebe07bf,8.3941,5.0594,code,github_docs,approved,python/cpython: dataclasses
+2411b0d9af8846589f91e3863cc179f3,7.6717,8.1736,code,github_docs,approved,nodejs/node: events
+4a3d83a5877a4aa0a5a22885e601ee40,7.8540,8.2982,code,github_docs,needs_update,nodejs/node: events
+b141a756fb614d21aed60a3c52fce6d9,8.1466,4.7128,code,github_docs,approved,python/cpython: optparse
+2bf6b7544f4047839f63dabbc3a19b13,8.1345,4.7834,code,github_docs,approved,python/cpython: optparse
+e6ff6506a72c418099fb17add7fd13cd,6.4496,6.2798,code,github_docs,needs_update,python/cpython: multiprocessing
+3c4a968a276642e8a7f2f1d455805258,6.5836,6.4496,code,github_docs,needs_update,python/cpython: multiprocessing
+6ac142e058ea4ec08bb66ae1dc335d0b,7.1945,7.4132,code,github_docs,approved,nodejs/node: worker_threads
+73ed2fee0b674246bc208482da482fba,6.7166,7.0340,code,github_docs,needs_update,nodejs/node: worker_threads
+1e095ef16cc24a01bca6c24314184662,6.9462,7.3470,code,github_docs,needs_update,nodejs/node: worker_threads
+6f57e47bc6f94ddea72dc9baf7157e1f,7.2660,7.3684,code,github_docs,needs_update,nodejs/node: worker_threads
+4ddd29aa806b457888db6da97c16b573,7.3155,7.1331,code,github_docs,needs_update,nodejs/node: worker_threads
+2c10f2baeed24588b78ab4700a149e0b,7.7122,7.6061,code,github_docs,needs_update,nodejs/node: url
+ba1ae8d930e941aab51592630550c90f,8.6463,5.9411,code,github_docs,approved,nodejs/node: url
+134f66b4e422414d8e602ebe274f6673,7.5942,8.2171,code,github_docs,needs_update,nodejs/node: diagnostics_channel
+03c97e31e7524d05925ae1c7c13bac8e,7.5450,8.2815,code,github_docs,needs_update,nodejs/node: diagnostics_channel
+63d322a8c46444e792b61c5c75fe0a34,7.5598,8.2813,code,github_docs,approved,nodejs/node: diagnostics_channel
+a65f49ffb49c4b90b3920a2c847589b5,7.4763,7.1278,code,github_docs,approved,nodejs/node: child_process
+adf4d7f2894c4a7fb55c94a7934420f7,7.2904,6.9737,code,github_docs,needs_update,nodejs/node: child_process
+b0d24d8cfa8647eb86c32d6e388a95ad,7.7059,5.2558,code,github_docs,needs_update,python/cpython: importlib
+99dc47024ac3415ebb390d77c964c8de,7.5045,6.8784,code,github_docs,approved,nodejs/node: v8
+7f9504fb16da486a9bc2d3627fe4b173,7.6910,8.2032,code,github_docs,needs_update,nodejs/node: v8
+cb96392c12ea4c699204b84182df57dd,7.8183,7.6616,code,github_docs,needs_update,nodejs/node: v8
+af395790ad5b4c22b0f970e6500d32ae,8.9516,4.9536,code,github_docs,needs_update,python/cpython: collections.abc
+d9b525d303884075b3ad259ea7e918c5,9.2618,5.1925,code,github_docs,approved,nodejs/node: assert
+f08748e221384a2a9b2eecb43c186b21,9.2428,5.1555,code,github_docs,approved,nodejs/node: assert
+4a36c42cc8e045af8ba98be2c1fee713,7.6398,5.5166,code,github_docs,needs_update,python/cpython: logging.handlers
+3f82fc142f884584b1c22b75e536e8f0,8.3876,6.2551,code,github_docs,needs_update,nodejs/node: zlib
+0d03f76e7d9d4922b12c4a58c0752b82,8.3738,6.4299,code,github_docs,needs_update,nodejs/node: zlib
+491bc6c555b04f36a848f0961f022e13,7.8766,7.4942,code,github_docs,needs_update,nodejs/node: deprecations
+7b4a3827d15445b7a1953d0cf44311c9,7.7373,7.4264,code,github_docs,needs_update,nodejs/node: cli
+c4ba37106cf442ba8bc7b9351ae40cab,6.7493,5.6718,code,github_docs,approved,nodejs/node: cli
+93419609cd854f719411546358293350,7.9573,7.5889,code,github_docs,needs_update,nodejs/node: cli
+0eae776b6f134c6591bf3f1a8d548222,7.1002,7.5823,code,github_docs,approved,nodejs/node: stream_iter
+b6cb45b1910a4d7f803999ea063b614e,7.1300,6.2621,code,github_docs,needs_update,nodejs/node: sqlite
+327d26201cea4da284dcae1f4e82d83f,4.3101,6.0954,code,github_docs,needs_update,nodejs/node: perf_hooks
+d4a75b4140dd4d4abd0a9b8da2e62b34,7.5192,5.0066,code,github_docs,needs_update,python/cpython: email.policy
+484db573443c4fc2a15b0cdd90483685,8.6299,4.7899,code,github_docs,approved,python/cpython: pickle
+f8b64eb63735465f8501f6324a537618,6.4179,6.8344,code,github_docs,approved,python/cpython: logging.config
+b44214e68b304001a5195b08dc33a820,7.9951,5.1059,code,github_docs,approved,python/cpython: logging.config
+36fc2aaad02649f9b942e69b1b3fe5c4,8.1462,5.2850,code,github_docs,approved,python/cpython: logging.config
+3b8b3461f1174764b52328d16782d8eb,7.6605,4.2106,code,github_docs,needs_update,python/cpython: ipaddress
+9de1a55e7b5d43508292afec9bf04d99,8.0481,4.2479,code,github_docs,needs_update,python/cpython: csv
+f8adb2ef39bf44a69a53be402b7d11cb,8.0114,7.8491,code,github_docs,approved,nodejs/node: esm
+865452d082e249108fc34f1ef0ed75dd,8.2456,4.3830,code,github_docs,needs_update,python/peps: pep-0258
+4a55f4e928a64cec81fa611515e13e62,6.4093,6.9966,code,github_docs,approved,nodejs/node: net
+4a532d32a6e34835a5f92e286a2c5486,6.4461,7.2065,code,github_docs,approved,nodejs/node: net
+822e59e0155d4ea0b3a50d7bc060dcd8,8.3425,7.9865,code,github_docs,needs_update,nodejs/node: addons
+4a8ea4b8b871434087227e7366603eef,9.2499,5.5492,code,github_docs,needs_update,rust-lang/book: appendix-02-operators
+e5003dccdae44248a109411ce3755ebf,7.5604,5.7733,code,github_docs,approved,python/cpython: pathlib
+8044e3452da34fb6b55a086e479559d3,7.8573,4.8003,code,github_docs,needs_update,python/cpython: locale
+eb6a23709b6c44fb9f2986a21057bde9,7.3663,5.1493,code,github_docs,needs_update,python/cpython: email.message
+d256c2c82846449481715bf7432f85c6,7.6487,4.3934,code,github_docs,needs_update,python/cpython: compileall
+e4065c2f984d4a0095c6f1c3ed6b646e,7.6071,5.0677,code,github_docs,needs_update,python/cpython: io
+0d52eb1698d04aa3bac0183894a73e1d,7.7042,7.8935,code,github_docs,approved,nodejs/node: async_hooks
+7f1167a75adb432a8ac74e324c4eb0f6,8.8450,4.9477,code,github_docs,needs_update,python/peps: pep-0209
+f44a64dc2d6645d291b68ced202e1207,8.6355,4.9692,code,github_docs,approved,python/peps: pep-0209
+128bdc5bf1194f50bdf908591f33c071,7.8538,5.4521,code,github_docs,needs_update,python/cpython: http.cookiejar
+aa372f5b7f6d4b1d83a1d5fb96e32b12,7.8308,8.0122,code,github_docs,hold,nodejs/node: modules
+28f8f29fde5842ce9b790bc890a38d3d,8.1110,7.8512,code,github_docs,needs_update,nodejs/node: packages
+5d5ef14b758f4fd48d226b6bd4cb5596,8.8090,4.3507,code,github_docs,needs_update,python/cpython: functools
+3b58eb96ca0d4b0eb863cf7aa60e7a07,8.2533,4.9546,code,github_docs,approved,python/cpython: functools
+3e1aa292db674a58b2675a4d4d0b2604,7.3569,5.1466,code,github_docs,needs_update,python/cpython: imaplib
+e4d34d25074940c19bf478549bd6c925,6.9885,5.4119,code,github_docs,needs_update,python/cpython: imaplib
+29dda9f6576d40c6aa993c53615a76b7,6.0996,7.7731,code,github_docs,needs_update,python/cpython: http.client
+08cae7b506aa4726ba883ccb38761d0b,6.2980,6.7880,code,github_docs,approved,python/cpython: ftplib
+8243bd284d204b148dcd718bf52ae750,7.5680,4.3375,code,github_docs,needs_update,python/cpython: ossaudiodev
+d8a84f974bd6423eadb6f947ef0cf9b4,2.5330,4.9304,code,github_docs,needs_update,python/cpython: ossaudiodev
+38d91329e7d144fab9223d88ea5f360a,7.1374,5.8473,code,github_docs,needs_update,python/cpython: http.server
+7ec6b72deaa6440dba5b42b72449b473,8.4008,6.1319,code,github_docs,approved,python/cpython: bz2
+d371a81da96344688db03e84573c04de,6.3304,7.9548,code,github_docs,needs_update,nodejs/node: quic
+e8a21bbd683f4d1a82ae1b84a65849f6,7.5969,7.4725,code,github_docs,approved,nodejs/node: inspector
+735eb8fd5ffa4f45a6fdeac26d768ae2,6.3549,7.8009,code,github_docs,needs_update,nodejs/node: https
+6c3e6ece6fc4419e91e1d7c678796008,8.5545,4.8891,code,github_docs,needs_update,python/peps: pep-0231
+e33bf296aac14017b117bc487b1223ec,7.6267,5.6919,code,github_docs,needs_update,python/cpython: os.path
+ad4aea989097488087c8bc71ccec7eae,7.3723,5.1686,code,github_docs,needs_update,python/cpython: email.mime
+6dec19bf86b44ed8bcdd9d8fbcb3077d,6.1680,6.1996,code,github_docs,approved,python/cpython: asyncio-queue
+f08cd1fd31824316ae3345a813657286,7.3985,4.7226,code,github_docs,approved,python/peps: pep-0262
+661a41cfb8b840299a498adafba2d10b,0.7319,0.6239,code,github_docs,needs_update,python/peps: pep-0012
+f326cb26042446768956d48c9576091e,7.4883,4.3894,code,github_docs,needs_update,python/peps: pep-0001
+45e1767de8bf4837ae5b6fcb9aee8f36,8.3847,7.5794,code,github_docs,needs_update,mdn/content: index
+9dd12fdc26b64d20ab24c85b88d19727,8.4359,4.8005,code,github_docs,needs_update,python/peps: pep-0205
+276839c3f8244fbeaed35de2bf4cdc35,8.3195,6.1370,code,github_docs,needs_update,python/cpython: lzma
+9dbe97c29fcd42be9fa7c7ae05c9f0ed,7.5802,8.0437,code,github_docs,unreviewed,nodejs/node: domain
+a6ccf9bc06f94b4cbef85472001d1043,7.4672,7.8876,code,github_docs,unreviewed,nodejs/node: domain
+9642973a42b044fba0db81e49249c37a,8.6717,4.7879,code,github_docs,unreviewed,python/peps: pep-0252
+4f3c969d843c46ffb323ea0cf5cc7204,9.1719,5.0156,code,github_docs,unreviewed,python/peps: pep-0207
+b7519177890d4c8088ba6a19e5c6f087,9.4958,6.1294,code,github_docs,unreviewed,rust-lang/book: SUMMARY
+ee49b98b91fb4e8ea55fa84fe3df9e2f,8.5194,6.3215,code,github_docs,unreviewed,python/peps: pep-0272
+a31e753bbe274ae2b95ad999ab912dad,7.6892,4.5809,code,github_docs,unreviewed,python/peps: pep-0238
+215d7bf021e04220a08ee79fb462235e,8.5840,5.1850,code,github_docs,unreviewed,python/peps: pep-0200
+44fd17ce1347407d8184bc62557ee5d6,9.1024,5.0747,code,github_docs,unreviewed,python/cpython: numbers
+3df21889f0ec457c8d68b5b1d2f5d57b,6.2226,6.0417,code,github_docs,unreviewed,python/cpython: _thread
+85b9b5efa755437d9fd31cbe47e03858,8.5070,7.8232,code,github_docs,unreviewed,mdn/content: index
+96adc33ba01247cf8b4c99273dbb6e24,8.8456,6.1775,code,github_docs,unreviewed,mdn/content: index
+9e44036081614b8981d72140c74d9a8b,7.4766,4.5075,code,github_docs,unreviewed,python/peps: pep-0011
+2327c68bc2224ecfbda42e05d6789066,8.0604,4.2100,code,github_docs,unreviewed,python/peps: pep-0008
+2d2cb07522a64eda9886ce13b6ee924e,8.5772,4.2575,code,github_docs,unreviewed,python/peps: pep-0008
+7e5cde27fb8b4513a62af9f77e5c8388,8.1841,4.1009,code,github_docs,unreviewed,python/peps: pep-0008
+4adb9def59344971ab45342d816f9564,7.4257,5.4958,code,github_docs,unreviewed,python/cpython: importlib.resources
+b557e84208ca4ad5849c34b2a5d66d66,6.6501,6.4225,code,github_docs,unreviewed,nodejs/node: os
+096f137d8c8c41399d94b187dedfd155,8.1395,7.4914,code,github_docs,unreviewed,nodejs/node: intl
+60a49eecddde4908b7f6bf126aa0d683,8.4413,4.6787,code,github_docs,unreviewed,python/peps: pep-0224
+cd4d6884663946ce9ed15af63538185a,8.3358,6.3066,code,github_docs,unreviewed,nodejs/node: zlib_iter
+8407de12198c42a3b475253c9f9ea1f0,7.8449,4.1592,code,github_docs,unreviewed,python/peps: pep-0278
+528d1a1741044ce8b3023c3ca579cee0,7.5035,4.7135,code,github_docs,unreviewed,python/peps: pep-0259
+959b1b4b76d44fbc930beb685110805d,8.2118,4.2512,code,github_docs,unreviewed,python/peps: pep-0216
+ab874acd4eb544b187d1e97a0512cf86,8.2334,4.2464,code,github_docs,unreviewed,python/peps: pep-0216
+8ef1ee1b25bd4d40abc367e62bfc0c9c,9.0382,5.2304,code,github_docs,unreviewed,python/peps: pep-0007
+9b7a322d3bf64f658697c313fca56d30,7.6646,5.8137,code,github_docs,unreviewed,python/cpython: glob
+9e5422b3a1cb4a00ab2da9987fefcfbe,7.3187,5.1076,code,github_docs,unreviewed,python/cpython: mailbox
+d801786ca96747ee9aeeded38c767a20,7.2652,5.0947,code,github_docs,unreviewed,python/cpython: imghdr
+6912b1e8cea84845a0089c2a7c564f6e,8.5446,4.4783,code,github_docs,unreviewed,python/cpython: copyreg
+89389f3426244d548956f3178a278747,7.7464,4.8716,code,github_docs,unreviewed,python/cpython: __future__
+318402edb1094ecfabff83143b84d8a4,10.1791,6.1196,code,github_docs,unreviewed,rust-lang/book: appendix-01-keywords
+cfcd085e557949388e03d75a35d9faed,7.5592,4.4693,code,github_docs,unreviewed,python/peps: pep-0226
+e551a2d9f4b54eb0a4638cfd41322bc0,9.0147,4.5842,code,github_docs,unreviewed,python/peps: pep-0201
+76b7f5276b6f4f4382f7551e40c782f2,2.2035,0.7182,general,manual,approved,
+e390d9aef30544048f7c17a0c117058f,7.7266,3.9655,general,arxiv,approved,Implementation of Kalman Filter with Python Language
+36b10a316d1b4563afe35a97779e677f,4.1321,5.9868,general,,,
+850777011df84c79912ec16093542e13,4.1446,5.9872,general,,,
+0725062d26474246856b19e92b7deaca,4.1364,5.9897,general,,,
+7d5b4b62982f4d88b20768c90b850e58,4.1588,6.0235,general,,,
+b1d9e6e14e6e424a8986e2786cc57418,4.1896,6.0003,general,,,
+c47df70f9f8541e7a96624fc081dd012,5.5340,4.9063,general,,,
+8376872893774d86aa79259af0a4f3c5,5.5301,5.0402,general,,,
+c7be21214448490aa38bc89b373f51e6,5.6185,5.1777,general,,,
+eae7d79561454e9b8742028ef66e0b4a,5.4158,4.5972,general,,,
+168b5d3ce077466f92dc3e9deb1221ea,8.6511,4.5659,general,,,
+c9b676b856e6444eb1155fc2580977ae,8.7166,4.4087,general,,,
+ca1a3ac1a1864d359b5afb4c1bf67c28,7.7449,3.8927,general,,,
+1858befa83a04e85883d8cfdd87a0d19,4.3664,5.1489,general,,,
+5df2c9ffb04249b183ec00d4197671cc,4.3996,5.2624,general,,,
+37d99dc9b8a1427c9ae11a34a8d7d065,4.4798,5.2762,general,,,
+f7d59947609f4c818305953e4aae2f3e,4.5618,5.5473,general,,,
+b5cef30566cb4018bcce11f5be2722d2,4.4616,5.6137,general,,,
+7d55300d1f8640de97a7d891febb245f,2.5261,3.0953,general,,,
+adb274b13e5e4d6a92c088bf53a81393,2.4652,3.0440,general,,,
+f33b9e70ca2248088768e4949f8944f9,2.4657,3.0243,general,,,
+b8d7679680c54594808842c2c79b4918,2.5702,3.3207,general,,,
+f5004e4a61b84ec8b35a6da45d68795f,2.5290,3.3665,general,,,

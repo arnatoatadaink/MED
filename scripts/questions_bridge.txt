@@ -1,0 +1,88 @@
+# questions_bridge.txt — arXiv↔実装 横断設問 + 設計思想設問
+# 参照: TODO.md セクションO-3
+# 用途: seed_and_mature.py --questions scripts/questions_bridge.txt
+#
+# 設問パターン:
+#   P1: 理論→実装変換型  (academic + code)
+#   P2: 実装→理論説明型  (code + academic)
+#   P3: 比較型           (academic + code)
+#   P4: デバッグ・最適化型 (code + academic)
+#   P5: 設計判断型       (academic + code)
+#   P6: UMLモデリング型   (design + code)
+#   P7: GoFデザインパターン選択型 (design + code)
+#   P8: アーキテクチャ改善型     (design + code)
+
+# === P1: 理論→実装変換型 ===
+How can ICL Posterior Variance O(e^{-ck}) reduction be verified with FAISS k=5 retrieval using Python?
+How do you implement GRPO reward computation separating accuracy, relevance and completeness scores in Python?
+How is Belief Propagation structurally equivalent to Transformer attention, and how can this be shown in code?
+How do you implement Hyperbolic edge weights using geoopt PoincareBall for a Knowledge Graph in Python?
+How do you implement the Chance-Level Threshold (scale/n_classes) as a Focal Loss variant in PyTorch?
+How do you compute Semantic Entropy from multiple LLM outputs using Python to detect query ambiguity?
+How can the IN-DEDUCTIVE path switching be implemented using FAISS group probabilities in Python?
+How do you implement an EMA tracker (alpha=0.1) for Student success rate tracking in numpy?
+
+# === P2: 実装→理論説明型 ===
+Why does faiss.IndexFlatIP with L2-normalized vectors compute cosine similarity? Explain with linear algebra.
+Why is float64 required instead of float32 for geoopt PoincareBall expmap0 to avoid numerical instability?
+What is the theoretical basis for sentence-transformers choosing 384 dimensions in all-MiniLM-L6-v2?
+Why does UMAP with cosine metric separate research papers from documentation in embedding space?
+What mathematical property makes inner product equivalent to cosine similarity after L2 normalization?
+Why do knowledge graph hierarchical relationships benefit from hyperbolic space over Euclidean space?
+
+# === P3: 比較型（論文vs実装）===
+How does HypStructure hyperbolic regularization differ from L2 regularization when implemented with geoopt and PyTorch?
+What is the difference between GRPO and standard RLHF reward design when implemented in TRL?
+How does FAISS IndexFlatIP compare to IndexHNSWFlat in terms of accuracy vs speed tradeoffs?
+How does grounded retrieval (FAISS hit) differ from ungrounded generation in Belief Propagation theory?
+What is the difference between Kuhn semantic uncertainty and standard entropy for LLM output evaluation?
+
+# === P4: デバッグ・最適化型 ===
+Why does Poincare Ball expmap0 produce NaN values with float32 and how do you fix it with float64?
+How do you profile geoopt manifold.dist computation to measure float64 performance impact in Python?
+Why does FAISS IndexFlatIP return identical scores for very similar documents and how to handle this?
+How do you detect and remove near-duplicate embeddings from FAISS before adding new vectors?
+How do you diagnose whether low retrieval quality is from FAISS k-value or from embedding quality?
+
+# === P5: 設計判断型 ===
+Should FAISS retrieval use k=3 or k=7 given ICL Bayesian convergence theory and context window limits?
+When should you use the Hyperbolic edge weight calculation vs simple cosine similarity for KG edges?
+How do you decide whether to use Observer/Solver separated rewards vs unified reward in GRPO training?
+How do you choose between grounded and ungrounded response paths in RAG based on FAISS similarity score?
+When should thought_logs patterns be promoted to Knowledge Graph nodes vs kept as logs only?
+
+# === P6: UMLモデリング型 ===
+Draw a UML class diagram for MED Teacher, Student, Verifier, and KGStore showing dependency directions with SOLID DI principle.
+Draw a UML sequence diagram for FAISS retrieval to maturation to KG registration flow.
+Draw a UML state machine diagram for document review_status transitions (unreviewed, approved, hold, needs_update, rejected).
+Draw a UML component diagram showing the interfaces between MED, TRIDENT, and external APIs (OpenRouter, FAISS, SQLite).
+Draw a UML activity diagram for the seed_and_mature.py parallel workflow including blacklist check and FAISS deduplication.
+When should you use a sequence diagram vs activity diagram for modeling async Python service interactions?
+How do you model the Teacher-Student curriculum loop as a UML state machine?
+What UML diagram best represents the relationship between FAISS DomainIndex, KGStore, and MetadataStore?
+
+# === P7: GoFデザインパターン選択型 ===
+Should RAG search strategy switching between FAISS and Tavily use Strategy or Command pattern? Show Python code.
+Should LLM provider switching between OpenRouter, FastFlowLM, and LMStudio use Factory or Abstract Factory? Explain with code.
+How do you use the Decorator pattern to add transparent logging and caching to FAISS search in Python?
+How do you implement the Observer pattern to trigger KG auto-update when thought_logs.reward exceeds 0.9?
+How do you use the Proxy pattern to add access control to the FAISS index in Python?
+How do you apply the Template Method pattern to extract common logic from seed_and_mature.py and seed_from_docs.py?
+How do you use the Composite pattern to represent hierarchical KG nodes (parent-child concepts) in Python?
+How do you use the Strategy pattern to make Chance-Level Threshold Hard and Soft variants interchangeable?
+How do you use the Facade pattern to wrap complex FAISS and KG search behind a unified API in Python?
+What is the difference between Strategy and Command patterns when implementing pluggable reward functions?
+How does the Observer pattern differ from Event Sourcing when tracking thought_logs changes in Python?
+When should you use Python Protocol vs ABC for implementing MEDSkillStoreProtocol? What are the design differences?
+
+# === P8: アーキテクチャ改善型 ===
+How would you refactor seed_and_mature.py from monolithic design to Hexagonal Architecture? Show component boundaries.
+How does applying CQRS to the MED Teacher-Student design separate read and write models?
+How does the Dependency Inversion Principle apply to the design of FAISSIndex and DomainIndex in MED?
+How do you apply Clean Architecture dependency rules to MED src/memory, src/rag, and src/llm layers?
+How does Event Sourcing applied to thought_logs enable reproducible reward computation history?
+What are the tradeoffs between Microservices and Monolith when deciding whether to separate mature job from seed job?
+How do SOLID principles guide the design of a pluggable LLM provider gateway in Python?
+How does Hexagonal Architecture improve testability of the FAISS retrieval pipeline compared to direct coupling?
+What is the practical difference between Clean Architecture and Hexagonal Architecture for a Python RAG system?
+How do you apply the Dependency Inversion Principle to make FAISS replaceable with another vector store?
