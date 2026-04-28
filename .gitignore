@@ -46,3 +46,6 @@ HANDOFF_*.md
 
 # その他 OS / エディタ
 temperature/
+
+# Windows/WSL 改行制御（ローカル環境固有）
+.gitattributes
