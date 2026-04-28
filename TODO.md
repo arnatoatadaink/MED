@@ -292,10 +292,10 @@ UMAP分析でソース別クラスター分布を確認後、retriever層の3問
 
 ### N-Phase1: 思考ログ + k値 外出し（IDEA-001, 002）
 
-#### N-1. Structured Thought Log（IDEA-001）🔴
+#### N-1. Structured Thought Log（IDEA-001）✅
 > 根拠: S1（Context Engineering 2.0, 2510.26493）
 
-- 🔴 `thought_logs` テーブル作成
+- ✅ `thought_logs` テーブル作成（`src/memory/metadata_store.py`）
   ```sql
   CREATE TABLE thought_logs (
       id TEXT PRIMARY KEY, timestamp TEXT,
@@ -305,9 +305,18 @@ UMAP分析でソース別クラスター分布を確認後、retriever層の3問
   ```
   - `reasoning`: `[{step, thought, confidence}]` 形式
   - `self_eval`: `{accuracy, relevance, completeness, improvement_notes}`
-- 🔴 `self_evaluate()` の出力を GRPO 報酬値（0.0〜1.0）に変換するパイプライン実装
-- 🔴 パターン抽出ロジック: `success_rate > 0.9` → KG へ自動登録（NetworkX ノード追加）
+- ✅ `ThoughtLog` Pydantic モデル追加（`src/memory/schema.py`）
+- ✅ MetadataStore CRUD: `save_thought_log()` / `get_thought_log()` / `list_thought_logs()`
+  - `get_pattern_success_rate()` — パターン別成功率集計
+  - `list_patterns_above_threshold()` — KG 登録候補抽出 SQL
+- ✅ `SelfEval` + `SelfEvaluator` — 報酬変換パイプライン（`src/training/rewards/self_evaluator.py`）
+  - 重み: accuracy×0.40 + relevance×0.35 + completeness×0.25
+  - `to_reward(SelfEval) → float` / `build_log(...) → ThoughtLog`
+- ✅ `PatternExtractor` — KG 自動登録（`src/training/rewards/pattern_extractor.py`）
+  - `success_rate > 0.9` かつ `n >= 5` → `pattern:<id>` Entity として KG に登録
+  - 既存ノードは properties 更新のみ（重複なし）
 - **接続先**: A-2（ReasoningTrace ✅）/ D（KG ✅）/ E（GRPO）
+- **残課題**: N-4（LLM 呼び出しによる `self_evaluate()` 実装）で Teacher との接続を完成させる
 
 #### N-2. FAISS k-value Calibration（IDEA-002）🔴
 > 根拠: S2（ICL is Provably Bayesian, 2510.10981）— k=3〜5 で指数収束 O(e^{-ck})

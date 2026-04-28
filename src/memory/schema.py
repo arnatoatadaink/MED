@@ -305,6 +305,16 @@ class Document(BaseModel):
     # 例: ["RAG", "FAISS", "TinyLoRA", "fine-tuning", "13B"]
     keywords: list[str] = Field(default_factory=list)
 
+    # ── チャンカー種別 ──
+    # chunk_text() = "text" (デフォルト) / chunk_markdown() = "markdown" (GITHUB_DOCS)
+    chunker_type: str = "text"
+
+    # ── 内部リンク (chunk_markdown 抽出) ──
+    # Markdown の [text][] / [text][ref] 形式リンクのターゲット文字列リスト。
+    # FAISS には含めず DB のみに保持。FAISS→DB→internal_links の順で辿る。
+    # 例: ["server.close()", "Buffer.byteLength()", "ERR_HTTP_CONTENT_LENGTH_MISMATCH"]
+    internal_links: list[str] = Field(default_factory=list)
+
     # ── タイムスタンプ ──
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -456,3 +466,34 @@ class ReasoningTrace(BaseModel):
     doc_ids: list[str] = Field(default_factory=list)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# ============================================================================
+# 思考ログ (ThoughtLog) — N-1 GRPO 報酬パイプライン
+# ============================================================================
+
+
+class ThoughtLog(BaseModel):
+    """Student LLM の推論ステップ・自己評価・GRPO 報酬を記録するエンティティ。
+
+    - reasoning: [{step, thought, confidence}] 形式の推論チェーン
+    - self_eval: {accuracy, relevance, completeness, improvement_notes} の自己評価
+    - reward: self_eval から計算した GRPO 報酬値 (0.0-1.0)
+    - pattern_id: 成功パターン識別子 (PatternExtractor が付与、KG に自動登録)
+    """
+
+    id: str = Field(default_factory=_generate_doc_id)
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+    input: str
+    reasoning: list[dict[str, Any]] = Field(default_factory=list)
+    output: str
+
+    reward: float = 0.0
+    self_eval: dict[str, Any] = Field(default_factory=dict)
+    pattern_id: str | None = None
+
+    @field_validator("reward")
+    @classmethod
+    def clamp_reward(cls, v: float) -> float:
+        return max(0.0, min(1.0, v))

@@ -33,6 +33,7 @@ from src.memory.schema import (
     ReviewStatus,
     SourceMeta,
     SourceType,
+    ThoughtLog,
     UsefulnessScore,
 )
 
@@ -85,7 +86,14 @@ CREATE TABLE IF NOT EXISTS documents (
     aliases TEXT DEFAULT '[]',
 
     -- キーワードアノテーション — JSON 配列（KeywordAnnotator が付与）
-    keywords TEXT DEFAULT '[]'
+    keywords TEXT DEFAULT '[]',
+
+    -- チャンカー種別 — "text" (chunk_text) / "markdown" (chunk_markdown / GITHUB_DOCS)
+    chunker_type TEXT DEFAULT 'text',
+
+    -- 内部リンク — JSON 配列。chunk_markdown が [text][] / [text][ref] から抽出。
+    -- FAISS には含めず DB のみに保持。FAISS → DB → internal_links の順で辿る。
+    internal_links TEXT DEFAULT '[]'
 );
 """
 
@@ -189,6 +197,24 @@ _CREATE_REASONING_INDICES_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_reasoning_traces_method ON reasoning_traces(trace_method);",
 ]
 
+_CREATE_THOUGHT_LOGS_SQL = """
+CREATE TABLE IF NOT EXISTS thought_logs (
+    id         TEXT PRIMARY KEY,
+    timestamp  TEXT NOT NULL DEFAULT (datetime('now')),
+    input      TEXT NOT NULL,
+    reasoning  TEXT DEFAULT '[]',
+    output     TEXT NOT NULL,
+    reward     REAL DEFAULT 0.0,
+    self_eval  TEXT DEFAULT '{}',
+    pattern_id TEXT
+);"""
+
+_CREATE_THOUGHT_LOGS_INDICES_SQL = [
+    "CREATE INDEX IF NOT EXISTS idx_thought_logs_timestamp ON thought_logs(timestamp DESC);",
+    "CREATE INDEX IF NOT EXISTS idx_thought_logs_pattern_id ON thought_logs(pattern_id) WHERE pattern_id IS NOT NULL;",
+    "CREATE INDEX IF NOT EXISTS idx_thought_logs_reward ON thought_logs(reward DESC);",
+]
+
 _CREATE_BLACKLIST_SQL = """
 CREATE TABLE IF NOT EXISTS seed_blacklist (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -224,6 +250,12 @@ _MIGRATION_ADD_ALIASES = (
 )
 _MIGRATION_ADD_KEYWORDS = (
     "ALTER TABLE documents ADD COLUMN keywords TEXT DEFAULT '[]';"
+)
+_MIGRATION_ADD_CHUNKER_TYPE = (
+    "ALTER TABLE documents ADD COLUMN chunker_type TEXT DEFAULT 'text';"
+)
+_MIGRATION_ADD_INTERNAL_LINKS = (
+    "ALTER TABLE documents ADD COLUMN internal_links TEXT DEFAULT '[]';"
 )
 
 
@@ -269,6 +301,10 @@ def _doc_to_row(doc: Document) -> dict[str, Any]:
         "aliases": json.dumps(doc.aliases),
         # キーワードアノテーション（JSON 配列文字列）
         "keywords": json.dumps(doc.keywords if hasattr(doc, "keywords") and doc.keywords else []),
+        # チャンカー種別
+        "chunker_type": doc.chunker_type if hasattr(doc, "chunker_type") else "text",
+        # 内部リンク（JSON 配列文字列）
+        "internal_links": json.dumps(doc.internal_links if hasattr(doc, "internal_links") and doc.internal_links else []),
     }
 
 
@@ -334,6 +370,8 @@ def _row_to_doc(row: aiosqlite.Row) -> Document:
         ),
         aliases=json.loads(d["aliases"]) if d.get("aliases") else [],
         keywords=json.loads(d["keywords"]) if d.get("keywords") else [],
+        chunker_type=d.get("chunker_type") or "text",
+        internal_links=json.loads(d["internal_links"]) if d.get("internal_links") else [],
         created_at=datetime.fromisoformat(d["created_at"]),
         updated_at=datetime.fromisoformat(d["updated_at"]),
         reviewed_at=(
@@ -377,9 +415,16 @@ class MetadataStore:
         await self._db.execute(_CREATE_FTS_SQL)
         await self._db.execute(_CREATE_REASONING_TRACES_SQL)
         await self._db.execute(_CREATE_TRACE_DOCUMENTS_SQL)
+        await self._db.execute(_CREATE_THOUGHT_LOGS_SQL)
         await self._db.execute(_CREATE_BLACKLIST_SQL)
         await self._migrate()  # 列追加を先に行い、その後インデックス作成
-        for idx_sql in _CREATE_INDICES_SQL + _CREATE_RAW_RESULTS_INDICES_SQL + _CREATE_REASONING_INDICES_SQL + _CREATE_BLACKLIST_INDICES_SQL:
+        for idx_sql in (
+            _CREATE_INDICES_SQL
+            + _CREATE_RAW_RESULTS_INDICES_SQL
+            + _CREATE_REASONING_INDICES_SQL
+            + _CREATE_THOUGHT_LOGS_INDICES_SQL
+            + _CREATE_BLACKLIST_INDICES_SQL
+        ):
             await self._db.execute(idx_sql)
         for trigger_sql in _CREATE_FTS_TRIGGERS_SQL:
             await self._db.execute(trigger_sql)
@@ -399,6 +444,12 @@ class MetadataStore:
         if "keywords" not in columns:
             await self._db.execute(_MIGRATION_ADD_KEYWORDS)
             logger.info("MetadataStore: migrated — added keywords column")
+        if "chunker_type" not in columns:
+            await self._db.execute(_MIGRATION_ADD_CHUNKER_TYPE)
+            logger.info("MetadataStore: migrated — added chunker_type column")
+        if "internal_links" not in columns:
+            await self._db.execute(_MIGRATION_ADD_INTERNAL_LINKS)
+            logger.info("MetadataStore: migrated — added internal_links column")
         # seed_blacklist エントリ数をログ出力（自動投入は無効化：hold文書は再審査対象）
         cur = await self._db.execute("SELECT COUNT(*) FROM seed_blacklist")
         count = (await cur.fetchone())[0]
@@ -431,6 +482,18 @@ class MetadataStore:
     # ------------------------------------------------------------------ #
     # seed_blacklist
     # ------------------------------------------------------------------ #
+
+    async def get_seeded_urls(self) -> set[str]:
+        """DB に登録済みの source_url を全件返す。
+
+        seed_from_docs の URL 単位重複排除に使用する。
+        空文字・NULL は除外する。
+        """
+        cur = await self._db.execute(
+            "SELECT DISTINCT source_url FROM documents WHERE source_url IS NOT NULL AND source_url != ''"
+        )
+        rows = await cur.fetchall()
+        return {row[0] for row in rows}
 
     async def is_blacklisted(self, source_url: str = "", source_title: str = "") -> bool:
         """URL またはタイトルがブラックリストに登録されているか確認する。"""
@@ -929,6 +992,7 @@ class MetadataStore:
         review_status: str | None = None,
         confidence: float | None = None,
         composite_score: float | None = None,
+        teacher_id: str | None = None,
     ) -> None:
         """品質関連フィールドを更新する (maturation 用)。"""
         updates: list[str] = []
@@ -952,6 +1016,9 @@ class MetadataStore:
         if composite_score is not None:
             updates.append("composite_score = ?")
             params.append(composite_score)
+        if teacher_id is not None:
+            updates.append("teacher_id = ?")
+            params.append(teacher_id)
 
         if not updates:
             return
@@ -1186,3 +1253,176 @@ class MetadataStore:
                 confidence=row["confidence"],
             ))
         return traces
+
+    # ================================================================
+    # ThoughtLog 操作 — N-1 GRPO 報酬パイプライン
+    # ================================================================
+
+    async def save_thought_log(self, log: ThoughtLog) -> str:
+        """ThoughtLog を thought_logs テーブルに保存する (UPSERT)。
+
+        Args:
+            log: 保存する ThoughtLog オブジェクト。
+
+        Returns:
+            log.id。
+        """
+        await self._db.execute(
+            """
+            INSERT OR REPLACE INTO thought_logs
+                (id, timestamp, input, reasoning, output, reward, self_eval, pattern_id)
+            VALUES
+                (:id, :timestamp, :input, :reasoning, :output, :reward, :self_eval, :pattern_id)
+            """,
+            {
+                "id": log.id,
+                "timestamp": log.timestamp.isoformat(),
+                "input": log.input,
+                "reasoning": json.dumps(log.reasoning, ensure_ascii=False),
+                "output": log.output,
+                "reward": log.reward,
+                "self_eval": json.dumps(log.self_eval, ensure_ascii=False),
+                "pattern_id": log.pattern_id,
+            },
+        )
+        await self._commit_with_retry()
+        logger.debug("Saved thought_log: %s (reward=%.3f)", log.id, log.reward)
+        return log.id
+
+    async def get_thought_log(self, log_id: str) -> ThoughtLog | None:
+        """ID で ThoughtLog を取得する。"""
+        cursor = await self._db.execute(
+            "SELECT * FROM thought_logs WHERE id = ?", (log_id,)
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        d = dict(row)
+        return ThoughtLog(
+            id=d["id"],
+            timestamp=datetime.fromisoformat(d["timestamp"]),
+            input=d["input"],
+            reasoning=json.loads(d["reasoning"] or "[]"),
+            output=d["output"],
+            reward=d["reward"],
+            self_eval=json.loads(d["self_eval"] or "{}"),
+            pattern_id=d["pattern_id"],
+        )
+
+    async def list_thought_logs(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        pattern_id: str | None = None,
+        min_reward: float | None = None,
+    ) -> list[ThoughtLog]:
+        """ThoughtLog をリスト取得する。
+
+        Args:
+            limit:      最大取得件数。
+            offset:     スキップ件数。
+            pattern_id: 絞り込むパターン ID (None = 全件)。
+            min_reward: この値以上の reward を持つログのみ返す。
+        """
+        conditions: list[str] = []
+        params: list[Any] = []
+
+        if pattern_id is not None:
+            conditions.append("pattern_id = ?")
+            params.append(pattern_id)
+        if min_reward is not None:
+            conditions.append("reward >= ?")
+            params.append(min_reward)
+
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        cursor = await self._db.execute(
+            f"SELECT * FROM thought_logs {where} ORDER BY timestamp DESC LIMIT ? OFFSET ?",
+            (*params, limit, offset),
+        )
+        rows = await cursor.fetchall()
+        return [
+            ThoughtLog(
+                id=dict(r)["id"],
+                timestamp=datetime.fromisoformat(dict(r)["timestamp"]),
+                input=dict(r)["input"],
+                reasoning=json.loads(dict(r)["reasoning"] or "[]"),
+                output=dict(r)["output"],
+                reward=dict(r)["reward"],
+                self_eval=json.loads(dict(r)["self_eval"] or "{}"),
+                pattern_id=dict(r)["pattern_id"],
+            )
+            for r in rows
+        ]
+
+    async def get_pattern_success_rate(
+        self,
+        pattern_id: str,
+        success_threshold: float = 0.8,
+    ) -> tuple[float, int]:
+        """指定パターン ID の成功率と総件数を返す。
+
+        Args:
+            pattern_id:        集計対象のパターン ID。
+            success_threshold: この reward 以上を「成功」とみなす閾値。
+
+        Returns:
+            (success_rate, total_count) のタプル。件数 0 の場合は (0.0, 0)。
+        """
+        cursor = await self._db.execute(
+            """
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN reward >= ? THEN 1 ELSE 0 END) AS successes
+            FROM thought_logs
+            WHERE pattern_id = ?
+            """,
+            (success_threshold, pattern_id),
+        )
+        row = await cursor.fetchone()
+        total = row[0] or 0
+        successes = row[1] or 0
+        if total == 0:
+            return (0.0, 0)
+        return (successes / total, total)
+
+    async def list_patterns_above_threshold(
+        self,
+        success_threshold: float = 0.8,
+        registration_threshold: float = 0.9,
+        min_count: int = 5,
+    ) -> list[dict[str, Any]]:
+        """success_rate が registration_threshold を超えるパターンを返す。
+
+        Args:
+            success_threshold:    reward >= この値を「成功」とカウント。
+            registration_threshold: この成功率以上のパターンを返す。
+            min_count:           最小サンプル数。これ未満のパターンは除外。
+
+        Returns:
+            [{pattern_id, success_rate, total_count, mean_reward}, ...] のリスト。
+        """
+        cursor = await self._db.execute(
+            """
+            SELECT
+                pattern_id,
+                COUNT(*) AS total_count,
+                AVG(reward) AS mean_reward,
+                SUM(CASE WHEN reward >= ? THEN 1 ELSE 0 END) * 1.0 / COUNT(*) AS success_rate
+            FROM thought_logs
+            WHERE pattern_id IS NOT NULL
+            GROUP BY pattern_id
+            HAVING total_count >= ? AND success_rate >= ?
+            ORDER BY success_rate DESC
+            """,
+            (success_threshold, min_count, registration_threshold),
+        )
+        rows = await cursor.fetchall()
+        return [
+            {
+                "pattern_id": dict(r)["pattern_id"],
+                "success_rate": dict(r)["success_rate"],
+                "total_count": dict(r)["total_count"],
+                "mean_reward": dict(r)["mean_reward"],
+            }
+            for r in rows
+        ]
