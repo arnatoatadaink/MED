@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import html as html_lib
 import logging
 import re
 
@@ -130,7 +131,7 @@ class StackOverflowRetriever(BaseRetriever):
             best_ans = self._pick_best_answer(ans_list, q.get("accepted_answer_id"))
 
             if best_ans:
-                body = _sanitize(_strip_html(best_ans.get("body", "")))
+                body = _sanitize(html_lib.unescape(_strip_html(best_ans.get("body", ""))))
                 ans_score = best_ans.get("score", 0)
                 is_accepted = best_ans.get("is_accepted", False)
 
@@ -140,7 +141,7 @@ class StackOverflowRetriever(BaseRetriever):
 
                 results.append(RawResult(
                     title=q_title,
-                    content=body[:2000],
+                    content=body,
                     url=q_link,
                     source=self.source_name,
                     score=float(ans_score),
@@ -161,7 +162,7 @@ class StackOverflowRetriever(BaseRetriever):
                 logger.debug("No suitable answer for q=%d, using question body as fallback", qid)
                 results.append(RawResult(
                     title=q_title,
-                    content=q_body[:2000],
+                    content=q_body,
                     url=q_link,
                     source=self.source_name,
                     score=max(float(q.get("score", 0)) * 0.3, 0.1),  # 質問は低スコア

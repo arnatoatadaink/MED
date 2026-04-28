@@ -47,9 +47,8 @@ class TavilyRetriever(BaseRetriever):
     def source_name(self) -> str:
         return "tavily"
 
-    def __init__(self, include_raw_content: bool = True) -> None:
+    def __init__(self, include_raw_content: bool = False) -> None:
         self._api_key = os.environ.get("TAVILY_API_KEY", "")
-        # True にすると全文コンテンツを取得（断片化防止）
         self._include_raw_content = include_raw_content
 
     def is_available(self) -> bool:
