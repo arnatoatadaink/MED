@@ -87,34 +87,40 @@
 ## F. メモリ品質目標（シード継続）
 > 📄 `plan_programming_seed.md`
 
-**現状: approved 5,044件 / FAISS code 11,813 vectors（2026-04-11）**
+**現状: approved 10,111件 / FAISS code 25,389 vectors（2026-04-28）**
+- ✅ approved 10,000件目標 達成済み（Apr 28確認）
+- needs_update: 6,304件（大幅増。主因: github_docs NodeJS内部リンク問題 → F-5で対処中）
+- mature はローカルモデル（LM Studio / FastFlowLM）が継続稼働中
 
-### F-1. 日次 seed_and_mature ジョブ 🔴
-- ✅ Apr 9: approved +302件（gemma-4-31b 429問題で低調）
-- ✅ Apr 10: approved +175件（nemotron-3-nano-30b で安定稼働・承認率65%）
-- 🔴 **Apr 11 ジョブ起動**（JST 09:00以降）
-  ```bash
-  poetry run python scripts/seed_and_mature.py \
-    --questions scripts/questions.txt \
-    --exclude-sources tavily \
-    --top-k 5 --limit 150 \
-    --provider openrouter \
-    --model nvidia/nemotron-3-nano-30b-a3b:free
-  ```
-- OpenRouter 日次上限: 950件/UTC日。毎日 JST 09:00 以降に起動
-- 目標: approved **10,000件**（現状 5,044件）
+### F-1. 日次 seed_and_mature ジョブ 🟡（mature はローカル継続中）
+- ✅ Apr 9: approved +302件
+- ✅ Apr 10: approved +175件
+- ✅ **approved 10,000件 目標達成**（2026-04-28確認）
+- mature 継続: LM Studio / FastFlowLM がローカルで稼働。OpenRouter は停止中（厳格さ不足 + 429問題）
+- OpenRouter 再活用候補: `openai/gpt-4o-mini` 系 — 厳格さが若干不足するため「切り口の異なるドメイン」のmatureに限定使用を検討
+- 🟡 **OpenRouter 再活用**: GPT-OSS-120b を異なる観点でのmaturation（F-2と連携）
 
-### F-2. seed_from_docs.py 本番実行 🔴
+### F-2. seed_from_docs.py 本番実行 🟡（mature なし seed 継続中）
 > 📄 `plan_programming_seed.md` カテゴリ I〜L（見込み 2,150〜4,200件）
-- 🔴 GitHub ドキュメントリポジトリ（**Node.js 除く**・tldr-pages / cpython / MDN）
-  - ⚠️ `data/doc_urls/github_doc_repos.yaml` の Node.js を `enabled: false` に変更済み（2026-04-11）
-  - 再有効化は F-5 の Chunker 改善後
+
+**2026-04-28 現状**:
+- URLリスト（Arch Wiki / Python docs / Linux Command Line）: ✅ 概ね seeded 済み
+- github_docs: seeding 実施中（--mature なし、ローカルモデルで消化）
+  - 追加余地大: Django(0件), TypeScript(2件), MDN JS/CSS(64件)
+  - 2026-04-28 seed_from_docs.py --source github_docs --max-files 100 実行中
+
+**man-pages 制約**:
+- `mkerrisk/man-pages` は troff 形式（.1/.7）のため github_docs_fetcher 非対応
+- 代替案: `man7.org` の HTML を url_list で取得（`data/doc_urls/man7org.txt` 作成が必要）
+- 🟡 `data/doc_urls/man7org.txt` 作成（man1コマンド / man7概念 優先URL列挙）
+
+- 🟡 GitHub ドキュメントリポジトリ（成熟 repos はローカル mature 待ち）
   ```bash
-  poetry run python scripts/seed_from_docs.py --source github_docs --max-files 100 --mature --provider openrouter
+  poetry run python scripts/seed_from_docs.py --source github_docs --max-files 100
   ```
-- 🔴 URLリスト（Arch Wiki / Python docs / Linux Command Line）
+- 🟡 questions_bridge.txt での seed 継続
   ```bash
-  poetry run python scripts/seed_from_docs.py --source url_list --mature --provider openrouter
+  poetry run python scripts/seed_only.py --questions-file scripts/questions_bridge.txt
   ```
 
 ### F-3. needs_update 再mature 🟡

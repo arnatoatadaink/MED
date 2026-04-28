@@ -38,6 +38,9 @@ conversation:
   user_faiss_base: "data/faiss_indices/user_{user_id}"
   knowledge_faiss_base: "data/faiss_indices/knowledge"
 
+rag:
+  faiss_k: 5          # FAISS 近傍検索数。推奨範囲: 3〜5（ICL Bayesian収束理論: k=3〜5 で指数収束）
+
 knowledge_graph:
   backend: "networkx"              # "networkx" (default) or "neo4j"
   # Neo4j 設定（backend: neo4j 時のみ使用）

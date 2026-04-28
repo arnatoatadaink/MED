@@ -193,6 +193,7 @@ class RAGConfig(BaseModel):
     verify_results: bool = True
     chunk_size: int = 512
     chunk_overlap: int = 50
+    faiss_k: int = 5  # FAISS 近傍検索数。ICL Bayesian収束理論: k=3〜5 で指数収束 O(e^{-ck})
 
 
 # ============================================================================

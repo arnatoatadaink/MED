@@ -35,7 +35,7 @@ sources:
     enabled: true
     max_results: 5
     search_depth: "advanced"
-    include_raw_content: true   # 全文取得（断片化防止）
+    include_raw_content: false  # スニペット取得（全文取得は過剰チャンク・無関係内容混入の原因）
 
   arxiv:
     enabled: true

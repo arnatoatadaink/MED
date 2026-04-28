@@ -297,7 +297,7 @@ class MemoryManager:
         self,
         query: str,
         domain: str | None = None,
-        k: int = 5,
+        k: int | None = None,
         min_score: float = -1.0,
     ) -> list[SearchResult]:
         """クエリテキストでベクトル検索を行い、メタデータを付与して返す。
@@ -312,6 +312,8 @@ class MemoryManager:
             スコア降順の SearchResult リスト。
         """
         self._ensure_initialized()
+        if k is None:
+            k = get_settings().rag.faiss_k
 
         query_vec = self.embedder.embed(query).reshape(1, -1)
 
@@ -355,7 +357,7 @@ class MemoryManager:
         self,
         query: str,
         domain: str | None = None,
-        k: int = 5,
+        k: int | None = None,
         min_score: float = -1.0,
     ) -> list[SearchResult]:
         """FAISS ベクトル検索 + FTS5 全文検索 + エイリアス LIKE のハイブリッド検索。
@@ -378,6 +380,8 @@ class MemoryManager:
             スコア降順の SearchResult リスト。
         """
         self._ensure_initialized()
+        if k is None:
+            k = get_settings().rag.faiss_k
 
         # ── 1. FAISS ベクトル検索 ──────────────────
         faiss_results = await self.search(query, domain=domain, k=k, min_score=min_score)
