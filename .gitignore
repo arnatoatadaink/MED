@@ -2,37 +2,47 @@ __pycache__/
 *.pyc
 *.pyo
 .env
-data/faiss_indices/
-data/faiss_test*/
-data/faiss_test_e2e/
-data/metadata.db
-data/users.db
-data/conversations.db
-data/conversations.db-shm
-data/conversations.db-wal
-data/adapters/
-data/training_logs/
-data/models/flan-t5-small/
-data/models/flan-t5-small-crag/
-data/models/Qwen2.5-0.5B-Instruct/
-data/models/Qwen2.5-0.5B-Instruct-crag/
-data/training/
+
+# data/ は GitHub 管理対象外（サイズ大）
+data/
+
+# Claude CLI 運用ファイル（ローカル専用）
+CLAUDE.md
+CLAUDE_USER.md
+.claude/
+forUser/
+
+# 設計ドキュメント（作業中・ローカル専用）
+redesign_en*.md
+
+# Python 環境
 .venv/
 venv/
 dist/
 *.egg-info/
+
+# 型チェック・テストキャッシュ
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
-wandb/
-*.so
-*.dylib
-docs/build/
-configs/llm_config.local.yaml
 .testmondata
 .testmondata-shm
 .testmondata-wal
-HANDOFF_*.md
+
+# 学習ログ
+wandb/
+
+# ビルド成果物
+*.so
+*.dylib
+docs/build/
+
+# ローカル設定
+configs/llm_config.local.yaml
 .restic/
 poetry_run_*.bat
 scripts/claude_commit.sh
+HANDOFF_*.md
+
+# その他 OS / エディタ
+temperature/
