@@ -51,9 +51,11 @@ MODELS = [
     # Qwen3.5-9b think/nothink 比較
     ("fastflowlm",       "qwen3.5:9b"),          # /nothink ON  (thinking disabled)
     ("fastflowlm_think", "qwen3.5:9b"),          # /nothink OFF (thinking enabled)
+    # OpenRouter GPT-OSS-120B テスト
+    ("openrouter", "openai/gpt-oss-120b:free"),
     # Phase 1 ローカル並列テスト（必要時に有効化）
     # ("lmstudio",         "gemma-4-26b-a4b-it@q8_0"),
-    # Phase 2: OpenRouter (後回し)
+    # Phase 2: OpenRouter その他モデル (後回し)
     # ("openrouter", "nvidia/nemotron-3-nano-30b-a3b:free"),
     # ("openrouter", "nvidia/nemotron-nano-12b-v2-vl:free"),
     # ("openrouter", "nvidia/nemotron-3-super-120b-a12b:free"),
@@ -517,6 +519,7 @@ _NEMOTRON_MODELS = [
     ("openrouter", "nvidia/nemotron-3-nano-30b-a3b:free"),
     ("openrouter", "nvidia/nemotron-nano-12b-v2-vl:free"),
     ("openrouter", "nvidia/nemotron-3-super-120b-a12b:free"),
+    ("openrouter", "openai/gpt-oss-120b:free"),
 ]
 
 # compare_think.md Section8 の固定文書 IDs

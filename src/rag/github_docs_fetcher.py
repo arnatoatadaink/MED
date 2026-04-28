@@ -345,6 +345,9 @@ class GitHubDocsFetcher:
         # 行頭の # ヘッダーマーカーを保持（内容はそのまま）
         # インラインコードのバッククォートを除去（内容は保持）
         text = re.sub(r'`([^`\n]+)`', r'\1', text)
+        # 未解決内部リンク記法を除去: [text][ref] → text, [text][] → text
+        # （Node.js API docs 等で多用される記法。属性としては extract_internal_links で取得済み）
+        text = re.sub(r'\[([^\]]+)\]\[[^\]]*\]', r'\1', text)
         # 連続空行を2行に正規化
         text = re.sub(r'\n{3,}', '\n\n', text)
         return text.strip()

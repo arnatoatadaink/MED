@@ -39,7 +39,7 @@ import asyncio
 import logging
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 _ROOT = Path(__file__).parent.parent
@@ -105,6 +105,19 @@ _BUILTIN_QUESTIONS = [
 
 _OPENROUTER_PROVIDERS = {"openrouter"}
 
+# ソース別 domain_flag デフォルト（reviewer プロンプトの品質向上用）
+_DOMAIN_FLAG_MAP: dict[str, str] = {
+    "arxiv": "on_domain",
+    "github": "on_domain",
+    "stackoverflow": "on_domain",
+    "tavily": "on_domain",
+    "web_docs": "on_domain",
+}
+
+# github_docs は seed_from_docs.py 専任（chunk_markdown パイプライン必須）
+# RetrieverRouter に github_docs リトリーバーが追加された場合も除外する
+_SEED_AND_MATURE_EXCLUDED_SOURCES: frozenset[str] = frozenset({"github_docs"})
+
 
 def _utc_reset_action(provider: str) -> str:
     """UTC 日次リセット前の停止チェック（OpenRouter のみ対象）。
@@ -116,7 +129,7 @@ def _utc_reset_action(provider: str) -> str:
     """
     if provider not in _OPENROUTER_PROVIDERS:
         return "continue"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     h, m = now.hour, now.minute
     if h == 23 and m >= 55:
         return "stop"
@@ -128,7 +141,7 @@ def _utc_reset_action(provider: str) -> str:
 async def _wait_for_utc_reset() -> None:
     """UTC 23:50〜00:00 まで待機してリセットを待つ。"""
     while True:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         h, m, s = now.hour, now.minute, now.second
         if not (h == 23 and m >= 50):
             logger.info("UTC リセット完了 — 処理を再開します")
@@ -259,6 +272,13 @@ async def seed_and_mature(
         for result in results:
             content = getattr(result, "content", "")
             source = getattr(result, "source", "")
+
+            # github_docs は seed_from_docs.py 専任（chunk_markdown パイプライン必須）
+            if source in _SEED_AND_MATURE_EXCLUDED_SOURCES:
+                logger.debug("  Skipping %s result (use seed_from_docs.py): %s", source, getattr(result, "url", ""))
+                stats["quality_filtered"] += 1
+                continue
+
             min_len = 300 if source == "tavily" else 50
             if not content or len(content.strip()) < min_len:
                 stats["quality_filtered"] += 1
@@ -305,17 +325,21 @@ async def seed_and_mature(
 
             # FAISS 投入
             try:
+                result_source = getattr(result, "source", "manual")
+                extra_meta = dict(getattr(result, "metadata", {}) or {})
+                if "domain_flag" not in extra_meta:
+                    extra_meta["domain_flag"] = _DOMAIN_FLAG_MAP.get(result_source, "on_domain")
+
                 doc = Document(
                     content=content,
                     domain=Domain(domain),
                     source=SourceMeta(
-                        source_type=_SOURCE_MAP.get(
-                            getattr(result, "source", "manual"), SourceType.MANUAL
-                        ),
+                        source_type=_SOURCE_MAP.get(result_source, SourceType.MANUAL),
                         url=getattr(result, "url", ""),
                         title=getattr(result, "title", ""),
-                        extra=getattr(result, "metadata", {}) or {},
+                        extra=extra_meta,
                     ),
+                    content_hash=content_hash,
                 )
                 doc_id = await mm.add(doc)
                 new_doc_ids.append(doc_id)
@@ -591,7 +615,7 @@ def main() -> None:
 
     # サマリー
     print(f"\n{'='*50}")
-    print(f"  SUMMARY")
+    print("  SUMMARY")
     print(f"{'='*50}")
     for k, v in stats.items():
         print(f"  {k:>12}: {v}")

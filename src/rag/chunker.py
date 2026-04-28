@@ -40,6 +40,10 @@ _LINE_SPLIT_RE = re.compile(r'\n')
 _HEADING_RE = re.compile(r'^(#{1,3})\s+(.+)$', re.MULTILINE)
 # 実質的な文を数えるための簡易パターン（コードブロック・見出し・空行を除く）
 _MEANINGFUL_LINE_RE = re.compile(r'^(?!#|```|\s*$).{20,}', re.MULTILINE)
+# Markdown 内部リンク抽出: [text][] または [text][ref] 形式
+# [text][] → text をターゲットとして採用
+# [text][ref] → ref をターゲットとして採用（ref が空でない場合）
+_MD_LINK_RE = re.compile(r'\[([^\]]+)\]\[([^\]]*)\]')
 
 
 class Chunker:
@@ -234,6 +238,32 @@ class Chunker:
 
         return chunks
 
+    @staticmethod
+    def extract_internal_links(text: str) -> list[str]:
+        """Markdown の [text][] / [text][ref] 形式から内部リンクターゲットを抽出する。
+
+        - [text][]  → text をターゲットとして採用
+        - [text][ref] → ref をターゲットとして採用
+
+        コードブロック内のリンクは除外する。
+
+        Returns:
+            重複なしのリンクターゲット文字列リスト。
+        """
+        # コードブロック（```...```）を除去してから抽出
+        cleaned = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
+        cleaned = re.sub(r'`[^`]+`', '', cleaned)
+
+        targets: list[str] = []
+        seen: set[str] = set()
+        for m in _MD_LINK_RE.finditer(cleaned):
+            link_text, ref = m.group(1), m.group(2)
+            target = ref.strip() if ref.strip() else link_text.strip()
+            if target and target not in seen:
+                seen.add(target)
+                targets.append(target)
+        return targets
+
     def chunk_result(
         self,
         result: RawResult,
@@ -254,8 +284,10 @@ class Chunker:
         # GITHUB_DOCS は見出し単位チャンキングを使用
         if result.source == "github_docs":
             chunks = self.chunk_markdown(full_text)
+            chunker_type = "markdown"
         else:
             chunks = self.chunk_text(full_text)
+            chunker_type = "text"
 
         if not chunks:
             return []
@@ -273,12 +305,19 @@ class Chunker:
                 tags=[result.source],
                 extra=result.metadata,
             )
+            internal_links = (
+                self.extract_internal_links(chunk_text)
+                if chunker_type == "markdown"
+                else []
+            )
             doc = Document(
                 content=chunk_text,
                 domain=domain,
                 source=source_meta,
                 chunk_index=idx,
                 parent_id=parent_id or (first_doc_id if idx > 0 else None),
+                chunker_type=chunker_type,
+                internal_links=internal_links,
             )
             if idx == 0:
                 first_doc_id = doc.id

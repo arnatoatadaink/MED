@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """scripts/seed_from_docs.py — GitHub ドキュメントリポジトリ / URL リストから FAISS に投入
 
+github_docs ソースの唯一の投入経路。chunk_markdown パイプライン（見出し単位分割）を使用する。
+seed_and_mature.py / seed_only.py は github_docs を扱わない。
+
 外部 RAG（arXiv/SO）ではカバーできない公式ドキュメント・教科書を取得し、
 FAISS メモリに追加する。オプションで Teacher による品質審査も実行する。
 
@@ -106,20 +109,30 @@ async def seed_from_docs(
 
     logger.info("Total raw results: %d", len(raw_results))
 
-    # ── Phase 1.5: ブラックリストフィルタ ────────────────────────────
-    filtered: list[RawResult] = []
-    blacklisted_count = 0
+    # ── Phase 1.5: URL 単位の既取得フィルタ ──────────────────────────
+    # DB に登録済みの source_url を一括取得し、該当する RawResult をブロック単位でスキップ。
+    # URL が一致すれば全チャンクをスキップできるため、content_hash 比較より大幅に効率的。
+    # URL が空の結果はスキップできないため通常処理に回す。
+    seeded_urls: set[str] = await mm.store.get_seeded_urls()
+    logger.info("Loaded %d seeded URLs for pre-filter", len(seeded_urls))
+
+    total_raw = len(raw_results)
+    filtered_results: list[RawResult] = []
+    url_skipped = 0
     for r in raw_results:
-        r_url = getattr(r, "url", "") or ""
-        r_title = getattr(r, "title", "") or ""
-        if await mm.store.is_blacklisted(source_url=r_url, source_title=r_title):
-            logger.debug("Blacklisted (skip): %s", r_url or r_title)
-            blacklisted_count += 1
+        r_url = (r.url or "").strip()
+        if r_url and r_url in seeded_urls:
+            url_skipped += 1
         else:
-            filtered.append(r)
-    if blacklisted_count:
-        logger.info("Blacklist filtered: %d / %d results skipped", blacklisted_count, len(raw_results))
-    raw_results = filtered
+            filtered_results.append(r)
+    if url_skipped:
+        logger.info("URL pre-filter: %d / %d results skipped (already seeded)", url_skipped, len(raw_results))
+    raw_results = filtered_results
+
+    if not raw_results:
+        logger.info("All results already seeded. Exiting.")
+        await mm.close()
+        return
 
     # ── Phase 2: チャンク化 ───────────────────────────────────────────
     from src.memory.schema import Document
@@ -132,15 +145,42 @@ async def seed_from_docs(
         return
 
     # ── Phase 3: 重複排除 + FAISS 投入 ───────────────────────────────
+    from src.memory.deduplicator import Deduplicator
+
+    dedup = Deduplicator(near_dup_threshold=0.95)
+
+    # 既存 content_hash を一括ロード（チャンク虫食い防止）
+    existing_hashes: dict[str, str] = {}
+    try:
+        async with mm.store._db.execute(
+            "SELECT id, content_hash FROM documents WHERE content_hash IS NOT NULL"
+        ) as cur:
+            async for row in cur:
+                existing_hashes[row[0]] = row[1]
+        logger.info("Loaded %d existing content hashes for dedup", len(existing_hashes))
+    except Exception:
+        logger.warning("Could not load existing hashes; dedup will rely on blacklist only")
+
     added = 0
     duplicates = 0
     errors = 0
 
     for i, doc in enumerate(docs):
         try:
+            content_hash = dedup.content_hash(doc.content)
+            dup_result = dedup.check(
+                content_hash=content_hash,
+                existing_hashes=existing_hashes,
+            )
+            if dup_result.is_duplicate:
+                duplicates += 1
+                continue
+
+            doc = doc.model_copy(update={"content_hash": content_hash})
             doc_id = await mm.add(doc)
             if doc_id:
                 added += 1
+                existing_hashes[doc_id] = content_hash
             else:
                 duplicates += 1
         except Exception as e:
@@ -161,8 +201,8 @@ async def seed_from_docs(
         from src.memory.maturation.difficulty_tagger import DifficultyTagger
 
         gw = LLMGateway()
-        reviewer = MemoryReviewer(gateway=gw, store=mm.store)
-        tagger = DifficultyTagger(gateway=gw)
+        reviewer = MemoryReviewer(gateway=gw, store=mm.store, provider=provider, model=model)
+        tagger = DifficultyTagger(gateway=gw, provider=provider, model=model)
 
         # 未審査ドキュメントを取得
         unreviewed = await mm.store.get_unreviewed(limit=added + 50)
@@ -171,10 +211,10 @@ async def seed_from_docs(
         approved = rejected = tagged = 0
         for i, doc in enumerate(unreviewed):
             try:
-                result = await reviewer.review(doc, provider=provider, model=model)
+                result = await reviewer.review(doc)
                 if result.approved:
                     approved += 1
-                    await tagger.tag(doc, provider=provider, model=model)
+                    await tagger.tag(doc)
                     tagged += 1
                 else:
                     rejected += 1
@@ -194,10 +234,12 @@ async def seed_from_docs(
     print("\n" + "=" * 50)
     print("  SUMMARY")
     print("=" * 50)
-    print(f"    raw_results: {len(raw_results)}")
+    print(f"    raw_results: {total_raw}")
+    print(f"    url_skipped: {url_skipped}  (already seeded)")
+    print(f"    to_chunk:    {len(raw_results)}")
     print(f"    chunked:     {len(docs)}")
     print(f"    added:       {added}")
-    print(f"    duplicates:  {duplicates}")
+    print(f"    duplicates:  {duplicates}  (same content, different URL)")
     print(f"    errors:      {errors}")
     if mature:
         print(f"    mature:      yes (provider={provider})")
