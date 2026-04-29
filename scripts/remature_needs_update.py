@@ -27,45 +27,66 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def _claim_docs(db, source: str | None, limit: int) -> list:
-    """needs_update ドキュメントを排他的に取得し unreviewed にマークする。
+def _claim_docs_sync(db_path: str, source: str | None, limit: int) -> list:
+    """needs_update ドキュメントを排他的に取得し unreviewed にマークする（同期版）。
 
-    単一の UPDATE ... RETURNING で SELECT と UPDATE をアトミックに実行する。
-    SQLite は書き込みを直列化するため、並列起動しても同じドキュメントを重複処理しない。
-    接続の timeout=30 が書き込みロック待ちのリトライを担う。
-    プロセスが途中終了しても docs は unreviewed に残り、通常レビュー対象になる。
+    isolation_level=None (autocommit) + BEGIN IMMEDIATE で排他ロックを取得してから
+    SELECT → UPDATE → COMMIT を実行する。aiosqlite の暗黙トランザクションと干渉しない
+    独立した接続を使うことで "database is locked" を回避する。
+    並列起動しても同じドキュメントを重複処理しない。
     """
-    if source:
-        cursor = await db.execute(
-            """
-            UPDATE documents
-            SET review_status = 'unreviewed', updated_at = datetime('now')
-            WHERE id IN (
-                SELECT id FROM documents
-                WHERE review_status = 'needs_update' AND source_type = ?
-                ORDER BY created_at ASC LIMIT ?
+    import sqlite3
+    import time
+
+    conn = sqlite3.connect(db_path, timeout=60, isolation_level=None)
+    conn.row_factory = sqlite3.Row
+    try:
+        for attempt in range(10):
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                break
+            except sqlite3.OperationalError as e:
+                if "locked" not in str(e) or attempt == 9:
+                    raise
+                time.sleep(1 + attempt)
+
+        if source:
+            cursor = conn.execute(
+                "SELECT * FROM documents WHERE review_status = 'needs_update' AND source_type = ? "
+                "ORDER BY created_at ASC LIMIT ?",
+                (source, limit),
             )
-            RETURNING *
-            """,
-            (source, limit),
-        )
-    else:
-        cursor = await db.execute(
-            """
-            UPDATE documents
-            SET review_status = 'unreviewed', updated_at = datetime('now')
-            WHERE id IN (
-                SELECT id FROM documents
-                WHERE review_status = 'needs_update'
-                ORDER BY created_at ASC LIMIT ?
+        else:
+            cursor = conn.execute(
+                "SELECT * FROM documents WHERE review_status = 'needs_update' "
+                "ORDER BY created_at ASC LIMIT ?",
+                (limit,),
             )
-            RETURNING *
-            """,
-            (limit,),
-        )
-    rows = await cursor.fetchall()
-    await db.commit()
-    return rows
+        rows = cursor.fetchall()
+
+        if rows:
+            ids = [row["id"] for row in rows]
+            placeholders = ",".join("?" * len(ids))
+            conn.execute(
+                f"UPDATE documents SET review_status = 'unreviewed', updated_at = datetime('now') "
+                f"WHERE id IN ({placeholders})",
+                ids,
+            )
+        conn.execute("COMMIT")
+        return rows
+    except Exception:
+        try:
+            conn.execute("ROLLBACK")
+        except Exception:
+            pass
+        raise
+    finally:
+        conn.close()
+
+
+async def _claim_docs(db_path: str, source: str | None, limit: int) -> list:
+    """_claim_docs_sync をスレッドで非同期実行する。"""
+    return await asyncio.to_thread(_claim_docs_sync, db_path, source, limit)
 
 
 async def remature(
@@ -90,7 +111,7 @@ async def remature(
     tagger = DifficultyTagger(gateway, provider=provider, model=model)
 
     # needs_update を排他クレーム（並列起動時の重複処理を防ぐ）
-    rows = await _claim_docs(mm.store._db, source, limit)
+    rows = await _claim_docs(mm.store._db_path, source, limit)
     docs = [_row_to_doc(row) for row in rows]
 
     if not docs:
