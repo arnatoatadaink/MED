@@ -30,37 +30,41 @@ logger = logging.getLogger(__name__)
 async def _claim_docs(db, source: str | None, limit: int) -> list:
     """needs_update ドキュメントを排他的に取得し unreviewed にマークする。
 
-    BEGIN IMMEDIATE で書き込みロックを取得してから SELECT + UPDATE を実行するため、
-    並列起動しても同じドキュメントを重複処理しない。
+    単一の UPDATE ... RETURNING で SELECT と UPDATE をアトミックに実行する。
+    SQLite は書き込みを直列化するため、並列起動しても同じドキュメントを重複処理しない。
+    接続の timeout=30 が書き込みロック待ちのリトライを担う。
     プロセスが途中終了しても docs は unreviewed に残り、通常レビュー対象になる。
     """
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        if source:
-            cursor = await db.execute(
-                "SELECT * FROM documents WHERE review_status = 'needs_update' AND source_type = ? "
-                "ORDER BY created_at ASC LIMIT ?",
-                (source, limit),
+    if source:
+        cursor = await db.execute(
+            """
+            UPDATE documents
+            SET review_status = 'unreviewed', updated_at = datetime('now')
+            WHERE id IN (
+                SELECT id FROM documents
+                WHERE review_status = 'needs_update' AND source_type = ?
+                ORDER BY created_at ASC LIMIT ?
             )
-        else:
-            cursor = await db.execute(
-                "SELECT * FROM documents WHERE review_status = 'needs_update' "
-                "ORDER BY created_at ASC LIMIT ?",
-                (limit,),
+            RETURNING *
+            """,
+            (source, limit),
+        )
+    else:
+        cursor = await db.execute(
+            """
+            UPDATE documents
+            SET review_status = 'unreviewed', updated_at = datetime('now')
+            WHERE id IN (
+                SELECT id FROM documents
+                WHERE review_status = 'needs_update'
+                ORDER BY created_at ASC LIMIT ?
             )
-        rows = await cursor.fetchall()
-        if rows:
-            ids = [row[0] for row in rows]  # id は先頭カラム
-            placeholders = ",".join("?" * len(ids))
-            await db.execute(
-                f"UPDATE documents SET review_status = 'unreviewed', updated_at = datetime('now') "
-                f"WHERE id IN ({placeholders})",
-                ids,
-            )
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        raise
+            RETURNING *
+            """,
+            (limit,),
+        )
+    rows = await cursor.fetchall()
+    await db.commit()
     return rows
 
 
