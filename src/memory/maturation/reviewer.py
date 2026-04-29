@@ -56,6 +56,12 @@ Note on domain_flag:
   retained for associative memory diversity. Approve if the document is high-quality
   within its own field, even if not directly CS/ML relevant. Lower the relevance
   weight and focus on accuracy and clarity instead.
+- practical_reference: Man pages, wikis, command references, system documentation
+  (e.g. Arch Wiki, Linux command references, Python stdlib docs). Approve if the
+  content is accurate, actionable, and useful as a quick reference for system
+  operation or programming — even if it is brief, tabular, or lacks narrative
+  explanation. Do NOT penalise list/table format or terse style. Relevance criterion:
+  is this useful to a developer or system administrator?
 
 Set needs_supplement=true if the document meets ANY of these conditions:
 1. Fragment / incomplete: truncated mid-sentence, missing context to be understood

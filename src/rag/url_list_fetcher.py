@@ -11,6 +11,7 @@ data/doc_urls/*.txt に記載された URL を順次フェッチし、RawResult 
 from __future__ import annotations
 
 import asyncio
+import html as html_module
 import logging
 import re
 import time
@@ -164,6 +165,7 @@ class UrlListFetcher:
                 "domain": self._get_domain(url),
                 "content_type": "documentation",
                 "direct_fetch": True,
+                "domain_flag": "practical_reference",
             },
         )
 
@@ -217,14 +219,8 @@ class UrlListFetcher:
             )
         # HTML タグを除去
         text = _HTML_TAG_RE.sub(" ", content_html)
-        # HTML エンティティ
-        text = (text
-                .replace("&nbsp;", " ")
-                .replace("&amp;", "&")
-                .replace("&lt;", "<")
-                .replace("&gt;", ">")
-                .replace("&quot;", '"')
-                .replace("&#39;", "'"))
+        # HTML エンティティ（&#32; &#8239; など数値参照を含む全パターン）
+        text = html_module.unescape(text)
         # 連続空白を正規化
         text = re.sub(r' {2,}', ' ', text)
         text = re.sub(r'\n{3,}', '\n\n', text)
