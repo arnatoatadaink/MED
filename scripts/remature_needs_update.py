@@ -12,9 +12,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-import os
 import sys
-import time
 
 sys.path.insert(0, ".")
 from dotenv import load_dotenv
@@ -29,6 +27,43 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def _claim_docs(db, source: str | None, limit: int) -> list:
+    """needs_update ドキュメントを排他的に取得し unreviewed にマークする。
+
+    BEGIN IMMEDIATE で書き込みロックを取得してから SELECT + UPDATE を実行するため、
+    並列起動しても同じドキュメントを重複処理しない。
+    プロセスが途中終了しても docs は unreviewed に残り、通常レビュー対象になる。
+    """
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        if source:
+            cursor = await db.execute(
+                "SELECT * FROM documents WHERE review_status = 'needs_update' AND source_type = ? "
+                "ORDER BY created_at ASC LIMIT ?",
+                (source, limit),
+            )
+        else:
+            cursor = await db.execute(
+                "SELECT * FROM documents WHERE review_status = 'needs_update' "
+                "ORDER BY created_at ASC LIMIT ?",
+                (limit,),
+            )
+        rows = await cursor.fetchall()
+        if rows:
+            ids = [row[0] for row in rows]  # id は先頭カラム
+            placeholders = ",".join("?" * len(ids))
+            await db.execute(
+                f"UPDATE documents SET review_status = 'unreviewed', updated_at = datetime('now') "
+                f"WHERE id IN ({placeholders})",
+                ids,
+            )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    return rows
+
+
 async def remature(
     source: str | None,
     provider: str,
@@ -40,6 +75,7 @@ async def remature(
     from src.memory.maturation.difficulty_tagger import DifficultyTagger
     from src.memory.maturation.reviewer import MemoryReviewer
     from src.memory.memory_manager import MemoryManager
+    from src.memory.metadata_store import _row_to_doc  # type: ignore[attr-defined]
 
     embedder = Embedder()
     mm = MemoryManager(embedder=embedder)
@@ -49,22 +85,9 @@ async def remature(
     reviewer = MemoryReviewer(gateway, mm.store, provider=provider, model=model)
     tagger = DifficultyTagger(gateway, provider=provider, model=model)
 
-    # needs_update ドキュメントを取得
-    if source:
-        cursor = await mm.store._db.execute(
-            "SELECT * FROM documents WHERE review_status = 'needs_update' AND source_type = ? "
-            "ORDER BY created_at ASC LIMIT ?",
-            (source, limit),
-        )
-    else:
-        cursor = await mm.store._db.execute(
-            "SELECT * FROM documents WHERE review_status = 'needs_update' "
-            "ORDER BY created_at ASC LIMIT ?",
-            (limit,),
-        )
-
-    from src.memory.metadata_store import _row_to_doc  # type: ignore[attr-defined]
-    docs = [_row_to_doc(row) for row in await cursor.fetchall()]
+    # needs_update を排他クレーム（並列起動時の重複処理を防ぐ）
+    rows = await _claim_docs(mm.store._db, source, limit)
+    docs = [_row_to_doc(row) for row in rows]
 
     if not docs:
         logger.info("needs_update ドキュメントが見つかりませんでした")
@@ -76,10 +99,9 @@ async def remature(
         len(docs), source or "all", provider, model,
     )
 
-    reviewed = approved = rejected = hold = tagged = errors = 0
+    reviewed = approved = needs_update = hold = tagged = errors = 0
 
     for i, doc in enumerate(docs):
-        # まず unreviewed に戻してから審査
         try:
             result = await reviewer.review(doc)
             reviewed += 1
@@ -88,16 +110,15 @@ async def remature(
             errors += 1
             continue
 
-        elapsed_label = ""
         if result.approved:
             approved += 1
             status = "PASS"
         elif result.needs_supplement:
+            needs_update += 1
+            status = "NEEDS_UPDATE"
+        else:
             hold += 1
             status = "HOLD"
-        else:
-            rejected += 1
-            status = "FAIL"
 
         logger.info(
             "  [%d/%d] %s (quality=%.2f): %s",
@@ -107,7 +128,7 @@ async def remature(
         # 難易度タグ (PASS のみ)
         if result.approved:
             try:
-                tag_result = await tagger.tag(doc)
+                await tagger.tag(doc)
                 tagged += 1
             except Exception as e:
                 logger.warning("  Tagging error: %s", e)
@@ -115,14 +136,15 @@ async def remature(
     await mm.close()
 
     # サマリー
+    approval_pct = f"{approved / reviewed * 100:.1f}%" if reviewed else "N/A"
     print("\n" + "=" * 50)
     print("  RE-MATURE SUMMARY")
     print("=" * 50)
     print(f"       source: {source or 'all'}")
     print(f"     reviewed: {reviewed}")
-    print(f"     approved: {approved}  ({approved/reviewed*100:.1f}%)" if reviewed else "     approved: 0")
+    print(f"     approved: {approved}  ({approval_pct})")
+    print(f"  needs_update: {needs_update}")
     print(f"         hold: {hold}")
-    print(f"     rejected: {rejected}")
     print(f"       tagged: {tagged}")
     print(f"       errors: {errors}")
 
