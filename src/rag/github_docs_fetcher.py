@@ -313,6 +313,8 @@ class GitHubDocsFetcher:
         text = GitHubDocsFetcher._clean_markdown(text)
         # Stability ブロック引用を除去
         text = re.sub(r'^>\s*Stability:\s*\d\s*[-\u2013]\s*.+$', '', text, flags=re.MULTILINE)
+        # {TypeName} 型参照を展開: {FileHandle} → FileHandle
+        text = re.sub(r'\{([A-Za-z][A-Za-z0-9_]*)\}', r'\1', text)
         # 連続空行を正規化
         text = re.sub(r'\n{3,}', '\n\n', text)
         return text.strip()
@@ -359,15 +361,18 @@ class GitHubDocsFetcher:
         """
         # セクション下線を除去（=== --- ~~~ 等の行）
         text = re.sub(r'^[=\-~^"#*+`]{3,}\s*$', '', text, flags=re.MULTILINE)
-        # インラインマークアップ: :role:`text` → text
+        # インラインマークアップ: :role:`text` → text  (:ref:`label <target>` も同様)
         text = re.sub(r':[a-zA-Z_]+:`([^`]+)`', r'\1', text)
+        # :role:`text <target>` の残留 <target> を除去
+        text = re.sub(r'\s*<(?!https?://|/)[^>]{1,120}>', '', text)
+        # チルダ参照: ~module.attr → module.attr（短縮表示記法）
+        text = re.sub(r'~([A-Za-z][A-Za-z0-9_.]*)', r'\1', text)
         # ダブルバッククォート: ``code`` → code
         text = re.sub(r'``([^`]+)``', r'\1', text)
         # ディレクティブ行を除去（.. directive:: args）
         text = re.sub(r'^\.\. [a-zA-Z_-]+::.*$', '', text, flags=re.MULTILINE)
         # versionadded/versionchanged/deprecated 注記
         text = re.sub(r'^\.\. version\w+::\s*\S+', '', text, flags=re.MULTILINE)
-        # フィールドリスト: :param foo: → :param foo:（そのまま）
         # 連続空行を2行に正規化
         text = re.sub(r'\n{3,}', '\n\n', text)
         return text.strip()
