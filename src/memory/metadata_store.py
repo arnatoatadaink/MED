@@ -408,7 +408,7 @@ class MetadataStore:
         self._db = await aiosqlite.connect(self._db_path, timeout=30)
         self._db.row_factory = aiosqlite.Row
         await self._db.execute("PRAGMA journal_mode=WAL;")
-        await self._db.execute("PRAGMA busy_timeout=10000;")
+        await self._db.execute("PRAGMA busy_timeout=30000;")
         await self._db.execute("PRAGMA foreign_keys=ON;")
         await self._db.execute(_CREATE_TABLE_SQL)
         await self._db.execute(_CREATE_RAW_RESULTS_SQL)

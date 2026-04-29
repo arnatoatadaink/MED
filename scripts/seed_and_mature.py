@@ -398,32 +398,39 @@ async def seed_and_mature(
         if doc is None:
             continue
 
-        # 審査
-        try:
-            start = time.monotonic()
-            result = await reviewer.review(doc)
-            elapsed = time.monotonic() - start
-            stats["reviewed"] += 1
-            if result.approved:
-                stats["approved"] += 1
-            elif result.needs_supplement:
-                stats.setdefault("needs_supplement", 0)
-                stats["needs_supplement"] += 1
-            if result.needs_supplement:
-                status = "HOLD"
-            elif result.approved:
-                status = "PASS"
-            else:
-                status = "FAIL"
-            logger.info(
-                "  [%d/%d] Review %s (%.1fs, quality=%.2f): %s",
-                i + 1, len(new_doc_ids), status, elapsed,
-                result.quality_score, doc.content[:60],
-            )
-        except Exception as e:
-            logger.warning("  [%d/%d] Review error: %s", i + 1, len(new_doc_ids), e)
-            stats["errors"] += 1
+        # 審査（DB ロック等の一時的エラーは最大3回リトライ）
+        result = None
+        start = time.monotonic()
+        for attempt in range(3):
+            try:
+                result = await reviewer.review(doc)
+                break
+            except Exception as e:
+                if attempt == 2 or "locked" not in str(e):
+                    logger.warning("  [%d/%d] Review error: %s", i + 1, len(new_doc_ids), e)
+                    stats["errors"] += 1
+                    break
+                await asyncio.sleep(2 ** attempt)
+        if result is None:
             continue
+        elapsed = time.monotonic() - start
+        stats["reviewed"] += 1
+        if result.approved:
+            stats["approved"] += 1
+        elif result.needs_supplement:
+            stats.setdefault("needs_supplement", 0)
+            stats["needs_supplement"] += 1
+        if result.needs_supplement:
+            status = "NEEDS_UPDATE"
+        elif result.approved:
+            status = "PASS"
+        else:
+            status = "HOLD"
+        logger.info(
+            "  [%d/%d] Review %s (%.1fs, quality=%.2f): %s",
+            i + 1, len(new_doc_ids), status, elapsed,
+            result.quality_score, doc.content[:60],
+        )
 
         # 難易度タグ (HOLD はスキップ)
         if result.approved:
@@ -491,30 +498,37 @@ async def mature_only(
             logger.info("OpenRouter UTC リセット待機 (23:50〜23:55) — 00:00 まで一時停止 [%d/%d]", i, len(docs))
             await _wait_for_utc_reset()
 
-        # 審査
-        try:
-            start = time.monotonic()
-            result = await reviewer.review(doc)
-            elapsed = time.monotonic() - start
-            reviewed += 1
-            if result.approved:
-                approved += 1
-            elif result.needs_supplement:
-                needs_supplement += 1
-            if result.needs_supplement:
-                status = "HOLD"
-            elif result.approved:
-                status = "PASS"
-            else:
-                status = "FAIL"
-            logger.info(
-                "  [%d/%d] Review %s (%.1fs, quality=%.2f): %s",
-                i + 1, len(docs), status, elapsed,
-                result.quality_score, doc.content[:60],
-            )
-        except Exception as e:
-            logger.warning("  [%d/%d] Review error: %s", i + 1, len(docs), e)
+        # 審査（DB ロック等の一時的エラーは最大3回リトライ）
+        result = None
+        start = time.monotonic()
+        for attempt in range(3):
+            try:
+                result = await reviewer.review(doc)
+                break
+            except Exception as e:
+                if attempt == 2 or "locked" not in str(e):
+                    logger.warning("  [%d/%d] Review error: %s", i + 1, len(docs), e)
+                    break
+                await asyncio.sleep(2 ** attempt)
+        if result is None:
             continue
+        elapsed = time.monotonic() - start
+        reviewed += 1
+        if result.approved:
+            approved += 1
+        elif result.needs_supplement:
+            needs_supplement += 1
+        if result.needs_supplement:
+            status = "NEEDS_UPDATE"
+        elif result.approved:
+            status = "PASS"
+        else:
+            status = "HOLD"
+        logger.info(
+            "  [%d/%d] Review %s (%.1fs, quality=%.2f): %s",
+            i + 1, len(docs), status, elapsed,
+            result.quality_score, doc.content[:60],
+        )
 
         # 難易度タグ (HOLD はスキップ)
         if result.approved and doc.difficulty is None:

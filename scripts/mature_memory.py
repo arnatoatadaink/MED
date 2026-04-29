@@ -77,20 +77,28 @@ async def review_docs(
 
     results = []
     for i, doc in enumerate(docs):
-        try:
-            result = await reviewer.review(doc)
-            results.append(result)
-            status = "PASS" if result.approved else "FAIL"
-            print(
-                f"  [{i+1}/{len(docs)}] {status} "
-                f"(quality={result.quality_score:.2f} confidence={result.confidence:.2f}) "
-                f"{doc.content[:60]}..."
-            )
-        except Exception as e:
-            print(f"  [{i+1}/{len(docs)}] ERROR: {e}", file=sys.stderr)
+        result = None
+        for attempt in range(3):
+            try:
+                result = await reviewer.review(doc)
+                break
+            except Exception as e:
+                if attempt == 2 or "locked" not in str(e):
+                    print(f"  [{i+1}/{len(docs)}] ERROR: {e}", file=sys.stderr)
+                    break
+                await asyncio.sleep(2 ** attempt)
+        if result is None:
+            continue
+        results.append(result)
+        status = "PASS" if result.approved else ("NEEDS_UPDATE" if result.needs_supplement else "HOLD")
+        print(
+            f"  [{i+1}/{len(docs)}] {status} "
+            f"(quality={result.quality_score:.2f} confidence={result.confidence:.2f}) "
+            f"{doc.content[:60]}..."
+        )
 
     approved = sum(1 for r in results if r.approved)
-    print(f"\n[mature] Reviewed {len(results)} docs: {approved} approved, {len(results)-approved} rejected")
+    print(f"\n[mature] Reviewed {len(results)} docs: {approved} approved, {len(results)-approved} not approved")
 
 
 async def tag_difficulty(

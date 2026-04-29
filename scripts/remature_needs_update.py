@@ -28,41 +28,48 @@ logger = logging.getLogger(__name__)
 
 
 def _claim_docs_sync(db_path: str, source: str | None, limit: int) -> list:
-    """needs_update ドキュメントを排他的に取得し unreviewed にマークする（同期版）。
+    """needs_update docs を排他的に取得し unreviewed にマーク（同期・autocommit）。
 
-    isolation_level=None (autocommit) で独立した接続を開き、
-    UPDATE...RETURNING の一文で SELECT と UPDATE をアトミックに実行する。
-    BEGIN IMMEDIATE は不要 — SQLite が書き込みロックを直列化し、
-    busy_timeout=60000ms でロック待ちをリトライする。
-    aiosqlite の暗黙トランザクションとは独立した接続なので干渉しない。
+    isolation_level=None (autocommit) の独立接続で UPDATE...RETURNING を実行する。
+    SQLite の busy_timeout + Python レベルのリトライで DB ロック競合に対処する。
     """
     import sqlite3
+    import time
 
-    conn = sqlite3.connect(db_path, timeout=60, isolation_level=None)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA busy_timeout = 60000")
-    try:
-        if source:
-            cursor = conn.execute(
-                "UPDATE documents SET review_status = 'unreviewed', updated_at = datetime('now') "
-                "WHERE id IN ("
-                "  SELECT id FROM documents WHERE review_status = 'needs_update' AND source_type = ?"
-                "  ORDER BY created_at ASC LIMIT ?"
-                ") RETURNING *",
-                (source, limit),
-            )
-        else:
-            cursor = conn.execute(
-                "UPDATE documents SET review_status = 'unreviewed', updated_at = datetime('now') "
-                "WHERE id IN ("
-                "  SELECT id FROM documents WHERE review_status = 'needs_update'"
-                "  ORDER BY created_at ASC LIMIT ?"
-                ") RETURNING *",
-                (limit,),
-            )
-        return cursor.fetchall()
-    finally:
-        conn.close()
+    if source:
+        sql = (
+            "UPDATE documents SET review_status = 'unreviewed', updated_at = datetime('now') "
+            "WHERE id IN ("
+            "  SELECT id FROM documents WHERE review_status = 'needs_update' AND source_type = ?"
+            "  ORDER BY created_at ASC LIMIT ?"
+            ") RETURNING *"
+        )
+        params: tuple = (source, limit)
+    else:
+        sql = (
+            "UPDATE documents SET review_status = 'unreviewed', updated_at = datetime('now') "
+            "WHERE id IN ("
+            "  SELECT id FROM documents WHERE review_status = 'needs_update'"
+            "  ORDER BY created_at ASC LIMIT ?"
+            ") RETURNING *"
+        )
+        params = (limit,)
+
+    for attempt in range(15):  # 最大 ~60秒待機 (2+4+6+...秒)
+        conn = sqlite3.connect(db_path, timeout=5, isolation_level=None)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA busy_timeout = 5000")
+        try:
+            cursor = conn.execute(sql, params)
+            rows = cursor.fetchall()
+            return rows
+        except sqlite3.OperationalError as e:
+            if "locked" not in str(e) or attempt == 14:
+                raise
+            time.sleep(2 + attempt * 2)
+        finally:
+            conn.close()
+    return []  # unreachable
 
 
 async def _claim_docs(db_path: str, source: str | None, limit: int) -> list:
