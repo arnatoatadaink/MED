@@ -313,16 +313,15 @@ UMAP分析でソース別クラスター分布を確認後、retriever層の3問
 - **接続先**: A-2（ReasoningTrace ✅）/ D（KG ✅）/ E（GRPO）
 - **残課題**: N-4（LLM 呼び出しによる `self_evaluate()` 実装）で Teacher との接続を完成させる
 
-#### N-2. FAISS k-value Calibration（IDEA-002）🔴
+#### N-2. FAISS k-value Calibration（IDEA-002）🟡
 > 根拠: S2（ICL is Provably Bayesian, 2510.10981）— k=3〜5 で指数収束 O(e^{-ck})
 > **RLVR知見（S6）により優先度昇格**: k値とコンテキスト品質がStudentの「見かけの賢さ」を決定
 
-- 🔴 FAISS 取得数 `k` を `configs/default.yaml` に外出し（現状ハードコード）
-  ```yaml
-  retrieval:
-    k: 5  # 推奨範囲: 3〜5（理論値）
-  ```
-- 🟡 k=3/5/7/10 での検索精度比較実験スクリプト作成（MRR / Recall@k 計測）
+- ✅ FAISS 取得数 `k` を `configs/default.yaml` に外出し（`rag.faiss_k: 5`）
+  - `memory_manager.py` の `search()` / `search_hybrid()` が `get_settings().rag.faiss_k` を参照
+- ✅ k=3/5/7/10 での検索精度比較実験スクリプト作成（`scripts/eval_faiss_k.py`）
+  - 実験結果 (n=30): k=3 MRR=0.139 / k=5 MRR=0.239 ← 最高 / k=10 MRR=0.209
+  - **結論: k=5 が最適（ICL Bayesian 収束理論 k=3〜5 と一致）。現設定を維持**
 - 🟡 Observer（FAISS検索精度）と Solver（Student推論精度）を**独立評価**する実験設計
   - `observation_accuracy`（正しい根拠を取得できたか）と `solver_accuracy`（根拠から正しく推論できたか）を分離
   - どちらが弱いかを診断 → k値調整 vs RLVR訓練強化の意思決定に使用（N-OQ-6参照）
