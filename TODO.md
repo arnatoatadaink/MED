@@ -585,13 +585,13 @@ academic domain (11点): 両クラスターから断絶（孤立島状態）
 
 **種別A: 実装ドキュメント（理論の実装側）**
 
-| 対象 | URL / arXiv | 橋渡しする概念 | 優先度 |
-|------|------------|--------------|--------|
-| sentence-transformers公式ドキュメント | GitHub/README | 384次元埋め込み ↔ all-MiniLM-L6-v2 | 🔴 |
-| FAISS公式ドキュメント | GitHub/README | ベクトル検索理論 ↔ faiss.IndexFlatIP | 🔴 |
-| geoopt使い方ガイド | GitHub/README | Poincaré Ball理論 ↔ geoopt.PoincareBall | 🟡 |
-| GRPO実装解説 | GitHub/README | GRPO報酬理論 ↔ TRL/VERLコード | 🟡 |
-| NetworkX チュートリアル | docs.networkx | KGグラフ理論 ↔ nx.DiGraph操作 | 🟡 |
+| 対象 | URL / arXiv | 橋渡しする概念 | 優先度 | 状態 |
+|------|------------|--------------|--------|------|
+| sentence-transformers公式ドキュメント | `data/doc_urls/bridge_sbert.txt` (9 URL) | 384次元埋め込み ↔ all-MiniLM-L6-v2 | 🔴 | ✅ URLリスト作成済み・seed待ち |
+| FAISS公式ドキュメント | `facebookresearch/faiss` (README等 md) | ベクトル検索理論 ↔ faiss.IndexFlatIP | 🔴 | ✅ github_doc_repos.yaml 追加済み・seed待ち |
+| GRPO実装解説 | `huggingface/trl/docs/source` (62 md) | GRPO報酬理論 ↔ TRL実装 | 🟡 | ✅ github_doc_repos.yaml 追加済み・seed待ち |
+| geoopt使い方ガイド | GitHub/README | Poincaré Ball理論 ↔ geoopt.PoincareBall | 🟡 | 🟡 GitHubに公式docs無し・方針検討 |
+| NetworkX チュートリアル | docs.networkx | KGグラフ理論 ↔ nx.DiGraph操作 | 🟡 | 🟡 rst形式・URLリスト方式が適切 |
 
 **種別B: ペーパー+実装ペア（seed済みarXivの公式コード）**
 
@@ -612,12 +612,11 @@ academic domain (11点): 両クラスターから断絶（孤立島状態）
 
 #### ブリッジSEED 追加コマンド（O-1後に実施）
 ```bash
-# 種別A/B: github_docs_fetcher でREADME等を取得
-poetry run python scripts/seed_from_docs.py --source github_docs --mature --provider openrouter
+# TRL (GRPO) + FAISS github_docs を seed（seed のみ、mature はローカルモデルで）
+poetry run python scripts/seed_from_docs.py --source github_docs --max-files 70
 
-# 種別A: URLリストに追加してから実行
-# data/doc_urls/url_list.txt に sentence-transformers / FAISS docs を追記
-poetry run python scripts/seed_from_docs.py --source url_list --mature --provider openrouter
+# sentence-transformers URLリストを seed
+poetry run python scripts/seed_from_docs.py --source url_list --url-file data/doc_urls/bridge_sbert.txt
 ```
 
 ---
