@@ -375,7 +375,7 @@ async def seed_and_mature(
         await mm.close()
         return stats
 
-    logger.info("=== Phase 2: Mature %d new docs (provider=%s) ===", len(new_doc_ids), provider)
+    logger.info("=== Phase 2: Mature %d new docs (provider=%s, persona=%s) ===", len(new_doc_ids), provider, persona)
 
     from src.llm.gateway import LLMGateway
     from src.memory.maturation.difficulty_tagger import DifficultyTagger
@@ -483,7 +483,7 @@ async def mature_only(
         await mm.close()
         return
 
-    logger.info("=== Mature %d existing docs (provider=%s) ===", len(docs), provider)
+    logger.info("=== Mature %d existing docs (provider=%s, persona=%s) ===", len(docs), provider, persona)
 
     reviewed = 0
     approved = 0

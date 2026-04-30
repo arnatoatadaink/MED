@@ -74,7 +74,7 @@ async def review_docs(
         print("[mature] No unreviewed documents found")
         return
 
-    print(f"[mature] Reviewing {len(docs)} docs (provider={provider or 'default'}, concurrency={concurrency})")
+    print(f"[mature] Reviewing {len(docs)} docs (provider={provider or 'default'}, concurrency={concurrency}, persona={persona})")
 
     results = []
     for i, doc in enumerate(docs):
@@ -99,7 +99,7 @@ async def review_docs(
         )
 
     approved = sum(1 for r in results if r.approved)
-    print(f"\n[mature] Reviewed {len(results)} docs: {approved} approved, {len(results)-approved} not approved")
+    print(f"\n[mature] Reviewed {len(results)} docs: {approved} approved, {len(results)-approved} not approved  [persona={persona}]")
 
 
 async def tag_difficulty(

@@ -120,6 +120,7 @@ async def remature(
     print("  RE-MATURE SUMMARY")
     print("=" * 50)
     print(f"       source: {source or 'all'}")
+    print(f"      persona: {persona}")
     print(f"     reviewed: {reviewed}")
     print(f"     approved: {approved}  ({approval_pct})")
     print(f"  needs_update: {needs_update}")
