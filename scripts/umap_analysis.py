@@ -1,24 +1,29 @@
 #!/usr/bin/env python3
-"""scripts/umap_analysis.py — FAISSメモリの UMAP 可視化
+"""scripts/umap_analysis.py — FAISSメモリの UMAP 可視化 / 島分析
 
 FAISS の埋め込みベクトルを UMAP で2次元に圧縮し、
 review_status / source_type / domain_flag / quality_score で色分けして出力する。
+--save-cache で DBSCAN 島分析用キャッシュ (data/umap_cache.npz) を保存し、
+island_report() で check_progress.sh から呼び出せる。
 
 Usage:
     # review_status で色分け（デフォルト）
     poetry run python scripts/umap_analysis.py
 
-    # source_type で色分け
-    poetry run python scripts/umap_analysis.py --color-by source_type
-
     # 4パネル一括
     poetry run python scripts/umap_analysis.py --color-by all
 
-    # サンプル数・出力先指定
-    poetry run python scripts/umap_analysis.py --n-samples 5000 --output data/umap.png
+    # キャッシュ保存（check_progress 用）
+    poetry run python scripts/umap_analysis.py --save-cache
+
+    # 可視化 + キャッシュ保存を同時に
+    poetry run python scripts/umap_analysis.py --color-by all --save-cache
 
     # インタラクティブ HTML（要 plotly: poetry add plotly）
     poetry run python scripts/umap_analysis.py --interactive
+
+    # キャッシュから島レポートのみ表示
+    poetry run python scripts/umap_analysis.py --report
 """
 
 from __future__ import annotations
@@ -108,11 +113,11 @@ async def _load_metadata(db_path: str) -> dict[str, dict]:
 def _load_faiss_vectors(
     n_samples: int,
     seed: int = 42,
-) -> tuple[np.ndarray, list[str]]:
+) -> tuple[np.ndarray, list[str], int]:
     """FAISS から埋め込みベクトルと doc_ids を返す。
 
     Returns:
-        (vectors: float32 (N, dim), doc_ids: list[str])
+        (vectors: float32 (N, dim), doc_ids: list[str], faiss_ntotal: int)
     """
     from src.common.config import get_settings
     from src.memory.faiss_index import FAISSIndexManager
@@ -141,16 +146,164 @@ def _load_faiss_vectors(
         raise RuntimeError("FAISS インデックスが空です")
 
     vectors = np.vstack(all_vecs)
-    logger.info("FAISS: %d vectors loaded (dim=%d)", len(all_ids), vectors.shape[1])
+    faiss_ntotal = len(all_ids)
+    logger.info("FAISS: %d vectors loaded (dim=%d)", faiss_ntotal, vectors.shape[1])
 
-    if len(all_ids) > n_samples:
+    if faiss_ntotal > n_samples:
         rng = np.random.default_rng(seed)
-        idx = rng.choice(len(all_ids), size=n_samples, replace=False)
+        idx = rng.choice(faiss_ntotal, size=n_samples, replace=False)
         vectors = vectors[idx]
         all_ids = [all_ids[i] for i in idx]
         logger.info("Subsampled to %d vectors", n_samples)
 
-    return vectors, all_ids
+    return vectors, all_ids, faiss_ntotal
+
+
+# ---- キャッシュ保存 / 島レポート ----------------------------------
+
+_DEFAULT_CACHE = Path("data/umap_cache.npz")
+
+
+def _save_cache(
+    embedding: np.ndarray,
+    doc_ids: list[str],
+    meta: dict[str, dict],
+    faiss_ntotal: int,
+    cache_path: Path = _DEFAULT_CACHE,
+) -> None:
+    """UMAP 結果と関連メタデータをキャッシュファイルに保存する。"""
+    import time
+
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    review_status = np.array([meta.get(d, {}).get("review_status", "orphaned") for d in doc_ids])
+    source_type   = np.array([meta.get(d, {}).get("source_type",   "orphaned") for d in doc_ids])
+    domain_flag   = np.array([meta.get(d, {}).get("domain_flag",   "unknown")  for d in doc_ids])
+    quality       = np.array([meta.get(d, {}).get("quality",       0.0)        for d in doc_ids], dtype=np.float32)
+    composite     = np.array([meta.get(d, {}).get("composite",     0.0)        for d in doc_ids], dtype=np.float32)
+
+    np.savez(
+        cache_path,
+        embedding=embedding.astype(np.float32),
+        doc_ids=np.array(doc_ids, dtype=object),
+        review_status=review_status,
+        source_type=source_type,
+        domain_flag=domain_flag,
+        quality=quality,
+        composite=composite,
+        timestamp=np.array([time.time()]),
+        faiss_ntotal=np.array([faiss_ntotal]),  # _idx_to_id で有効なベクトル数
+        db_total=np.array([len(meta)]),          # DB ドキュメント総数（staleness 比較用）
+    )
+    logger.info("Cache saved: %s (%d docs)", cache_path, len(doc_ids))
+
+
+def island_report(
+    cache_path: str | Path = _DEFAULT_CACHE,
+    top_n: int = 5,
+) -> None:
+    """UMAP キャッシュから DBSCAN で島を検出し、統計を標準出力に表示する。
+
+    check_progress.sh から直接 import して呼び出す想定。
+    キャッシュが存在しない場合は生成コマンドを示して終了する。
+    """
+    import glob
+    import time
+
+    cache_path = Path(cache_path)
+    if not cache_path.exists():
+        print("\n[UMAP] キャッシュなし")
+        print("  → 生成: poetry run python scripts/umap_analysis.py --save-cache")
+        return
+
+    cache = np.load(cache_path, allow_pickle=True)
+    age_h   = (time.time() - float(cache["timestamp"][0])) / 3600
+    embedding     = cache["embedding"]              # (N, 2)
+    doc_ids       = cache["doc_ids"].tolist()
+    review_status = cache["review_status"].tolist()
+    source_type   = cache["source_type"].tolist()
+    quality       = cache["quality"].tolist()
+    cached_db_total = int(cache["db_total"][0]) if "db_total" in cache else 0
+    n = len(doc_ids)
+
+    # DB 件数で staleness を判定（軽量 sqlite3 クエリ）
+    stale = False
+    try:
+        import sqlite3
+        current_db_total = sqlite3.connect("data/metadata.db").execute(
+            "SELECT COUNT(*) FROM documents"
+        ).fetchone()[0]
+        stale = cached_db_total > 0 and current_db_total > cached_db_total * 1.10
+    except Exception:
+        pass
+
+    # DBSCAN — 正規化座標で eps を自動決定
+    from sklearn.cluster import DBSCAN
+    from sklearn.neighbors import NearestNeighbors
+
+    emb_min  = embedding.min(axis=0)
+    emb_max  = embedding.max(axis=0)
+    emb_norm = (embedding - emb_min) / (emb_max - emb_min + 1e-8)
+
+    # eps auto-tune: サンプル数が少ない場合は percentile を緩める
+    k = 10
+    pct = max(10, min(30, 10 + (8000 - n) // 400))  # 1000点→30%, 8000点→10%
+    nn   = NearestNeighbors(n_neighbors=k, n_jobs=1).fit(emb_norm)
+    dists, _ = nn.kneighbors(emb_norm)
+    eps  = max(0.02, float(np.percentile(dists[:, -1], pct)))
+
+    labels     = DBSCAN(eps=eps, min_samples=10, n_jobs=1).fit_predict(emb_norm)
+    n_clusters = int(labels.max()) + 1
+    noise      = int((labels == -1).sum())
+
+    sigma_x = float(embedding[:, 0].std())
+    sigma_y = float(embedding[:, 1].std())
+
+    # クラスタ統計
+    clusters: list[dict] = []
+    for cid in range(n_clusters):
+        mask   = [i for i in range(n) if labels[i] == cid]
+        size   = len(mask)
+        q_avg  = sum(quality[i] for i in mask) / size
+
+        src_cnt: dict[str, int] = {}
+        st_cnt:  dict[str, int] = {}
+        for i in mask:
+            src_cnt[source_type[i]]   = src_cnt.get(source_type[i], 0) + 1
+            st_cnt[review_status[i]]  = st_cnt.get(review_status[i], 0) + 1
+
+        dom_src     = max(src_cnt, key=src_cnt.__getitem__)
+        dom_src_pct = src_cnt[dom_src] * 100 // size
+        approved    = st_cnt.get("approved", 0) * 100 // size
+
+        clusters.append({
+            "id": cid + 1, "size": size,
+            "source": dom_src, "src_pct": dom_src_pct,
+            "approved_pct": approved, "q_avg": q_avg,
+        })
+
+    clusters.sort(key=lambda c: c["size"], reverse=True)
+    max_size = clusters[0]["size"] if clusters else 1
+
+    # 出力
+    stale_mark = "  ⚠ STALE (FAISS +10% growth)" if stale else ""
+    print(f"\n[UMAP] Memory Map  (cache: {age_h:.1f}h ago, {n:,} docs){stale_mark}")
+    print(f"  Islands: {n_clusters} clusters  noise: {noise} ({noise * 100 // n}%)  eps={eps:.3f}")
+    print(f"  Dispersion: σx={sigma_x:.2f}  σy={sigma_y:.2f}")
+
+    print(f"\n  Top clusters (by size):")
+    for c in clusters[:top_n]:
+        bar = "█" * (c["size"] * 20 // max_size)
+        print(
+            f"    #{c['id']:02d}  {c['size']:>5} docs  "
+            f"{c['source']:<14} {c['src_pct']:>2}%  "
+            f"approved {c['approved_pct']:>2}%  "
+            f"q={c['q_avg']:.2f}  {bar}"
+        )
+    if n_clusters > top_n:
+        rest = sum(c["size"] for c in clusters[top_n:])
+        print(f"    ...  {n_clusters - top_n} more clusters ({rest:,} docs)")
+
+    print(f"\n  → Refresh: poetry run python scripts/umap_analysis.py --save-cache")
 
 
 # ---- UMAP 実行 ---------------------------------------------------
@@ -388,16 +541,27 @@ def main() -> None:
     parser.add_argument("--metric", default="cosine", choices=["cosine", "euclidean"], help="距離指標")
     parser.add_argument("--output", type=str, default=None, help="出力ファイルパス (省略時は data/umap_<color>.png)")
     parser.add_argument("--interactive", action="store_true", help="plotly でインタラクティブ HTML を出力 (要 plotly)")
+    parser.add_argument("--save-cache", action="store_true", help="DBSCAN 島分析用キャッシュを data/umap_cache.npz に保存")
+    parser.add_argument("--report", action="store_true", help="キャッシュから島レポートを表示して終了 (UMAP 計算なし)")
     parser.add_argument("--seed", type=int, default=42, help="乱数シード")
     args = parser.parse_args()
 
-    # 出力パス決定
-    if args.output:
-        output = Path(args.output)
-    else:
-        suffix = ".html" if args.interactive else ".png"
-        output = _ROOT / "data" / f"umap_{args.color_by}{suffix}"
-    output.parent.mkdir(parents=True, exist_ok=True)
+    # --report: UMAP 計算なしでキャッシュから表示
+    if args.report:
+        island_report()
+        return
+
+    # 出力先が必要か（--save-cache のみの場合は画像出力をスキップ）
+    need_image = args.interactive or args.output or not args.save_cache
+
+    output: Path | None = None
+    if need_image:
+        if args.output:
+            output = Path(args.output)
+        else:
+            suffix = ".html" if args.interactive else ".png"
+            output = _ROOT / "data" / f"umap_{args.color_by}{suffix}"
+        output.parent.mkdir(parents=True, exist_ok=True)
 
     # メタデータ読み込み
     from src.common.config import get_settings
@@ -407,7 +571,7 @@ def main() -> None:
     logger.info("Loaded %d document records from DB", len(meta))
 
     # FAISS ベクトル読み込み
-    vectors, doc_ids = _load_faiss_vectors(n_samples=args.n_samples, seed=args.seed)
+    vectors, doc_ids, faiss_ntotal = _load_faiss_vectors(n_samples=args.n_samples, seed=args.seed)
 
     # UMAP
     embedding = _run_umap(
@@ -417,17 +581,22 @@ def main() -> None:
         metric=args.metric,
     )
 
-    # 出力
     orphaned = sum(1 for d in doc_ids if d not in meta)
     if orphaned:
         logger.info("Orphaned (FAISS only, not in DB): %d", orphaned)
 
-    if args.interactive:
-        _save_plotly(embedding, doc_ids, meta, args.color_by if args.color_by != "all" else "review_status", output)
-    else:
-        _save_matplotlib(embedding, doc_ids, meta, args.color_by, output)
+    # キャッシュ保存
+    if args.save_cache:
+        _save_cache(embedding, doc_ids, meta, faiss_ntotal)
+        island_report()
 
-    print(f"\nOutput: {output}")
+    # 画像出力
+    if output is not None:
+        if args.interactive:
+            _save_plotly(embedding, doc_ids, meta, args.color_by if args.color_by != "all" else "review_status", output)
+        else:
+            _save_matplotlib(embedding, doc_ids, meta, args.color_by, output)
+        print(f"\nOutput: {output}")
 
 
 if __name__ == "__main__":

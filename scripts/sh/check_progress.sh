@@ -54,3 +54,22 @@ except Exception as e:
 EOF
 
 echo ""
+
+# UMAP 島分析（キャッシュがあれば表示）
+poetry run python - <<'PYEOF'
+import sys
+sys.path.insert(0, ".")
+sys.path.insert(0, "scripts")
+
+try:
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("umap_analysis", "scripts/umap_analysis.py")
+    mod  = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    mod.island_report("data/umap_cache.npz", top_n=5)
+except Exception as e:
+    print(f"\n[UMAP] 読み込みエラー: {e}")
+    print("  → 生成: poetry run python scripts/umap_analysis.py --save-cache")
+PYEOF
+
+echo ""
