@@ -54,6 +54,7 @@ async def review_docs(
     limit: int, domain: str | None,
     provider: str | None = None,
     concurrency: int = 1,
+    persona: str = "auto",
 ) -> None:
     """未審査ドキュメントを Teacher で審査する。"""
     from src.common.config import get_settings
@@ -66,7 +67,7 @@ async def review_docs(
     await store.initialize()
     gateway = LLMGateway(settings)
 
-    reviewer = MemoryReviewer(gateway, store, provider=provider)
+    reviewer = MemoryReviewer(gateway, store, provider=provider, persona=persona)
 
     docs = await store.get_unreviewed(domain=domain, limit=limit)
     if not docs:
@@ -149,6 +150,11 @@ def main() -> None:
     parser.add_argument("--domain", type=str, default=None, help="Filter by domain")
     parser.add_argument("--provider", type=str, default=None, help="LLM provider (e.g. lmstudio)")
     parser.add_argument("--concurrency", type=int, default=1, help="Concurrent review requests (local models: 1)")
+    parser.add_argument(
+        "--persona", default="auto",
+        choices=["auto", "on_domain", "off_domain", "practical_reference", "strict"],
+        help="レビュアーペルソナ (default: auto)",
+    )
     args = parser.parse_args()
 
     if not any([args.check, args.review, args.tag_difficulty, args.all]):
@@ -156,7 +162,7 @@ def main() -> None:
 
     if args.all or args.review:
         print("\n=== Reviewing docs ===")
-        asyncio.run(review_docs(args.limit, args.domain, provider=args.provider, concurrency=args.concurrency))
+        asyncio.run(review_docs(args.limit, args.domain, provider=args.provider, concurrency=args.concurrency, persona=args.persona))
 
     if args.all or args.tag_difficulty:
         print("\n=== Tagging difficulty ===")

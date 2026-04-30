@@ -35,6 +35,7 @@ async def remature(
     provider: str,
     model: str | None,
     limit: int,
+    persona: str = "auto",
 ) -> None:
     from src.llm.gateway import LLMGateway
     from src.memory.embedder import Embedder
@@ -47,7 +48,7 @@ async def remature(
     await mm.initialize()
     gateway = LLMGateway()
 
-    reviewer = MemoryReviewer(gateway, mm.store, provider=provider, model=model)
+    reviewer = MemoryReviewer(gateway, mm.store, provider=provider, model=model, persona=persona)
     tagger = DifficultyTagger(gateway, provider=provider, model=model)
 
     # needs_update ドキュメントを取得（クレーム不要 — doc_reviews で並列書き込みを分離）
@@ -73,8 +74,8 @@ async def remature(
         return
 
     logger.info(
-        "=== Re-mature %d needs_update docs (source=%s, provider=%s, model=%s) ===",
-        len(docs), source or "all", provider, model,
+        "=== Re-mature %d needs_update docs (source=%s, provider=%s, model=%s, persona=%s) ===",
+        len(docs), source or "all", provider, model, persona,
     )
 
     reviewed = approved = needs_update = hold = tagged = errors = 0
@@ -133,10 +134,15 @@ def main() -> None:
     parser.add_argument("--provider", default="openrouter", help="LLM プロバイダー")
     parser.add_argument("--model", default=None, help="モデル名")
     parser.add_argument("--limit", type=int, default=500, help="最大処理件数")
+    parser.add_argument(
+        "--persona", default="auto",
+        choices=["auto", "on_domain", "off_domain", "practical_reference", "strict"],
+        help="レビュアーペルソナ (default: auto — doc の domain_flag で動的選択)",
+    )
     args = parser.parse_args()
 
     source = None if args.source == "all" else args.source
-    asyncio.run(remature(source, args.provider, args.model, args.limit))
+    asyncio.run(remature(source, args.provider, args.model, args.limit, args.persona))
 
 
 if __name__ == "__main__":

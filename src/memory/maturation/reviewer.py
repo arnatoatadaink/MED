@@ -24,6 +24,7 @@ import re
 from dataclasses import dataclass
 
 from src.llm.gateway import LLMGateway
+from src.memory.maturation.personas import AUTO_PERSONA, ReviewerPersona, get_persona_or_raise
 from src.memory.metadata_store import MetadataStore
 from src.memory.schema import Document, ReviewStatus
 
@@ -96,6 +97,15 @@ class ReviewResult:
     review_status: ReviewStatus
 
 
+_REVIEW_PROMPT_PERSONA = """\
+Document metadata:
+- content_type: {content_type}
+- categories: {categories}
+
+Document text:
+{text}"""
+
+
 class MemoryReviewer:
     """Teacher Model でドキュメントを審査・品質スコア更新する。
 
@@ -103,8 +113,10 @@ class MemoryReviewer:
         gateway: LLMGateway インスタンス。
         store: MetadataStore インスタンス（品質スコア更新に使用）。
         provider: 優先プロバイダ（省略時はデフォルト）。
+        persona: ペルソナ名 ("auto" / "on_domain" / "off_domain" /
+                 "practical_reference" / "strict")。
+                 "auto" (デフォルト) は doc の domain_flag で動的選択。
         max_text_length: LLM に渡す最大文字数。
-        approval_threshold: この値以上で approved=True。
     """
 
     def __init__(
@@ -113,15 +125,20 @@ class MemoryReviewer:
         store: MetadataStore,
         provider: str | None = None,
         model: str | None = None,
+        persona: str = AUTO_PERSONA,
         max_text_length: int = 1200,
-        approval_threshold: float = 0.6,
     ) -> None:
         self._gateway = gateway
         self._store = store
         self._provider = provider
         self._model = model
         self._max_text = max_text_length
-        self._threshold = approval_threshold
+        # auto 以外はペルソナを起動時に検証してキャッシュ
+        if persona != AUTO_PERSONA:
+            self._fixed_persona: ReviewerPersona | None = get_persona_or_raise(persona)
+        else:
+            self._fixed_persona = None
+        self._persona_name = persona
 
     async def review(self, doc: Document) -> ReviewResult:
         """ドキュメントを審査し、MetadataStore を更新する。
@@ -134,14 +151,28 @@ class MemoryReviewer:
         content_type = extra.get("content_type", "unknown")
         categories = ", ".join(extra.get("categories", [])) or "unknown"
         domain_flag = extra.get("domain_flag", "unknown")
-        prompt = _REVIEW_PROMPT.format(
-            content_type=content_type,
-            categories=categories,
-            domain_flag=domain_flag,
-            text=text,
-        )
 
-        system = _REVIEW_SYSTEM
+        if self._fixed_persona is not None:
+            # 明示的ペルソナ: ペルソナ固有のシステムプロンプト + domain_flag なしの短いプロンプト
+            system = self._fixed_persona.system_prompt
+            persona_label = self._fixed_persona.name
+            threshold = self._fixed_persona.approval_threshold
+            prompt = _REVIEW_PROMPT_PERSONA.format(
+                content_type=content_type,
+                categories=categories,
+                text=text,
+            )
+        else:
+            # auto: domain_flag をプロンプトに渡して LLM が動的選択
+            system = _REVIEW_SYSTEM
+            persona_label = domain_flag
+            threshold = 0.6
+            prompt = _REVIEW_PROMPT.format(
+                content_type=content_type,
+                categories=categories,
+                domain_flag=domain_flag,
+                text=text,
+            )
 
         try:
             response = await self._gateway.complete(
@@ -167,9 +198,12 @@ class MemoryReviewer:
         needs_supplement = bool(parsed.get("needs_supplement", False))
         reason = str(parsed.get("reason", ""))
 
+        # quality >= threshold なら LLM の approved 判定を優先（ペルソナ固有閾値を使用）
+        if not approved and not needs_supplement and quality_score >= threshold:
+            approved = True
         # quality >= 0.7 なら needs_supplement でも APPROVED として扱う（内容は十分）
         if needs_supplement and quality_score >= 0.7:
-            needs_supplement = False  # 品質十分なので保留扱いしない
+            needs_supplement = False
             approved = True
         if needs_supplement:
             review_status = ReviewStatus.NEEDS_UPDATE
@@ -205,7 +239,7 @@ class MemoryReviewer:
             await self._store.save_review(
                 doc_id=doc.id,
                 teacher_id=teacher_id or "unknown",
-                persona=domain_flag,
+                persona=persona_label,
                 quality_score=quality_score,
                 confidence=confidence,
                 approved=approved,
