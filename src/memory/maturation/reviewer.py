@@ -187,7 +187,7 @@ class MemoryReviewer:
             parts = [p for p in (self._provider, self._model) if p]
             teacher_id = "/".join(parts)
 
-        # MetadataStore を更新
+        # documents テーブル更新（後方互換 — 最終審査結果を保持）
         try:
             await self._store.update_quality(
                 doc.id,
@@ -197,11 +197,24 @@ class MemoryReviewer:
                 composite_score=composite_score,
                 teacher_id=teacher_id,
             )
-            # ブラックリスト自動登録は無効化（HOLD文書は再審査対象のため）
-            # if review_status == ReviewStatus.REJECTED:
-            #     await self._store.add_to_blacklist(...)
         except Exception:
             logger.exception("Failed to update quality for doc=%s", doc.id)
+
+        # doc_reviews テーブル更新（モデル×ペルソナ単位で競合なく保存）
+        try:
+            await self._store.save_review(
+                doc_id=doc.id,
+                teacher_id=teacher_id or "unknown",
+                persona=domain_flag,
+                quality_score=quality_score,
+                confidence=confidence,
+                approved=approved,
+                needs_supplement=needs_supplement,
+                reason=reason,
+                composite_score=composite_score,
+            )
+        except Exception:
+            logger.exception("Failed to save doc_review for doc=%s", doc.id)
 
         result = ReviewResult(
             doc_id=doc.id,

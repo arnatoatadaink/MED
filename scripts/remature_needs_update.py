@@ -1,5 +1,8 @@
 """needs_update ドキュメントを再 mature するスクリプト。
 
+並列起動しても doc_reviews テーブルの (doc_id, teacher_id, persona) 複合 PK で
+各モデルが独立して書き込むため DB ロックは発生しない。
+
 Usage:
     poetry run python scripts/remature_needs_update.py \
         --source arxiv \
@@ -27,56 +30,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def _claim_docs_sync(db_path: str, source: str | None, limit: int) -> list:
-    """needs_update docs を排他的に取得し unreviewed にマーク（同期・autocommit）。
-
-    isolation_level=None (autocommit) の独立接続で UPDATE...RETURNING を実行する。
-    SQLite の busy_timeout + Python レベルのリトライで DB ロック競合に対処する。
-    """
-    import sqlite3
-    import time
-
-    if source:
-        sql = (
-            "UPDATE documents SET review_status = 'unreviewed', updated_at = datetime('now') "
-            "WHERE id IN ("
-            "  SELECT id FROM documents WHERE review_status = 'needs_update' AND source_type = ?"
-            "  ORDER BY created_at ASC LIMIT ?"
-            ") RETURNING *"
-        )
-        params: tuple = (source, limit)
-    else:
-        sql = (
-            "UPDATE documents SET review_status = 'unreviewed', updated_at = datetime('now') "
-            "WHERE id IN ("
-            "  SELECT id FROM documents WHERE review_status = 'needs_update'"
-            "  ORDER BY created_at ASC LIMIT ?"
-            ") RETURNING *"
-        )
-        params = (limit,)
-
-    for attempt in range(15):  # 最大 ~60秒待機 (2+4+6+...秒)
-        conn = sqlite3.connect(db_path, timeout=5, isolation_level=None)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA busy_timeout = 5000")
-        try:
-            cursor = conn.execute(sql, params)
-            rows = cursor.fetchall()
-            return rows
-        except sqlite3.OperationalError as e:
-            if "locked" not in str(e) or attempt == 14:
-                raise
-            time.sleep(2 + attempt * 2)
-        finally:
-            conn.close()
-    return []  # unreachable
-
-
-async def _claim_docs(db_path: str, source: str | None, limit: int) -> list:
-    """_claim_docs_sync をスレッドで非同期実行する。"""
-    return await asyncio.to_thread(_claim_docs_sync, db_path, source, limit)
-
-
 async def remature(
     source: str | None,
     provider: str,
@@ -88,7 +41,6 @@ async def remature(
     from src.memory.maturation.difficulty_tagger import DifficultyTagger
     from src.memory.maturation.reviewer import MemoryReviewer
     from src.memory.memory_manager import MemoryManager
-    from src.memory.metadata_store import _row_to_doc  # type: ignore[attr-defined]
 
     embedder = Embedder()
     mm = MemoryManager(embedder=embedder)
@@ -98,9 +50,22 @@ async def remature(
     reviewer = MemoryReviewer(gateway, mm.store, provider=provider, model=model)
     tagger = DifficultyTagger(gateway, provider=provider, model=model)
 
-    # needs_update を排他クレーム（並列起動時の重複処理を防ぐ）
-    rows = await _claim_docs(mm.store._db_path, source, limit)
-    docs = [_row_to_doc(row) for row in rows]
+    # needs_update ドキュメントを取得（クレーム不要 — doc_reviews で並列書き込みを分離）
+    if source:
+        cursor = await mm.store._db.execute(
+            "SELECT * FROM documents WHERE review_status = 'needs_update' AND source_type = ? "
+            "ORDER BY created_at ASC LIMIT ?",
+            (source, limit),
+        )
+    else:
+        cursor = await mm.store._db.execute(
+            "SELECT * FROM documents WHERE review_status = 'needs_update' "
+            "ORDER BY created_at ASC LIMIT ?",
+            (limit,),
+        )
+
+    from src.memory.metadata_store import _row_to_doc  # type: ignore[attr-defined]
+    docs = [_row_to_doc(row) for row in await cursor.fetchall()]
 
     if not docs:
         logger.info("needs_update ドキュメントが見つかりませんでした")

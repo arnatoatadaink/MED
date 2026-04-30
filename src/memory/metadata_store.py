@@ -215,6 +215,30 @@ _CREATE_THOUGHT_LOGS_INDICES_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_thought_logs_reward ON thought_logs(reward DESC);",
 ]
 
+_CREATE_DOC_REVIEWS_SQL = """
+CREATE TABLE IF NOT EXISTS doc_reviews (
+    doc_id           TEXT NOT NULL,
+    teacher_id       TEXT NOT NULL,
+    persona          TEXT NOT NULL DEFAULT 'unknown',
+    quality_score    REAL DEFAULT 0.0,
+    confidence       REAL DEFAULT 0.5,
+    approved         INTEGER DEFAULT 0,
+    needs_supplement INTEGER DEFAULT 0,
+    reason           TEXT DEFAULT '',
+    composite_score  REAL DEFAULT 0.0,
+    reviewed_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (doc_id, teacher_id, persona),
+    FOREIGN KEY (doc_id) REFERENCES documents(id) ON DELETE CASCADE
+);
+"""
+
+_CREATE_DOC_REVIEWS_INDICES_SQL = [
+    "CREATE INDEX IF NOT EXISTS idx_doc_reviews_doc_id     ON doc_reviews(doc_id);",
+    "CREATE INDEX IF NOT EXISTS idx_doc_reviews_teacher_id ON doc_reviews(teacher_id);",
+    "CREATE INDEX IF NOT EXISTS idx_doc_reviews_approved   ON doc_reviews(approved);",
+    "CREATE INDEX IF NOT EXISTS idx_doc_reviews_reviewed_at ON doc_reviews(reviewed_at DESC);",
+]
+
 _CREATE_BLACKLIST_SQL = """
 CREATE TABLE IF NOT EXISTS seed_blacklist (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -417,6 +441,7 @@ class MetadataStore:
         await self._db.execute(_CREATE_TRACE_DOCUMENTS_SQL)
         await self._db.execute(_CREATE_THOUGHT_LOGS_SQL)
         await self._db.execute(_CREATE_BLACKLIST_SQL)
+        await self._db.execute(_CREATE_DOC_REVIEWS_SQL)
         await self._migrate()  # 列追加を先に行い、その後インデックス作成
         for idx_sql in (
             _CREATE_INDICES_SQL
@@ -424,6 +449,7 @@ class MetadataStore:
             + _CREATE_REASONING_INDICES_SQL
             + _CREATE_THOUGHT_LOGS_INDICES_SQL
             + _CREATE_BLACKLIST_INDICES_SQL
+            + _CREATE_DOC_REVIEWS_INDICES_SQL
         ):
             await self._db.execute(idx_sql)
         for trigger_sql in _CREATE_FTS_TRIGGERS_SQL:
@@ -1030,6 +1056,78 @@ class MetadataStore:
         sql = f"UPDATE documents SET {', '.join(updates)} WHERE id = ?"
         await self._db.execute(sql, params)
         await self._commit_with_retry()
+
+    async def save_review(
+        self,
+        doc_id: str,
+        teacher_id: str,
+        persona: str,
+        quality_score: float,
+        confidence: float,
+        approved: bool,
+        needs_supplement: bool,
+        reason: str,
+        composite_score: float,
+    ) -> None:
+        """個別モデルのレビュー結果を doc_reviews に UPSERT する。
+
+        (doc_id, teacher_id, persona) が既存なら上書き。
+        documents テーブルとは独立しており、複数モデルが同一 doc を
+        競合なく審査できる。
+        """
+        await self._db.execute(
+            """
+            INSERT INTO doc_reviews
+              (doc_id, teacher_id, persona, quality_score, confidence,
+               approved, needs_supplement, reason, composite_score, reviewed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            ON CONFLICT (doc_id, teacher_id, persona) DO UPDATE SET
+              quality_score    = excluded.quality_score,
+              confidence       = excluded.confidence,
+              approved         = excluded.approved,
+              needs_supplement = excluded.needs_supplement,
+              reason           = excluded.reason,
+              composite_score  = excluded.composite_score,
+              reviewed_at      = excluded.reviewed_at
+            """,
+            (
+                doc_id, teacher_id, persona,
+                quality_score, confidence,
+                int(approved), int(needs_supplement),
+                reason, composite_score,
+            ),
+        )
+        await self._commit_with_retry()
+
+    async def get_reviews(
+        self,
+        doc_id: str,
+    ) -> list[dict[str, Any]]:
+        """doc_id のすべてのモデルレビューを返す。"""
+        cursor = await self._db.execute(
+            "SELECT * FROM doc_reviews WHERE doc_id = ? ORDER BY reviewed_at DESC",
+            (doc_id,),
+        )
+        return [dict(row) for row in await cursor.fetchall()]
+
+    async def list_reviewed_by(
+        self,
+        teacher_id: str,
+        persona: str | None = None,
+        limit: int = 500,
+    ) -> list[str]:
+        """指定 teacher_id (+ 任意 persona) がレビュー済みの doc_id 一覧を返す。"""
+        if persona:
+            cursor = await self._db.execute(
+                "SELECT doc_id FROM doc_reviews WHERE teacher_id = ? AND persona = ? LIMIT ?",
+                (teacher_id, persona, limit),
+            )
+        else:
+            cursor = await self._db.execute(
+                "SELECT doc_id FROM doc_reviews WHERE teacher_id = ? LIMIT ?",
+                (teacher_id, limit),
+            )
+        return [row[0] for row in await cursor.fetchall()]
 
     # ── 統計 ────────────────────────────────────────────────────────────
 
