@@ -206,101 +206,43 @@ def island_report(
     check_progress.sh から直接 import して呼び出す想定。
     キャッシュが存在しない場合は生成コマンドを示して終了する。
     """
-    import glob
-    import time
+    from src.cycle.umap_islands import compute_islands
 
-    cache_path = Path(cache_path)
-    if not cache_path.exists():
+    iset = compute_islands(cache_path=cache_path)
+
+    if not Path(cache_path).exists():
         print("\n[UMAP] キャッシュなし")
         print("  → 生成: poetry run python scripts/umap_analysis.py --save-cache")
         return
 
-    cache = np.load(cache_path, allow_pickle=True)
-    age_h   = (time.time() - float(cache["timestamp"][0])) / 3600
-    embedding     = cache["embedding"]              # (N, 2)
-    doc_ids       = cache["doc_ids"].tolist()
-    review_status = cache["review_status"].tolist()
-    source_type   = cache["source_type"].tolist()
-    quality       = cache["quality"].tolist()
-    cached_db_total = int(cache["db_total"][0]) if "db_total" in cache else 0
-    n = len(doc_ids)
+    if iset.n_docs == 0:
+        print("\n[UMAP] キャッシュにデータなし")
+        return
 
-    # DB 件数で staleness を判定（軽量 sqlite3 クエリ）
-    stale = False
-    try:
-        import sqlite3
-        current_db_total = sqlite3.connect("data/metadata.db").execute(
-            "SELECT COUNT(*) FROM documents"
-        ).fetchone()[0]
-        stale = cached_db_total > 0 and current_db_total > cached_db_total * 1.10
-    except Exception:
-        pass
+    n          = iset.n_docs
+    n_clusters = iset.n_clusters
+    noise      = iset.noise_count
+    age_h      = iset.cache_age_h
+    stale_mark = "  ⚠ STALE (DB +10% growth)" if iset.stale else ""
 
-    # DBSCAN — 正規化座標で eps を自動決定
-    from sklearn.cluster import DBSCAN
-    from sklearn.neighbors import NearestNeighbors
-
-    emb_min  = embedding.min(axis=0)
-    emb_max  = embedding.max(axis=0)
-    emb_norm = (embedding - emb_min) / (emb_max - emb_min + 1e-8)
-
-    # eps auto-tune: サンプル数が少ない場合は percentile を緩める
-    k = 10
-    pct = max(10, min(30, 10 + (8000 - n) // 400))  # 1000点→30%, 8000点→10%
-    nn   = NearestNeighbors(n_neighbors=k, n_jobs=1).fit(emb_norm)
-    dists, _ = nn.kneighbors(emb_norm)
-    eps  = max(0.02, float(np.percentile(dists[:, -1], pct)))
-
-    labels     = DBSCAN(eps=eps, min_samples=10, n_jobs=1).fit_predict(emb_norm)
-    n_clusters = int(labels.max()) + 1
-    noise      = int((labels == -1).sum())
-
-    sigma_x = float(embedding[:, 0].std())
-    sigma_y = float(embedding[:, 1].std())
-
-    # クラスタ統計
-    clusters: list[dict] = []
-    for cid in range(n_clusters):
-        mask   = [i for i in range(n) if labels[i] == cid]
-        size   = len(mask)
-        q_avg  = sum(quality[i] for i in mask) / size
-
-        src_cnt: dict[str, int] = {}
-        st_cnt:  dict[str, int] = {}
-        for i in mask:
-            src_cnt[source_type[i]]   = src_cnt.get(source_type[i], 0) + 1
-            st_cnt[review_status[i]]  = st_cnt.get(review_status[i], 0) + 1
-
-        dom_src     = max(src_cnt, key=src_cnt.__getitem__)
-        dom_src_pct = src_cnt[dom_src] * 100 // size
-        approved    = st_cnt.get("approved", 0) * 100 // size
-
-        clusters.append({
-            "id": cid + 1, "size": size,
-            "source": dom_src, "src_pct": dom_src_pct,
-            "approved_pct": approved, "q_avg": q_avg,
-        })
-
-    clusters.sort(key=lambda c: c["size"], reverse=True)
-    max_size = clusters[0]["size"] if clusters else 1
-
-    # 出力
-    stale_mark = "  ⚠ STALE (FAISS +10% growth)" if stale else ""
     print(f"\n[UMAP] Memory Map  (cache: {age_h:.1f}h ago, {n:,} docs){stale_mark}")
-    print(f"  Islands: {n_clusters} clusters  noise: {noise} ({noise * 100 // n}%)  eps={eps:.3f}")
-    print(f"  Dispersion: σx={sigma_x:.2f}  σy={sigma_y:.2f}")
+    print(f"  Islands: {n_clusters} clusters  noise: {noise} ({noise * 100 // n}%)  eps={iset.eps:.3f}")
+    print(f"  Dispersion: σx={iset.sigma_x:.2f}  σy={iset.sigma_y:.2f}")
 
+    max_size = iset.islands[0].size if iset.islands else 1
     print(f"\n  Top clusters (by size):")
-    for c in clusters[:top_n]:
-        bar = "█" * (c["size"] * 20 // max_size)
+    for c in iset.islands[:top_n]:
+        bar     = "█" * (c.size * 20 // max_size)
+        src_pct = int(c.dominant_source_pct * 100)
+        app_pct = int(c.approved_pct * 100)
         print(
-            f"    #{c['id']:02d}  {c['size']:>5} docs  "
-            f"{c['source']:<14} {c['src_pct']:>2}%  "
-            f"approved {c['approved_pct']:>2}%  "
-            f"q={c['q_avg']:.2f}  {bar}"
+            f"    #{c.id:02d}  {c.size:>5} docs  "
+            f"{c.dominant_source:<14} {src_pct:>2}%  "
+            f"approved {app_pct:>2}%  "
+            f"q={c.q_avg:.2f}  {bar}"
         )
     if n_clusters > top_n:
-        rest = sum(c["size"] for c in clusters[top_n:])
+        rest = sum(c.size for c in iset.islands[top_n:])
         print(f"    ...  {n_clusters - top_n} more clusters ({rest:,} docs)")
 
     print(f"\n  → Refresh: poetry run python scripts/umap_analysis.py --save-cache")
