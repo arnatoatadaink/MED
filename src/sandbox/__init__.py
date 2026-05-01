@@ -5,12 +5,16 @@ DockerRuntime : persistent コンテナ方式（バルク実行向け、MEDの�
 SandboxManager: CodeExecutor のリトライラッパー
 """
 
+from src.sandbox.code_extractor import CodeBlock, CodeExtractor, extract_blocks
 from src.sandbox.docker_runtime import DockerRuntime
 from src.sandbox.executor import CodeExecutor, ExecutionResult
 from src.sandbox.manager import SandboxManager
 from src.sandbox.security import SecurityPolicy, _DEFAULT_POLICY
 
 __all__ = [
+    "CodeBlock",
+    "CodeExtractor",
+    "extract_blocks",
     "DockerRuntime",
     "CodeExecutor",
     "ExecutionResult",
