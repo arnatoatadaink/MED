@@ -23,7 +23,7 @@ import gradio as gr
 from src.gui.components.status_bar import get_status_markdown
 
 # タブモジュール
-from src.gui.tabs import chat, guide, memory, sandbox, settings, training
+from src.gui.tabs import chat, cycle, guide, memory, sandbox, settings, training
 from src.gui.utils import get_all_provider_choices
 
 # ────────────────────────────────────────────────────────────────
@@ -263,6 +263,13 @@ def build_app() -> gr.Blocks:
                     "_Docker Sandbox でコードを安全に実行します。ネットワーク無効・読み取り専用FS。_"
                 )
                 sandbox.build_tab()
+
+            with gr.TabItem("🔄 サイクル"):
+                gr.Markdown(
+                    "_Gap Detection → Enrich → Dispatch サイクルの状態監視。"
+                    "実行は `scripts/run_cycle.py` から。_"
+                )
+                cycle.build_tab()
 
             with gr.TabItem("🎓 学習"):
                 gr.Markdown(
