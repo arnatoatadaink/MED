@@ -41,6 +41,7 @@ class SourceType(str, Enum):
     SEED = "seed"  # シードデータ
     GITHUB_DOCS = "github_docs"  # GitHub ドキュメントリポジトリ取得
     WEB_DOCS = "web_docs"  # キュレーテッド URL リスト取得
+    SANDBOX = "sandbox"   # DockerSandbox 実行結果
 
 
 class DifficultyLevel(str, Enum):
