@@ -122,13 +122,25 @@ class Orchestrator:
 
     async def _phase_dispatch(self, run_id: str, tasks: list[CollectionTask]) -> None:
         """gap_type に応じてタスクをディスパッチする。"""
-        for task in tasks:
-            if task.gap_type in _MATURE_GAP_TYPES:
-                await self._dispatch_mature(run_id, task)
-            elif task.gap_type in _COLLECTOR_GAP_TYPES:
-                await self._dispatch_needs_collector(run_id, task)
-            else:
-                logger.warning("Unknown gap_type %s — skipping task %s", task.gap_type, task.task_id)
+        from src.cycle.query_runner import QueryRunner, QueryRunnerConfig
+
+        runner: QueryRunner | None = None
+        collector_tasks = [t for t in tasks if t.gap_type in _COLLECTOR_GAP_TYPES]
+        if collector_tasks:
+            runner = QueryRunner(QueryRunnerConfig())
+            await runner.initialize()
+
+        try:
+            for task in tasks:
+                if task.gap_type in _MATURE_GAP_TYPES:
+                    await self._dispatch_mature(run_id, task)
+                elif task.gap_type in _COLLECTOR_GAP_TYPES:
+                    await self._dispatch_collector(run_id, task, runner)
+                else:
+                    logger.warning("Unknown gap_type %s — skipping task %s", task.gap_type, task.task_id)
+        finally:
+            if runner is not None:
+                await runner.close()
 
     async def _dispatch_mature(self, run_id: str, task: CollectionTask) -> None:
         """mature_only を呼び出してクラスタのバックログを消化する。"""
@@ -155,12 +167,25 @@ class Orchestrator:
             logger.warning("mature_only failed for task %s: %s", task.task_id[:8], exc)
             await self._store.update_task_status(task.task_id, "error")
 
-    async def _dispatch_needs_collector(self, run_id: str, task: CollectionTask) -> None:
-        """QueryRunner 未実装のため 'needs_collector' として記録するのみ。"""
+    async def _dispatch_collector(
+        self,
+        run_id: str,
+        task: CollectionTask,
+        runner: object,
+    ) -> None:
+        """QueryRunner で外部ソースを検索して FAISS に投入する。"""
+        from src.cycle.query_runner import QueryRunner
+
+        await self._store.update_task_status(task.task_id, "collecting")
         logger.info(
-            "Task %s (gap=%s) deferred — QueryRunner not yet implemented",
-            task.task_id[:8], task.gap_type.value,
+            "Dispatching collector for task %s (gap=%s, %d queries)",
+            task.task_id[:8], task.gap_type.value, len(task.queries),
         )
-        # status は save_tasks 時に 'enriched' になっているが、
-        # collector が未実装なので現状維持（needs_collector 相当）。
-        # QueryRunner 実装後にここで実際の収集を呼ぶ。
+        try:
+            stats = await runner.run_task(task)
+            summary = f"added={stats['added']} retrieved={stats['retrieved']}"
+            logger.info("Collector done for task %s: %s", task.task_id[:8], summary)
+            await self._store.update_task_status(task.task_id, "done")
+        except Exception as exc:
+            logger.warning("Collector failed for task %s: %s", task.task_id[:8], exc)
+            await self._store.update_task_status(task.task_id, "error")

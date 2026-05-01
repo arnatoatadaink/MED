@@ -1003,8 +1003,16 @@ Gap Detection → Enrich → Dispatch の自律サイクルパイプライン。
 TODO: `required_persona TEXT DEFAULT NULL` を追加 → Reviewer ワーカーがペルソナ対応文書のみ処理できるようにする。
 DB マイグレーション: `ALTER TABLE documents ADD COLUMN required_persona TEXT DEFAULT NULL;`
 
-#### P-R5. QueryRunner（Seeder）実装 🟢
-`small_cluster` / `source_imbalance` タスクの enrich 済み queries を使って外部ソース（arXiv / GitHub / Tavily）から文書を収集し FAISS に追加するパイプライン。
+#### P-R5. QueryRunner（Seeder）実装 ✅ **完了（2026-05-02）**
+- ✅ `src/cycle/query_runner.py` (232行) — `QueryRunner` / `QueryRunnerConfig`
+  - `initialize()`: RetrieverRouter / Embedder / MemoryManager / Deduplicator を共有初期化
+  - `run_task(task)`: queries × 外部検索 → 関連性フィルタ(cosine) → ブラックリスト → dedup → `mm.add()`
+  - `SOURCE_IMBALANCE`: `dominant_source` を除外したソースリストで検索（多様化）
+  - `SMALL_CLUSTER`: 全利用可能ソースで検索（拡充）
+  - mature なし（Reviewer タブが担当）
+- ✅ `src/cycle/orchestrator.py`: `_dispatch_needs_collector()` → `_dispatch_collector()` に置換
+  - `_phase_dispatch()` で QueryRunner を1インスタンス生成・再利用、finally で close
+- ✅ `src/cycle/__init__.py`: `QueryRunner`, `QueryRunnerConfig` エクスポート追加
 
 #### P-R6. 実験的: レビュー結果によるブリッジ文書生成 🟢（審査プロセス設計後）
 Reviewer の分析結果を使って UMAP 上の島間ブリッジを伸ばす合成文書生成。
