@@ -1,8 +1,9 @@
-"""src/cycle/orchestrator.py — サイクル実行ディスパッチャ (P1d)
+"""src/cycle/orchestrator.py — サイクル実行ディスパッチャ
 
 gap_detect → enrich → dispatch の 3 フェーズを順に実行する。
-UNREVIEWED_BACKLOG / LOW_QUALITY → mature_only 呼び出し
-SMALL_CLUSTER / SOURCE_IMBALANCE  → 'needs_collector' でスキップ（QueryRunner 未実装）
+
+UNREVIEWED_BACKLOG / LOW_QUALITY → cycle_tasks に記録のみ（Reviewer タブが担当）
+SMALL_CLUSTER / SOURCE_IMBALANCE  → QueryRunner で外部収集して FAISS に投入
 """
 
 from __future__ import annotations
@@ -22,20 +23,21 @@ logger = logging.getLogger(__name__)
 _MATURE_GAP_TYPES = {GapType.UNREVIEWED_BACKLOG, GapType.LOW_QUALITY}
 _COLLECTOR_GAP_TYPES = {GapType.SMALL_CLUSTER, GapType.SOURCE_IMBALANCE}
 
-# mature_only はクラスタサイズをそのまま使うが上限を設ける
-_MATURE_LIMIT_CAP = 200
-
 
 class OrchestratorConfig:
-    """Orchestrator のランタイム設定。"""
+    """Orchestrator のランタイム設定。
+
+    provider / model: QueryGenerator (enrich フェーズ) で使用。
+    persona / mature_interval: P-R1 分離後は未使用（後方互換のため残存）。
+    """
 
     def __init__(
         self,
         provider: str = "fastflowlm",
         model: Optional[str] = None,
-        persona: str = "auto",
+        persona: str = "auto",        # 未使用（Reviewer タブが管理）
         enrich_concurrency: int = 3,
-        mature_interval: float = 0.0,
+        mature_interval: float = 0.0,  # 未使用（Reviewer タブが管理）
         db_path: str = "data/metadata.db",
         cache_path: str = "data/umap_cache.npz",
         detector_config: Optional[GapDetectorConfig] = None,
@@ -143,29 +145,18 @@ class Orchestrator:
                 await runner.close()
 
     async def _dispatch_mature(self, run_id: str, task: CollectionTask) -> None:
-        """mature_only を呼び出してクラスタのバックログを消化する。"""
-        from scripts.seed_and_mature import mature_only
+        """UNREVIEWED_BACKLOG / LOW_QUALITY タスクを Reviewer タブへ委譲する。
 
-        await self._store.update_task_status(task.task_id, "collecting")
-        limit = min(int(task.signals.get("size", 50)), _MATURE_LIMIT_CAP)
-
+        Orchestrator はギャップを記録するのみ。実際のレビューは GUI の
+        Reviewer タブ（ReviewerSession）がマルチスレッドで実行する。
+        """
+        size = task.signals.get("size", "?")
         logger.info(
-            "Dispatching mature for task %s (gap=%s, limit=%d)",
-            task.task_id[:8], task.gap_type.value, limit,
+            "Queued for Reviewer: task %s (gap=%s, island_size=%s) "
+            "— run Reviewer tab to process unreviewed/low_quality docs",
+            task.task_id[:8], task.gap_type.value, size,
         )
-        try:
-            await mature_only(
-                limit=limit,
-                domain=None,
-                provider=self._cfg.provider,
-                model=self._cfg.model,
-                interval=self._cfg.mature_interval,
-                persona=self._cfg.persona,
-            )
-            await self._store.update_task_status(task.task_id, "done")
-        except Exception as exc:
-            logger.warning("mature_only failed for task %s: %s", task.task_id[:8], exc)
-            await self._store.update_task_status(task.task_id, "error")
+        await self._store.update_task_status(task.task_id, "done")
 
     async def _dispatch_collector(
         self,

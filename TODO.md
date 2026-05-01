@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-05-02
+> 最終更新: 2026-05-02 (P-R1 完了、P-R7 ポーリングシナリオ追記)
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_translate.md` / `plan_version_aware.md` / `plan_neat_hyp_e.md` / `plan_programming_seed.md` / `med_enhancement_seed.md` / `med_seed_papers.md`
 
 ---
@@ -969,13 +969,13 @@ Gap Detection → Enrich → Dispatch の自律サイクルパイプライン。
 
 ### 残課題
 
-#### P-R1. Seeder / Reviewer 分離 🔴
-**現状**: `_dispatch_mature()` が `mature_only()` を呼び出し、Seeder（クエリ生成+文書収集）と Reviewer（品質審査）が混在している。
-**方針**:
-- `unreviewed_backlog` / `low_quality` → Reviewer タブが担当（マルチスレッドで処理）
-- `small_cluster` / `source_imbalance` → Seeder（QueryRunner）が担当（シングルスレッドでゆっくり実行）
-- Orchestrator の `_dispatch_mature()` は「Reviewer タスクキューへの追加」のみに変更
-- Seeder（QueryRunner）は将来実装（クエリ→RAG/CRAG→文書収集→FAISSへ追加）
+#### P-R1. Seeder / Reviewer 分離 ✅ **完了（2026-05-02）**
+- ✅ `src/cycle/orchestrator.py`: `_dispatch_mature()` から `mature_only()` 呼び出しを除去
+  - UNREVIEWED_BACKLOG / LOW_QUALITY → ギャップを記録して `done` にマークするのみ
+  - 実際のレビューは Reviewer タブ（ReviewerSession）がマルチスレッドで担当
+  - `OrchestratorConfig.persona` / `mature_interval` は後方互換のため残存（未使用）
+  - `_MATURE_LIMIT_CAP` 定数を削除
+- ✅ `src/cycle/__init__.py` / ドキュメント更新
 
 #### P-R2. Reviewer タブ実装 ✅ **完了（2026-05-01）**
 - ✅ `src/cycle/reviewer_worker.py` (279行) — ReviewTask / SlotConfig / ReviewerConfig / ReviewerSession
@@ -1021,10 +1021,39 @@ Reviewer の分析結果を使って UMAP 上の島間ブリッジを伸ばす�
 - 生成→審査→FAISS 追加 の各ステップの品質テスト
 - 生成元が「レビュー結果」であることの provenance 記録（N-5 SourceTrustScore と連携）
 
-#### P-R7. サイクルタブへの自動ポーリング 🟢
+#### P-R7. Reviewer タブ ポーリング機能 🟡
+
+現状: `gr.Timer(10秒)` で表示更新のみ。ReviewerSession 自体のポーリング間隔と、
+テスト/本番の設定差分を整備する。
+
+**テストシナリオ**（単体テスト・CI で長時間待機を回避）:
+| パラメータ | テスト値 | 説明 |
+|---|---|---|
+| `ReviewerConfig.limit` | 3〜5 件 | 少数タスクで完了を即確認 |
+| `ReviewerConfig.timeout_sec` | 5 秒 | スレッド終了タイムアウト |
+| ロックスリープ（`_LOCK_SLEEP_*` 定数） | 10〜50 ms | ランダム待機を極小化 |
+| `QueryRunnerConfig.top_k` | 1 | 外部検索を最小化 |
+| `gr.Timer` interval（UI 自動更新） | 1 秒 | 進捗を素早く確認 |
+
+**本番シナリオ**:
+| パラメータ | 本番値 | 説明 |
+|---|---|---|
+| `ReviewerConfig.limit` | 200 件（デフォルト） | 一度のセッションで処理する上限 |
+| `ReviewerConfig.timeout_sec` | 60 秒（デフォルト） | スレッド終了タイムアウト |
+| ロックスリープ | 100〜1000 ms（ランダム） | 競合防止のランダムバックオフ |
+| `QueryRunnerConfig.top_k` | 5（デフォルト） | ソースあたり最大取得件数 |
+| `gr.Timer` interval（UI 自動更新） | 10 秒（デフォルト） | 過剰ポーリング防止 |
+
+**実装 TODO**:
+- 🟡 `ReviewerConfig` に `lock_sleep_min_ms` / `lock_sleep_max_ms` フィールドを追加（テスト用に外出し）
+- 🟡 `ReviewerConfig.TEST_PRESET` / `ReviewerConfig.PROD_PRESET` クラスメソッドを追加
+- 🟡 Reviewer タブの `gr.Timer` interval を設定から取得できるようにする
+- 🟡 pytest fixture で `TEST_PRESET` を使う ReviewerSession の統合テスト追加
+
+#### P-R8. サイクルタブへの自動ポーリング 🟢
 現在は手動 `⟳` のみ。`gr.Timer` による 10 秒自動更新。
 
-#### P-R8. プランタブの「タスクスキップ」オーバーライド機能 🟢
+#### P-R9. プランタブの「タスクスキップ」オーバーライド機能 🟢
 
 ---
 
