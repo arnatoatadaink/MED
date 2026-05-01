@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-04-27
+> 最終更新: 2026-05-02
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_translate.md` / `plan_version_aware.md` / `plan_neat_hyp_e.md` / `plan_programming_seed.md` / `med_enhancement_seed.md` / `med_seed_papers.md`
 
 ---
@@ -931,6 +931,95 @@ UMAP 上で各島が充実したら、「2型が4を踏まえて3に教える」
 
 ---
 
+---
+
+## P. サイクル管理システム（Knowledge Collection Cycle）✅ **完了（2026-05-01）**
+
+Gap Detection → Enrich → Dispatch の自律サイクルパイプライン。
+
+### P1d. Orchestrator ✅
+- ✅ `src/cycle/schema.py` — `CollectionTask` / `GapType` (`small_cluster`, `unreviewed_backlog`, `source_imbalance`, `low_quality`)
+- ✅ `src/cycle/gap_detector.py` — UMAP 島分析から CollectionTask リスト生成
+- ✅ `src/cycle/query_generator.py` — LLM 支援検索クエリ生成
+- ✅ `src/cycle/cycle_store.py` — `cycle_runs` / `cycle_tasks` SQLite 永続化
+- ✅ `src/cycle/orchestrator.py` — `OrchestratorConfig` + `Orchestrator.run_cycle()`
+  - `_phase_detect()` → `_phase_enrich()` → `_phase_dispatch()` の 3 フェーズステートマシン
+  - `_MATURE_GAP_TYPES` (`unreviewed_backlog`, `low_quality`) → `mature_only()` 呼び出し（上限 200 件）
+  - `_COLLECTOR_GAP_TYPES` (`small_cluster`, `source_imbalance`) → 収集ログのみ（QueryRunner 未実装）
+- ✅ `src/cycle/__init__.py` — `CycleStore`, `Orchestrator`, `OrchestratorConfig` エクスポート追加
+- ✅ `scripts/run_cycle.py` — CLI エントリーポイント（`--detect-only`, `--enrich-only`, デフォルト full run）
+
+### P3. サイクルモニタリング GUI タブ ✅
+- ✅ `src/gui/tabs/cycle.py` — 読み取り専用モニタリングタブ（259 行）
+  - UMAP Islands 散布図（Plotly Express、最大 8,000 点）
+  - サイクル実行履歴テーブル（直近 20 件）
+  - 最新サイクル タスク一覧テーブル（reason[:80] / keywords[:4]）
+  - `⟳ 更新` ボタン → 全コンポーネント一括更新
+- ✅ `src/gui/app.py` — `🔄 サイクル` タブとして追加（`🎓 学習` の前）
+
+### P4a-b. プランビューア & 実行コントロール ✅
+- ✅ `src/gui/tabs/plan.py` — 245 行
+  - **P4a**: run-id ドロップダウン（直近 50 件）+ サマリー Markdown + タスク詳細 DataFrame
+    - keywords・queries・signals の全文表示（P3 は切り詰め、P4 は完全表示）
+    - `⟳ リスト更新` でドロップダウンを最新化
+  - **P4b**: Provider ドロップダウン + Model テキスト + `▶ Run Cycle` ボタン
+    - DB バックのロック: 直近 30 分以内に `status='running'` な run がある場合はブロック
+    - `threading.Thread(daemon=True)` + `asyncio.new_event_loop()` でバックグラウンド実行
+- ✅ `src/gui/app.py` — `📋 プラン` タブとして追加（`🔄 サイクル` の直後）
+
+### 残課題
+
+#### P-R1. Seeder / Reviewer 分離 🔴
+**現状**: `_dispatch_mature()` が `mature_only()` を呼び出し、Seeder（クエリ生成+文書収集）と Reviewer（品質審査）が混在している。
+**方針**:
+- `unreviewed_backlog` / `low_quality` → Reviewer タブが担当（マルチスレッドで処理）
+- `small_cluster` / `source_imbalance` → Seeder（QueryRunner）が担当（シングルスレッドでゆっくり実行）
+- Orchestrator の `_dispatch_mature()` は「Reviewer タスクキューへの追加」のみに変更
+- Seeder（QueryRunner）は将来実装（クエリ→RAG/CRAG→文書収集→FAISSへ追加）
+
+#### P-R2. Reviewer タブ実装 ✅ **完了（2026-05-01）**
+- ✅ `src/cycle/reviewer_worker.py` (279行) — ReviewTask / SlotConfig / ReviewerConfig / ReviewerSession
+  - `build_task_list()`: unreviewed + needs_update を DB から取得してメモリ上タスクリスト構築
+  - `_get_next_task()`: ロック + ランダムスリープ (100-1000ms) でタスクを排他取得
+  - `_worker_thread()` + `_worker_async()`: スロット毎のデーモンスレッド（asyncio.new_event_loop）
+  - `ReviewerSession.stop()`: 停止フラグ → join(timeout) → 生存スレッドは放棄
+- ✅ `src/gui/tabs/reviewer.py` (185行) — 4スロット UI + 進捗モニター
+  - スロット毎: Provider ドロップダウン / Model テキスト / ペルソナ CheckboxGroup
+  - `▶ レビュー開始` / `■ 停止` ボタン
+  - `gr.Timer(10秒)` による自動ポーリング（Gradio 5+ のみ、旧版は手動 `⟳`）
+  - タスク一覧 DataFrame（最大 200 件）+ ETA 表示
+
+#### P-R3. ペルソナ対 source_type マッピング改善 ✅ **完了（2026-05-02）**
+`_DOMAIN_FLAG_MAP`（seed_and_mature.py:109）を更新:
+- `arxiv` → `strict`（学術論文）
+- `stackoverflow` → `practical_reference`（Q&A実践内容）
+- `web_docs` → `practical_reference`（manページ・wiki系）
+- `tavily` → `practical_reference`（一般Webスニペット）
+- `github` → `on_domain`（コードファイル・現状維持）
+- `github_docs` → `on_domain`（APIリファレンス・seed_from_docs.py 専任）
+
+#### P-R4. 文書側ペルソナ指定フィールド追加 🟡（P-R3 後）
+現状: DB の documents テーブルにペルソナ指定カラムなし。domain_flag で代替。
+TODO: `required_persona TEXT DEFAULT NULL` を追加 → Reviewer ワーカーがペルソナ対応文書のみ処理できるようにする。
+DB マイグレーション: `ALTER TABLE documents ADD COLUMN required_persona TEXT DEFAULT NULL;`
+
+#### P-R5. QueryRunner（Seeder）実装 🟢
+`small_cluster` / `source_imbalance` タスクの enrich 済み queries を使って外部ソース（arXiv / GitHub / Tavily）から文書を収集し FAISS に追加するパイプライン。
+
+#### P-R6. 実験的: レビュー結果によるブリッジ文書生成 🟢（審査プロセス設計後）
+Reviewer の分析結果を使って UMAP 上の島間ブリッジを伸ばす合成文書生成。
+⚠️ ハルシネーション連鎖リスクが高い。実施前に以下が必要:
+- 合成文書の審査プロセス設計（Verifier + trust_score チェックゲート）
+- 生成→審査→FAISS 追加 の各ステップの品質テスト
+- 生成元が「レビュー結果」であることの provenance 記録（N-5 SourceTrustScore と連携）
+
+#### P-R7. サイクルタブへの自動ポーリング 🟢
+現在は手動 `⟳` のみ。`gr.Timer` による 10 秒自動更新。
+
+#### P-R8. プランタブの「タスクスキップ」オーバーライド機能 🟢
+
+---
+
 ## 完了済みモジュール一覧
 
 | モジュール | 状態 |
@@ -943,9 +1032,10 @@ UMAP 上で各島が充実したら、「2型が4を踏まえて3に教える」
 | Seed拡張: github_docs_fetcher / url_list_fetcher / seed_from_docs.py | ✅ |
 | Seed品質管理: seed_blacklist / remature_needs_update.py | ✅ |
 | OpenRouter日次管理: daily_usage_tracker / check_usage.py | ✅ |
-| GUI: Gradio 6タブ + docs_chat | ✅ |
+| GUI: Gradio 9タブ（chat / memory / sandbox / cycle / plan / reviewer / training / guide / settings） | ✅ |
 | CI: GitHub Actions + ruff + pytest 1096テスト | ✅ |
 | A-1: src/auth/ + src/conversation/ + JWT + セッション管理 | ✅ |
 | A-2: ReasoningTrace / ThinkingExtractor / Extended Thinking | ✅ |
 | J: restic + NAS バックアップ基盤 | ✅ |
 | K: CRAG Query Rewriter 4戦略 + タイムアウト伝播 | ✅ |
+| P: サイクル管理（Orchestrator + cycle/plan GUI タブ） | ✅ |

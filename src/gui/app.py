@@ -23,7 +23,7 @@ import gradio as gr
 from src.gui.components.status_bar import get_status_markdown
 
 # タブモジュール
-from src.gui.tabs import chat, cycle, guide, memory, sandbox, settings, training
+from src.gui.tabs import chat, cycle, guide, memory, plan, reviewer, sandbox, settings, training
 from src.gui.utils import get_all_provider_choices
 
 # ────────────────────────────────────────────────────────────────
@@ -270,6 +270,18 @@ def build_app() -> gr.Blocks:
                     "実行は `scripts/run_cycle.py` から。_"
                 )
                 cycle.build_tab()
+
+            with gr.TabItem("📋 プラン"):
+                gr.Markdown(
+                    "_サイクル履歴の詳細プラン閲覧・実行コントロール。_"
+                )
+                plan.build_tab()
+
+            with gr.TabItem("🔬 レビュアー"):
+                gr.Markdown(
+                    "_マルチモデルで unreviewed / low_quality 文書を並列審査する。_"
+                )
+                reviewer.build_tab()
 
             with gr.TabItem("🎓 学習"):
                 gr.Markdown(

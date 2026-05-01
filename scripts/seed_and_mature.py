@@ -106,12 +106,15 @@ _BUILTIN_QUESTIONS = [
 _OPENROUTER_PROVIDERS = {"openrouter"}
 
 # ソース別 domain_flag デフォルト（reviewer プロンプトの品質向上用）
+# arxiv: 学術論文 → strict（高基準）
+# stackoverflow / tavily / web_docs: 実践的参照コンテンツ → practical_reference
+# github / github_docs: CS/ML コード・仕様書 → on_domain
 _DOMAIN_FLAG_MAP: dict[str, str] = {
-    "arxiv": "on_domain",
+    "arxiv": "strict",
     "github": "on_domain",
-    "stackoverflow": "on_domain",
-    "tavily": "on_domain",
-    "web_docs": "on_domain",
+    "stackoverflow": "practical_reference",
+    "tavily": "practical_reference",
+    "web_docs": "practical_reference",
 }
 
 # github_docs は seed_from_docs.py 専任（chunk_markdown パイプライン必須）
