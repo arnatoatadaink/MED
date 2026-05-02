@@ -60,14 +60,14 @@ def build_task_list(cfg: ReviewerConfig) -> list[ReviewTask]:
         conn = sqlite3.connect(str(db_path))
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT id, source_type, extra FROM documents "
+            "SELECT id, source_type, source_extra FROM documents "
             "WHERE review_status = 'unreviewed' ORDER BY created_at ASC LIMIT ?",
             (cfg.limit,),
         ).fetchall()
         for r in rows:
             extra = {}
             try:
-                extra = json.loads(r["extra"] or "{}")
+                extra = json.loads(r["source_extra"] or "{}")
             except Exception:
                 pass
             tasks.append(ReviewTask(
@@ -79,7 +79,7 @@ def build_task_list(cfg: ReviewerConfig) -> list[ReviewTask]:
             remain = cfg.limit - len(tasks)
             seen = {t.doc_id for t in tasks}
             rows2 = conn.execute(
-                "SELECT id, source_type, extra FROM documents "
+                "SELECT id, source_type, source_extra FROM documents "
                 "WHERE review_status = 'needs_update' ORDER BY updated_at ASC LIMIT ?",
                 (remain,),
             ).fetchall()
@@ -88,7 +88,7 @@ def build_task_list(cfg: ReviewerConfig) -> list[ReviewTask]:
                     continue
                 extra = {}
                 try:
-                    extra = json.loads(r["extra"] or "{}")
+                    extra = json.loads(r["source_extra"] or "{}")
                 except Exception:
                     pass
                 tasks.append(ReviewTask(
