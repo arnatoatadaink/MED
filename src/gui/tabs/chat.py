@@ -433,11 +433,12 @@ def respond(
 # タブ UI 構築
 # ────────────────────────────────────────────────────────────────
 
-def build_tab() -> gr.Dropdown:
+def build_tab() -> tuple[gr.Dropdown, dict]:
     """Gradio Blocks コンテキスト内でチャットタブを描画する。
 
     Returns:
-        provider_dd: 設定タブ・app.load から選択肢を更新するために返す。
+        (provider_dd, restore_components): provider_dd は設定タブ更新用。
+        restore_components は app.load の localStorage 復元用コンポーネント辞書。
     """
     # ── セッション / 認証 State ───────────────────────────────
     session_id_state = gr.State(None)   # 現在の session_id
@@ -521,9 +522,10 @@ def build_tab() -> gr.Dropdown:
                 value="auto",
                 label="モデルモード",
                 info="auto: Router が自動選択",
+                elem_id="med-chat-mode",
             )
-            use_memory_chk = gr.Checkbox(value=True, label="FAISSメモリ使用")
-            use_rag_chk = gr.Checkbox(value=True, label="外部RAG使用")
+            use_memory_chk = gr.Checkbox(value=True, label="FAISSメモリ使用", elem_id="med-chat-use-memory")
+            use_rag_chk = gr.Checkbox(value=True, label="外部RAG使用", elem_id="med-chat-use-rag")
 
             gr.Markdown("#### LLM プロバイダー / モデル")
             _initial_choices = get_all_provider_choices()
@@ -532,11 +534,13 @@ def build_tab() -> gr.Dropdown:
                 value=_initial_choices[0],
                 label="プロバイダー",
                 info="設定ファイルの primary_provider を使う場合は auto のまま",
+                elem_id="med-chat-provider",
             )
             model_box = gr.Textbox(
                 placeholder="空白=設定ファイルのデフォルト",
                 label="モデル名 (任意)",
                 lines=1,
+                elem_id="med-chat-model",
             )
 
             # プロバイダー選択時にモデル例を表示
@@ -561,14 +565,17 @@ def build_tab() -> gr.Dropdown:
                 timeout_h = gr.Number(
                     value=0, minimum=0, maximum=24, step=1,
                     label="時 (h)", precision=0, scale=1,
+                    elem_id="med-chat-timeout-h",
                 )
                 timeout_m = gr.Number(
                     value=5, minimum=0, maximum=59, step=1,
                     label="分 (m)", precision=0, scale=1,
+                    elem_id="med-chat-timeout-m",
                 )
                 timeout_s = gr.Number(
                     value=0, minimum=0, maximum=59, step=1,
                     label="秒 (s)", precision=0, scale=1,
+                    elem_id="med-chat-timeout-s",
                 )
             timeout_display = gr.Markdown("_設定値: 300秒 (5分)_")
 
@@ -595,6 +602,7 @@ def build_tab() -> gr.Dropdown:
                 value="cascade",
                 label="実行モード",
                 info="cascade: 安い順に試し成功で停止 / parallel: 全戦略を実行",
+                elem_id="med-chat-crag-mode",
             )
             gr.Markdown(
                 "_複数選択可。モデル未配置の戦略は効果なし。_",
@@ -605,21 +613,25 @@ def build_tab() -> gr.Dropdown:
                 value=True,
                 label=_strat_map.get("rule_expand", {}).get("label", "ルールベース展開"),
                 interactive=True,
+                elem_id="med-chat-crag-rule",
             )
             crag_flan_chk = gr.Checkbox(
                 value=False,
                 label=_strat_map.get("flan_t5_rewrite", {}).get("label", "FLAN-T5 Rewrite"),
                 interactive=_strat_map.get("flan_t5_rewrite", {}).get("available", False),
+                elem_id="med-chat-crag-flan",
             )
             crag_qwen_chk = gr.Checkbox(
                 value=False,
                 label=_strat_map.get("qwen_rewrite", {}).get("label", "Qwen2.5-0.5B Rewrite"),
                 interactive=_strat_map.get("qwen_rewrite", {}).get("available", False),
+                elem_id="med-chat-crag-qwen",
             )
             crag_llm_chk = gr.Checkbox(
                 value=False,
                 label=_strat_map.get("llm_rewrite", {}).get("label", "Teacher LLM Rewrite"),
                 interactive=_strat_map.get("llm_rewrite", {}).get("available", False),
+                elem_id="med-chat-crag-llm",
             )
 
             gr.Markdown("### レスポンス情報")
@@ -735,4 +747,55 @@ def build_tab() -> gr.Dropdown:
         visible=False,
     )
 
-    return provider_dd
+    # ── localStorage 保存 ─────────────────────────────────────────
+    for _comp, _key in [
+        (provider_dd,     "med-chat-provider"),
+        (mode_radio,      "med-chat-mode"),
+        (crag_mode_radio, "med-chat-crag-mode"),
+    ]:
+        _comp.change(
+            fn=None, inputs=[_comp],
+            js=f"(v) => {{ localStorage.setItem('{_key}', v ?? ''); }}",
+        )
+    for _comp, _key in [
+        (use_memory_chk,  "med-chat-use-memory"),
+        (use_rag_chk,     "med-chat-use-rag"),
+        (crag_rule_chk,   "med-chat-crag-rule"),
+        (crag_flan_chk,   "med-chat-crag-flan"),
+        (crag_qwen_chk,   "med-chat-crag-qwen"),
+        (crag_llm_chk,    "med-chat-crag-llm"),
+    ]:
+        _comp.change(
+            fn=None, inputs=[_comp],
+            js=f"(v) => {{ localStorage.setItem('{_key}', JSON.stringify(v)); }}",
+        )
+    for _comp, _key in [
+        (timeout_h, "med-chat-timeout-h"),
+        (timeout_m, "med-chat-timeout-m"),
+        (timeout_s, "med-chat-timeout-s"),
+    ]:
+        _comp.change(
+            fn=None, inputs=[_comp],
+            js=f"(v) => {{ localStorage.setItem('{_key}', JSON.stringify(v)); }}",
+        )
+    model_box.blur(
+        fn=None, inputs=[model_box],
+        js="(v) => { localStorage.setItem('med-chat-model', v ?? ''); }",
+    )
+
+    _restore = {
+        "provider": provider_dd,
+        "model": model_box,
+        "mode": mode_radio,
+        "use_memory": use_memory_chk,
+        "use_rag": use_rag_chk,
+        "timeout_h": timeout_h,
+        "timeout_m": timeout_m,
+        "timeout_s": timeout_s,
+        "crag_mode": crag_mode_radio,
+        "crag_rule": crag_rule_chk,
+        "crag_flan": crag_flan_chk,
+        "crag_qwen": crag_qwen_chk,
+        "crag_llm": crag_llm_chk,
+    }
+    return provider_dd, _restore

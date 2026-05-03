@@ -110,17 +110,30 @@ def _refresh_all():
 
 # ── タブ構築 ───────────────────────────────────────────────────
 
-def build_tab() -> None:
-    """Reviewer 制御タブを構築する。"""
+def build_tab() -> tuple:
+    """Reviewer 制御タブを構築する。
+
+    Returns:
+        Flat tuple of all input components for localStorage restore in app.py.
+    """
     provider_choices = get_all_provider_choices()
     persona_choices = get_persona_choices()
 
     # ── 実行設定 ───────────────────────────────────────────────
     with gr.Accordion("実行設定", open=True):
         with gr.Row():
-            limit_nb = gr.Number(label="最大件数", value=200, minimum=1, maximum=2000, scale=1)
-            timeout_nb = gr.Number(label="タイムアウト(秒)", value=60, minimum=10, maximum=600, scale=1)
-            low_q_cb = gr.Checkbox(label="needs_update も含む", value=True, scale=1)
+            limit_nb = gr.Number(
+                label="最大件数", value=200, minimum=1, maximum=2000, scale=1,
+                elem_id="med-rev-limit",
+            )
+            timeout_nb = gr.Number(
+                label="タイムアウト(秒)", value=60, minimum=10, maximum=600, scale=1,
+                elem_id="med-rev-timeout",
+            )
+            low_q_cb = gr.Checkbox(
+                label="needs_update も含む", value=True, scale=1,
+                elem_id="med-rev-low-q",
+            )
 
     # ── モデルスロット ─────────────────────────────────────────
     gr.Markdown("#### モデルスロット（最大 4）")
@@ -132,17 +145,20 @@ def build_tab() -> None:
                 label=f"Slot {i} Provider",
                 value="fastflowlm" if i == 1 else None,
                 scale=2,
+                elem_id=f"med-rev-slot{i}-provider",
             )
             m = gr.Textbox(
                 label="Model (空欄=デフォルト)",
                 placeholder="例: gemini-2.0-flash",
                 scale=3,
+                elem_id=f"med-rev-slot{i}-model",
             )
             ps = gr.CheckboxGroup(
                 choices=persona_choices,
                 label="対応ペルソナ",
                 value=["auto"] if i == 1 else [],
                 scale=4,
+                elem_id=f"med-rev-slot{i}-personas",
             )
         slot_inputs.append((p, m, ps))
 
@@ -183,3 +199,29 @@ def build_tab() -> None:
     )
     stop_btn.click(fn=_stop_review, outputs=[action_status])
     refresh_btn.click(fn=_refresh_all, outputs=[status_md, task_df])
+
+    # ── localStorage 保存 ─────────────────────────────────────
+    for _comp, _key in [(limit_nb, "med-rev-limit"), (timeout_nb, "med-rev-timeout")]:
+        _comp.change(
+            fn=None, inputs=[_comp],
+            js=f"(v) => {{ localStorage.setItem('{_key}', JSON.stringify(v)); }}",
+        )
+    low_q_cb.change(
+        fn=None, inputs=[low_q_cb],
+        js="(v) => { localStorage.setItem('med-rev-low-q', JSON.stringify(v)); }",
+    )
+    for i, (p, m, ps) in enumerate(slot_inputs, start=1):
+        p.change(
+            fn=None, inputs=[p],
+            js=f"(v) => {{ if (v == null || v === '') {{ localStorage.removeItem('med-rev-slot{i}-provider'); }} else {{ localStorage.setItem('med-rev-slot{i}-provider', v); }} }}",
+        )
+        m.blur(
+            fn=None, inputs=[m],
+            js=f"(v) => {{ localStorage.setItem('med-rev-slot{i}-model', v ?? ''); }}",
+        )
+        ps.change(
+            fn=None, inputs=[ps],
+            js=f"(v) => {{ localStorage.setItem('med-rev-slot{i}-personas', JSON.stringify(v)); }}",
+        )
+
+    return (limit_nb, timeout_nb, low_q_cb, slot_inputs)

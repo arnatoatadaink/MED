@@ -179,8 +179,12 @@ def _trigger_cycle(provider: str, model: str) -> str:
 
 # ── タブ構築 ───────────────────────────────────────────────────
 
-def build_tab() -> None:
-    """プランビューア & 実行コントロールタブを構築する。"""
+def build_tab() -> tuple[gr.Dropdown, gr.Textbox]:
+    """プランビューア & 実行コントロールタブを構築する。
+
+    Returns:
+        (provider_dd, model_tb) — localStorage 復元用に app.py へ渡す。
+    """
 
     # ── P4b: 実行コントロール ──────────────────────────────────
     with gr.Accordion("▶ サイクル実行", open=True):
@@ -190,11 +194,13 @@ def build_tab() -> None:
                 value="fastflowlm",
                 label="Provider",
                 scale=2,
+                elem_id="med-plan-provider",
             )
             model_tb = gr.Textbox(
                 label="Model (空欄=デフォルト)",
                 placeholder="例: gemini-2.0-flash",
                 scale=3,
+                elem_id="med-plan-model",
             )
             run_btn = gr.Button("▶ Run Cycle", variant="primary", scale=1)
         trigger_status = gr.Markdown("_ここにステータスが表示されます。_")
@@ -204,6 +210,18 @@ def build_tab() -> None:
             inputs=[provider_dd, model_tb],
             outputs=[trigger_status],
         )
+
+    # localStorage 保存（Dropdown: change、Textbox: blur）
+    provider_dd.change(
+        fn=None,
+        inputs=[provider_dd],
+        js="(v) => { localStorage.setItem('med-plan-provider', v ?? ''); }",
+    )
+    model_tb.blur(
+        fn=None,
+        inputs=[model_tb],
+        js="(v) => { localStorage.setItem('med-plan-model', v ?? ''); }",
+    )
 
     gr.Markdown("---")
 
@@ -243,3 +261,5 @@ def build_tab() -> None:
         fn=_refresh_dd,
         outputs=[run_dd],
     )
+
+    return provider_dd, model_tb

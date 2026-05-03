@@ -116,6 +116,7 @@ class Orchestrator:
         """QueryGenerator で keywords / queries を補完する。"""
         gen = QueryGenerator(
             provider=self._cfg.provider,
+            model=self._cfg.model or None,
             db_path=self._cfg.db_path,
         )
         enriched = await gen.enrich_batch(tasks, concurrency=self._cfg.enrich_concurrency)

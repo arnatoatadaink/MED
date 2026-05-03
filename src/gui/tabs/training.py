@@ -71,8 +71,12 @@ def _stop_training() -> dict:
 # タブ UI 構築
 # ────────────────────────────────────────────────────────────────
 
-def build_tab() -> None:
-    """Gradio Blocks コンテキスト内で学習タブを描画する。"""
+def build_tab() -> tuple:
+    """Gradio Blocks コンテキスト内で学習タブを描画する。
+
+    Returns:
+        Tuple of input components for localStorage restore in app.py.
+    """
 
     with gr.Tabs():
 
@@ -86,44 +90,50 @@ def build_tab() -> None:
                     value="grpo",
                     label="学習アルゴリズム",
                     info="デフォルト: GRPO (Group Relative Policy Optimization)",
+                    elem_id="med-train-algorithm",
                 )
                 adapter_dd = gr.Dropdown(
                     choices=["tinylora", "lora", "lora_xs", "full_ft"],
                     value="tinylora",
                     label="パラメータアダプタ",
                     info="デフォルト: TinyLoRA (極少パラメータ)",
+                    elem_id="med-train-adapter",
                 )
                 reward_dd = gr.Dropdown(
                     choices=["composite", "code_exec", "teacher_eval", "hybrid"],
                     value="composite",
                     label="Reward関数",
                     info="デフォルト: 複合Reward (多信号加重)",
+                    elem_id="med-train-reward",
                 )
 
             with gr.Row():
                 steps_slider = gr.Slider(
-                    100, 10000, value=1000, step=100, label="総ステップ数"
+                    100, 10000, value=1000, step=100, label="総ステップ数",
+                    elem_id="med-train-steps",
                 )
                 batch_slider = gr.Slider(
-                    4, 64, value=8, step=4, label="バッチサイズ"
+                    4, 64, value=8, step=4, label="バッチサイズ",
+                    elem_id="med-train-batch",
                 )
                 lr_slider = gr.Slider(
-                    1e-6, 1e-3, value=1e-4, step=1e-6, label="学習率"
+                    1e-6, 1e-3, value=1e-4, step=1e-6, label="学習率",
+                    elem_id="med-train-lr",
                 )
 
             gr.Markdown("#### TinyLoRA 設定 (デフォルト: Morris et al., 2026)")
             with gr.Row():
-                frozen_rank = gr.Number(value=2, label="frozen_rank", precision=0)
-                proj_dim = gr.Number(value=4, label="projection_dim", precision=0)
-                tie_factor = gr.Number(value=7, label="tie_factor", precision=0)
+                frozen_rank = gr.Number(value=2, label="frozen_rank", precision=0, elem_id="med-train-frozen-rank")
+                proj_dim = gr.Number(value=4, label="projection_dim", precision=0, elem_id="med-train-proj-dim")
+                tie_factor = gr.Number(value=7, label="tie_factor", precision=0, elem_id="med-train-tie-factor")
 
             gr.Markdown("#### Composite Reward 重み配分")
             with gr.Row():
-                w_correctness = gr.Slider(0, 1, value=0.35, label="correctness")
-                w_retrieval = gr.Slider(0, 1, value=0.20, label="retrieval_quality")
-                w_exec = gr.Slider(0, 1, value=0.20, label="exec_success")
-                w_efficiency = gr.Slider(0, 1, value=0.10, label="efficiency")
-                w_memory = gr.Slider(0, 1, value=0.15, label="memory_utilization")
+                w_correctness = gr.Slider(0, 1, value=0.35, label="correctness", elem_id="med-train-w-correctness")
+                w_retrieval = gr.Slider(0, 1, value=0.20, label="retrieval_quality", elem_id="med-train-w-retrieval")
+                w_exec = gr.Slider(0, 1, value=0.20, label="exec_success", elem_id="med-train-w-exec")
+                w_efficiency = gr.Slider(0, 1, value=0.10, label="efficiency", elem_id="med-train-w-efficiency")
+                w_memory = gr.Slider(0, 1, value=0.15, label="memory_utilization", elem_id="med-train-w-memory")
 
             with gr.Row():
                 start_btn = gr.Button("▶  学習開始", variant="primary", scale=2)
@@ -243,3 +253,38 @@ def build_tab() -> None:
 2. **GRPO + TinyLoRA** — メモリ検索・利用スキルのRL学習
 3. **評価** — Benchmark Suite で性能測定
 """)
+
+    # ── localStorage 保存 ────────────────────────────────────────
+    for _comp, _key in [
+        (algorithm_dd, "med-train-algorithm"),
+        (adapter_dd,   "med-train-adapter"),
+        (reward_dd,    "med-train-reward"),
+    ]:
+        _comp.change(
+            fn=None, inputs=[_comp],
+            js=f"(v) => {{ localStorage.setItem('{_key}', v ?? ''); }}",
+        )
+    for _comp, _key in [
+        (steps_slider,   "med-train-steps"),
+        (batch_slider,   "med-train-batch"),
+        (lr_slider,      "med-train-lr"),
+        (frozen_rank,    "med-train-frozen-rank"),
+        (proj_dim,       "med-train-proj-dim"),
+        (tie_factor,     "med-train-tie-factor"),
+        (w_correctness,  "med-train-w-correctness"),
+        (w_retrieval,    "med-train-w-retrieval"),
+        (w_exec,         "med-train-w-exec"),
+        (w_efficiency,   "med-train-w-efficiency"),
+        (w_memory,       "med-train-w-memory"),
+    ]:
+        _comp.change(
+            fn=None, inputs=[_comp],
+            js=f"(v) => {{ localStorage.setItem('{_key}', JSON.stringify(v)); }}",
+        )
+
+    return (
+        algorithm_dd, adapter_dd, reward_dd,
+        steps_slider, batch_slider, lr_slider,
+        frozen_rank, proj_dim, tie_factor,
+        w_correctness, w_retrieval, w_exec, w_efficiency, w_memory,
+    )

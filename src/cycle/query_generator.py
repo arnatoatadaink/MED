@@ -42,11 +42,13 @@ class QueryGenerator:
     def __init__(
         self,
         provider: str = _DEFAULT_PROVIDER,
+        model: Optional[str] = None,
         db_path: str = _DEFAULT_DB_PATH,
         temperature: float = 0.7,
         max_tokens: int = 512,
     ) -> None:
         self._provider    = provider
+        self._model       = model
         self._db_path     = db_path
         self._temperature = temperature
         self._max_tokens  = max_tokens
@@ -130,6 +132,7 @@ class QueryGenerator:
             resp = await gateway.complete(
                 prompt,
                 provider=self._provider,
+                model=self._model,
                 max_tokens=self._max_tokens,
                 temperature=self._temperature,
             )

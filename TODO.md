@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-05-02 (P-R1 完了、P-R7 ポーリングシナリオ追記)
+> 最終更新: 2026-05-03 (GUI localStorage 永続化完了、QueryGenerator model 未伝播バグ修正)
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_translate.md` / `plan_version_aware.md` / `plan_neat_hyp_e.md` / `plan_programming_seed.md` / `med_enhancement_seed.md` / `med_seed_papers.md`
 
 ---
@@ -87,9 +87,9 @@
 ## F. メモリ品質目標（シード継続）
 > 📄 `plan_programming_seed.md`
 
-**現状: approved 10,111件 / FAISS code 25,389 vectors（2026-04-28）**
-- ✅ approved 10,000件目標 達成済み（Apr 28確認）
-- needs_update: 6,304件（大幅増。主因: github_docs NodeJS内部リンク問題 → F-5で対処中）
+**現状: approved 11,116件 / needs_update 4,583件 / unreviewed 671件（2026-05-03）**
+- ✅ approved 10,000件目標 達成済み（Apr 28確認）、現在 11,116件
+- needs_update: 4,583件（F-5クリーナー修正により削減傾向）
 - mature はローカルモデル（LM Studio / FastFlowLM）が継続稼働中
 
 ### F-1. 日次 seed_and_mature ジョブ 🟡（mature はローカル継続中）
@@ -998,6 +998,17 @@ Gap Detection → Enrich → Dispatch の自律サイクルパイプライン。
 - `github` → `on_domain`（コードファイル・現状維持）
 - `github_docs` → `on_domain`（APIリファレンス・seed_from_docs.py 専任）
 
+#### P-GUI-1. GUI 入力パラメーター localStorage 永続化 ✅ **完了（2026-05-03）**
+ページリロード後も全入力値を復元する。`elem_id="med-{tab}-{component}"` をキーに使用。
+
+- ✅ `src/gui/tabs/plan.py` — provider / model（2コンポーネント）
+- ✅ `src/gui/tabs/chat.py` — provider / model / mode / memory,RAG チェック / timeout h,m,s / CRAG 設定 4 個（13コンポーネント）
+- ✅ `src/gui/tabs/reviewer.py` — limit / timeout / low_q / スロット 1-4 × (provider, model, personas)（15コンポーネント）
+- ✅ `src/gui/tabs/training.py` — algorithm / adapter / reward / sliders 3 / TinyLoRA 3 / reward 重み 5（14コンポーネント）
+- ✅ `src/gui/app.py` — `app.load(fn=None, js=..., outputs=[...])` でページロード時に一括復元
+  - Dropdown / Radio / Checkbox → `.change()` で即保存、Textbox → `.blur()` で保存
+  - optional Dropdown（null 許容）は未保存時に `localStorage.removeItem` → デフォルト `null` で復元
+
 #### P-R4. 文書側ペルソナ指定フィールド追加 🟡（P-R3 後）
 現状: DB の documents テーブルにペルソナ指定カラムなし。domain_flag で代替。
 TODO: `required_persona TEXT DEFAULT NULL` を追加 → Reviewer ワーカーがペルソナ対応文書のみ処理できるようにする。
@@ -1013,6 +1024,13 @@ DB マイグレーション: `ALTER TABLE documents ADD COLUMN required_persona 
 - ✅ `src/cycle/orchestrator.py`: `_dispatch_needs_collector()` → `_dispatch_collector()` に置換
   - `_phase_dispatch()` で QueryRunner を1インスタンス生成・再利用、finally で close
 - ✅ `src/cycle/__init__.py`: `QueryRunner`, `QueryRunnerConfig` エクスポート追加
+
+#### P-BUG-1. バグ修正（2026-05-03）✅
+- ✅ **reviewer Slot 2-4 provider エラー**: 未保存時に `''` を復元 → Gradio が choices バリデーションエラー
+  - 修正: 保存側を `removeItem`（null クリア）に変更、復元側デフォルトを `null` に変更
+- ✅ **QueryGenerator モデル未伝播**: プランタブで指定したモデルが LLM 呼び出しに渡らずプロバイダーデフォルトモデルが使われていた
+  - 修正: `QueryGenerator.__init__` に `model: Optional[str]` 追加、`_call_llm` に `model=self._model` 追加
+  - 修正: `Orchestrator._phase_enrich` で `model=self._cfg.model or None` を渡すよう修正
 
 #### P-R6. 実験的: レビュー結果によるブリッジ文書生成 🟢（審査プロセス設計後）
 Reviewer の分析結果を使って UMAP 上の島間ブリッジを伸ばす合成文書生成。
@@ -1070,6 +1088,7 @@ Reviewer の分析結果を使って UMAP 上の島間ブリッジを伸ばす�
 | Seed品質管理: seed_blacklist / remature_needs_update.py | ✅ |
 | OpenRouter日次管理: daily_usage_tracker / check_usage.py | ✅ |
 | GUI: Gradio 9タブ（chat / memory / sandbox / cycle / plan / reviewer / training / guide / settings） | ✅ |
+| GUI localStorage 永続化: 全入力タブ 44コンポーネント（plan/chat/reviewer/training）| ✅ |
 | CI: GitHub Actions + ruff + pytest 1096テスト | ✅ |
 | A-1: src/auth/ + src/conversation/ + JWT + セッション管理 | ✅ |
 | A-2: ReasoningTrace / ThinkingExtractor / Extended Thinking | ✅ |

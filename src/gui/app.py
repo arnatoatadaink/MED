@@ -250,7 +250,7 @@ def build_app() -> gr.Blocks:
                 gr.Markdown(
                     "_Teacher / Student モデルへのクエリ。RAGとFAISSメモリを活用した応答を返します。_"
                 )
-                provider_dd = chat.build_tab()
+                provider_dd, _chat_restore = chat.build_tab()
 
             with gr.TabItem("🧠 FAISSメモリ"):
                 gr.Markdown(
@@ -275,19 +275,19 @@ def build_app() -> gr.Blocks:
                 gr.Markdown(
                     "_サイクル履歴の詳細プラン閲覧・実行コントロール。_"
                 )
-                plan.build_tab()
+                plan_provider_dd, plan_model_tb = plan.build_tab()
 
             with gr.TabItem("🔬 レビュアー"):
                 gr.Markdown(
                     "_マルチモデルで unreviewed / low_quality 文書を並列審査する。_"
                 )
-                reviewer.build_tab()
+                _rev_limit, _rev_timeout, _rev_low_q, _rev_slots = reviewer.build_tab()
 
             with gr.TabItem("🎓 学習"):
                 gr.Markdown(
                     "_GRPO + TinyLoRA 学習の設定・制御・進捗モニタリング。_"
                 )
-                training.build_tab()
+                _train_comps = training.build_tab()
 
             with gr.TabItem("🔧 設定"):
                 gr.Markdown(
@@ -312,6 +312,116 @@ def build_app() -> gr.Blocks:
             return _gr.update(choices=get_all_provider_choices())
 
         app.load(fn=_sync_provider_choices, outputs=[provider_dd])
+
+        # ── localStorage から入力値を復元 ──
+        app.load(
+            fn=None,
+            js="""() => {
+                function ls(k, d) { var v = localStorage.getItem(k); return v !== null ? v : d; }
+                return [
+                    ls('med-plan-provider', 'fastflowlm'),
+                    ls('med-plan-model', '')
+                ];
+            }""",
+            outputs=[plan_provider_dd, plan_model_tb],
+        )
+        _cr = _chat_restore
+        _chat_initial_provider = get_all_provider_choices()
+        _chat_provider_default = _chat_initial_provider[0] if _chat_initial_provider else "auto"
+        app.load(
+            fn=None,
+            js=f"""() => {{
+                function ls(k, d) {{ var v = localStorage.getItem(k); return v !== null ? v : d; }}
+                function lsj(k, d) {{ try {{ var v = localStorage.getItem(k); return v !== null ? JSON.parse(v) : d; }} catch(e) {{ return d; }} }}
+                return [
+                    ls('med-chat-provider', {repr(_chat_provider_default)}),
+                    ls('med-chat-model', ''),
+                    ls('med-chat-mode', 'auto'),
+                    lsj('med-chat-use-memory', true),
+                    lsj('med-chat-use-rag', true),
+                    lsj('med-chat-timeout-h', 0),
+                    lsj('med-chat-timeout-m', 5),
+                    lsj('med-chat-timeout-s', 0),
+                    ls('med-chat-crag-mode', 'cascade'),
+                    lsj('med-chat-crag-rule', true),
+                    lsj('med-chat-crag-flan', false),
+                    lsj('med-chat-crag-qwen', false),
+                    lsj('med-chat-crag-llm', false)
+                ];
+            }}""",
+            outputs=[
+                _cr["provider"], _cr["model"], _cr["mode"],
+                _cr["use_memory"], _cr["use_rag"],
+                _cr["timeout_h"], _cr["timeout_m"], _cr["timeout_s"],
+                _cr["crag_mode"],
+                _cr["crag_rule"], _cr["crag_flan"], _cr["crag_qwen"], _cr["crag_llm"],
+            ],
+        )
+
+        # reviewer restore
+        _rev_slot_outputs = [c for trio in _rev_slots for c in trio]
+        app.load(
+            fn=None,
+            js="""() => {
+                function lsj(k, d) { try { var v = localStorage.getItem(k); return v !== null ? JSON.parse(v) : d; } catch(e) { return d; } }
+                function ls(k, d) { var v = localStorage.getItem(k); return (v !== null && v !== '') ? v : d; }
+                return [
+                    lsj('med-rev-limit', 200),
+                    lsj('med-rev-timeout', 60),
+                    lsj('med-rev-low-q', true),
+                    ls('med-rev-slot1-provider', 'fastflowlm'),
+                    ls('med-rev-slot1-model', ''),
+                    lsj('med-rev-slot1-personas', ['auto']),
+                    ls('med-rev-slot2-provider', null),
+                    ls('med-rev-slot2-model', ''),
+                    lsj('med-rev-slot2-personas', []),
+                    ls('med-rev-slot3-provider', null),
+                    ls('med-rev-slot3-model', ''),
+                    lsj('med-rev-slot3-personas', []),
+                    ls('med-rev-slot4-provider', null),
+                    ls('med-rev-slot4-model', ''),
+                    lsj('med-rev-slot4-personas', [])
+                ];
+            }""",
+            outputs=[_rev_limit, _rev_timeout, _rev_low_q, *_rev_slot_outputs],
+        )
+
+        # training restore
+        (
+            _t_algo, _t_adap, _t_rew,
+            _t_steps, _t_batch, _t_lr,
+            _t_rank, _t_proj, _t_tie,
+            _t_wc, _t_wr, _t_we, _t_wef, _t_wm,
+        ) = _train_comps
+        app.load(
+            fn=None,
+            js="""() => {
+                function ls(k, d) { var v = localStorage.getItem(k); return v !== null ? v : d; }
+                function lsj(k, d) { try { var v = localStorage.getItem(k); return v !== null ? JSON.parse(v) : d; } catch(e) { return d; } }
+                return [
+                    ls('med-train-algorithm', 'grpo'),
+                    ls('med-train-adapter', 'tinylora'),
+                    ls('med-train-reward', 'composite'),
+                    lsj('med-train-steps', 1000),
+                    lsj('med-train-batch', 8),
+                    lsj('med-train-lr', 0.0001),
+                    lsj('med-train-frozen-rank', 2),
+                    lsj('med-train-proj-dim', 4),
+                    lsj('med-train-tie-factor', 7),
+                    lsj('med-train-w-correctness', 0.35),
+                    lsj('med-train-w-retrieval', 0.20),
+                    lsj('med-train-w-exec', 0.20),
+                    lsj('med-train-w-efficiency', 0.10),
+                    lsj('med-train-w-memory', 0.15)
+                ];
+            }""",
+            outputs=[
+                _t_algo, _t_adap, _t_rew,
+                _t_steps, _t_batch, _t_lr,
+                _t_rank, _t_proj, _t_tie,
+                _t_wc, _t_wr, _t_we, _t_wef, _t_wm,
+            ],
+        )
 
     return app
 
