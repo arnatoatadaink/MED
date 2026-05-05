@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-05-03 (GUI localStorage 永続化完了、QueryGenerator model 未伝播バグ修正)
+> 最終更新: 2026-05-05 (シーダー/レビュアー動作確認・arXiv 429 / SO 400 対策・SO 日次制限・GUI ポーリング強化・タブ名変更)
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_translate.md` / `plan_version_aware.md` / `plan_neat_hyp_e.md` / `plan_programming_seed.md` / `med_enhancement_seed.md` / `med_seed_papers.md`
 
 ---
@@ -87,9 +87,10 @@
 ## F. メモリ品質目標（シード継続）
 > 📄 `plan_programming_seed.md`
 
-**現状: approved 11,116件 / needs_update 4,583件 / unreviewed 671件（2026-05-03）**
+**現状: approved 11,116件 / needs_update 4,583件 / unreviewed 765件（2026-05-05）**
 - ✅ approved 10,000件目標 達成済み（Apr 28確認）、現在 11,116件
 - needs_update: 4,583件（F-5クリーナー修正により削減傾向）
+- unreviewed: 765件（シーダーによる新規投入が進行中）
 - mature はローカルモデル（LM Studio / FastFlowLM）が継続稼働中
 
 ### F-1. 日次 seed_and_mature ジョブ 🟡（mature はローカル継続中）
@@ -1032,6 +1033,44 @@ DB マイグレーション: `ALTER TABLE documents ADD COLUMN required_persona 
   - 修正: `QueryGenerator.__init__` に `model: Optional[str]` 追加、`_call_llm` に `model=self._model` 追加
   - 修正: `Orchestrator._phase_enrich` で `model=self._cfg.model or None` を渡すよう修正
 
+#### P-GUI-2. シーダータブ ポーリング強化 ✅ **完了（2026-05-04）**
+- ✅ **⏸ 停止 / ▶ 再開ボタン**: `_polling_paused` フラグで Timer コールバックを一時停止
+  - サーバー再起動後の誤検知（古い `running` run を遷移と誤認）を手動回避できる
+- ✅ **ETA 表示**: `running` 中のみ `ETA: 残り Xm Ys (done/total 完了)` を status_md に追記
+  - 完了済みタスクの平均処理時間から残り時間を算出
+- ✅ **タブ名変更**: 🔄 サイクル → 📊 アナリティクス / 📋 プラン → 🌱 シーダー（`src/gui/app.py`）
+
+#### P-BUG-2. レトリーバー レート制限・並列制御強化 ✅ **完了（2026-05-05）**
+- ✅ **arXiv 429 対策**:
+  - レート制限 5s → **10s** に引き上げ（`src/rag/retriever.py`）
+  - 429 受信時に 15s/45s 指数バックオフリトライ（最大2回）を追加（`src/rag/retrievers/arxiv.py`）
+- ✅ **SO 400/429 対策**: レート制限を **12s** に設定（`src/rag/retriever.py`）
+- ✅ **SO 日次上限 300件**: `DailyUsageTracker` を流用し `data/openrouter_usage.db` で使用回数を管理
+  - `_RATE_LIMIT_COUNTS = {"stackoverflow": 300}` — ソース別日次上限を定義
+  - `BaseRetriever.search()` でセマフォ取得前に日次チェック → 超過時は `[]` を返してスキップ
+  - `_get_daily_tracker()` — モジュールレベル遅延初期化（`asyncio.Lock` 不使用、SO concurrency=1 で二重初期化防止）
+- ✅ **ソース別同時リクエスト上限**: `BaseRetriever` にインスタンス単位のセマフォを追加
+  - arXiv: 1 / SO: 1 / GitHub: 2 / Tavily: 2（異なるソース間の並列実行は維持）
+  - `asyncio.Semaphore` をインスタンスに保持（`_get_sem()` 遅延生成）— イベントループ跨ぎ安全
+- ✅ **enrich_concurrency デフォルト**: 3 → **1**（LMStudio等ローカルプロバイダーの同時リクエスト積み上がりを防止）
+
+#### P-GUI-3. Reviewer タブ キュー件数表示 ✅ **完了（2026-05-05）**
+- ✅ `_get_queue_counts()` / `_format_queue_md()` 追加（`src/gui/tabs/reviewer.py`）
+  - SQLite から `review_status` 別件数を集計（unreviewed / needs_update / 合計）
+- ✅ 実行設定アコーディオン内に件数 Markdown + `⟳ 件数更新` ボタンを配置
+- ✅ **⟳ ボタンクリック** → DB 再クエリして最新件数を反映
+
+#### P-BUG-3. DB ロック解除手順の確立 ✅ **完了（2026-05-05）**
+サーバー中断でシーダーが `running` のまま止まる問題（hot-reload による `.claude/` 読み取り権限エラーが原因）
+- ✅ `fuser data/metadata.db` でロック保持プロセス確認 → サーバー終了後は自動解除
+- ✅ WAL ファイル（`-wal`/`-shm`）はサーバー終了後に残存しないことを確認
+- ✅ `running` 状態の `cycle_runs` レコードを `error` に書き換えるワンライナー手順を確立
+  ```python
+  conn.execute("UPDATE cycle_runs SET status='error', finished_at=datetime('now'), "
+               "summary='Interrupted: server shutdown / DB lock' WHERE status='running'")
+  ```
+- ⚠️ **根本対策**: `--reload-exclude .claude` を uvicorn 起動時に指定（`.claude/` 読み取りエラーを防止）
+
 #### P-R6. 実験的: レビュー結果によるブリッジ文書生成 🟢（審査プロセス設計後）
 Reviewer の分析結果を使って UMAP 上の島間ブリッジを伸ばす合成文書生成。
 ⚠️ ハルシネーション連鎖リスクが高い。実施前に以下が必要:
@@ -1068,10 +1107,11 @@ Reviewer の分析結果を使って UMAP 上の島間ブリッジを伸ばす�
 - 🟡 Reviewer タブの `gr.Timer` interval を設定から取得できるようにする
 - 🟡 pytest fixture で `TEST_PRESET` を使う ReviewerSession の統合テスト追加
 
-#### P-R8. サイクルタブへの自動ポーリング 🟢
-現在は手動 `⟳` のみ。`gr.Timer` による 10 秒自動更新。
+#### P-R8. シーダータブへの自動ポーリング ✅ **完了（2026-05-04）**
+`gr.Timer(5秒)` で status_md を更新、`running→done/error` 遷移時のみ run_dd を再ロード。
+停止ボタン・ETA 表示は P-GUI-2 で実装済み。
 
-#### P-R9. プランタブの「タスクスキップ」オーバーライド機能 🟢
+#### P-R9. シーダータブの「タスクスキップ」オーバーライド機能 🟢
 
 ---
 

@@ -264,14 +264,14 @@ def build_app() -> gr.Blocks:
                 )
                 sandbox.build_tab()
 
-            with gr.TabItem("🔄 サイクル"):
+            with gr.TabItem("📊 アナリティクス"):
                 gr.Markdown(
                     "_Gap Detection → Enrich → Dispatch サイクルの状態監視。"
                     "実行は `scripts/run_cycle.py` から。_"
                 )
                 cycle.build_tab()
 
-            with gr.TabItem("📋 プラン"):
+            with gr.TabItem("🌱 シーダー"):
                 gr.Markdown(
                     "_サイクル履歴の詳細プラン閲覧・実行コントロール。_"
                 )

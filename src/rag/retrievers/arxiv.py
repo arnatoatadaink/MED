@@ -62,6 +62,8 @@ class ArXivRetriever(BaseRetriever):
         return True  # 公開 API のため常に利用可能
 
     async def _do_search(self, query: str, max_results: int = 5) -> list[RawResult]:
+        import asyncio
+
         import httpx
 
         # カテゴリフィルタ付きクエリ構築
@@ -75,10 +77,25 @@ class ArXivRetriever(BaseRetriever):
             "sortOrder": "descending",
         }
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(_ARXIV_API, params=params)
-            resp.raise_for_status()
-            content = resp.text
+        _RETRY_WAITS = [30.0,60.0]  # 429 受信後の待機秒数（試行ごとに増加）
+        content = ""
+        async with httpx.AsyncClient(timeout=sum(_RETRY_WAITS)+10.0) as client:
+            for attempt, _ in enumerate([None] + _RETRY_WAITS):
+                try:
+                    resp = await client.get(_ARXIV_API, params=params)
+                    resp.raise_for_status()
+                    content = resp.text
+                    break
+                except httpx.HTTPStatusError as exc:
+                    if exc.response.status_code == 429 and attempt < len(_RETRY_WAITS):
+                        wait = _RETRY_WAITS[attempt]
+                        logger.warning(
+                            "ArXiv 429 (attempt %d/%d) — waiting %.0fs before retry",
+                            attempt + 1, len(_RETRY_WAITS) + 1, wait,
+                        )
+                        await asyncio.sleep(wait)
+                    else:
+                        raise
 
         try:
             root = ET.fromstring(content)

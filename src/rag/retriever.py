@@ -17,6 +17,10 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.llm.daily_usage_tracker import DailyUsageTracker
 
 logger = logging.getLogger(__name__)
 
@@ -42,20 +46,48 @@ class RawResult:
 # レート制限
 # ============================================================================
 
-# ソース別のリクエスト間隔（秒）。デフォルト1秒、ArXivは利用規約に基づき3秒。
-# 並列実行時の複数クエリ同時アクセスを考慮し、5秒に増加。
+# ソース別のAPI実行回数（日次上限）
+_RATE_LIMIT_COUNTS: dict[str, int] = {
+    "stackoverflow": 300,  # 429対策、日次制限
+}
+
+# 日次使用量トラッカー（遅延初期化）
+_daily_tracker: "DailyUsageTracker | None" = None
+
+
+async def _get_daily_tracker() -> "DailyUsageTracker":
+    """DailyUsageTracker をモジュールレベルで遅延初期化して返す。
+
+    asyncio.Lock を使わず SO セマフォ（concurrency=1）に依存して二重初期化を防ぐ。
+    """
+    global _daily_tracker
+    if _daily_tracker is None:
+        from src.llm.daily_usage_tracker import DailyUsageTracker as _DUT
+        tracker = _DUT("data/openrouter_usage.db")
+        await tracker.initialize()
+        _daily_tracker = tracker
+    return _daily_tracker
+
+
+
+
+# ソース別のリクエスト間隔（秒）。
 _RATE_LIMIT_INTERVALS: dict[str, float] = {
-    "arxiv": 5.0,  # 公式推奨 3秒 + 並列実行対策
+    "arxiv":         10.0,  # 公式推奨 3秒 + バースト 429 対策
+    "stackoverflow": 12.0,  # 400/429 対策
 }
 _DEFAULT_RATE_LIMIT = 1.0
 
 # ソース別の最終リクエスト時刻
 _last_request_times: dict[str, float] = {}
 
+# 2026/05/04 19:19(JST) arxivで429が出るため追加、同時取得した件数分インターバルを延長する
+# ソース毎の前回取得ドキュメント数
+_last_request_counts: dict[str, int] = {}
 
-async def _rate_limit_wait(source: str) -> None:
+async def _rate_limit_wait(source: str,last_results: int = 0) -> None:
     """ソース別のレート制限待機。各 API に対して最低間隔を保証する。"""
-    interval = _RATE_LIMIT_INTERVALS.get(source, _DEFAULT_RATE_LIMIT)
+    interval = _RATE_LIMIT_INTERVALS.get(source, _DEFAULT_RATE_LIMIT)*last_results
     last = _last_request_times.get(source, 0.0)
     now = time.monotonic()
     elapsed = now - last
@@ -67,6 +99,19 @@ async def _rate_limit_wait(source: str) -> None:
 
 
 # ============================================================================
+# ソース別並列数制限
+# ============================================================================
+
+# ソース別の最大同時リクエスト数。同一ソースへの並列アクセスを防ぐ。
+# 異なるソース同士（例: SO + arXiv）は並列実行を許可する。
+_SOURCE_CONCURRENCY: dict[str, int] = {
+    "arxiv": 1,
+    "stackoverflow": 1,
+}
+_DEFAULT_CONCURRENCY = 2
+
+
+# ============================================================================
 # 抽象基底クラス
 # ============================================================================
 
@@ -74,8 +119,10 @@ async def _rate_limit_wait(source: str) -> None:
 class BaseRetriever(ABC):
     """外部検索ソースの抽象基底クラス。
 
-    サブクラスは _do_search を実装する。search() がレート制限を適用した上で
-    _do_search を呼び出す。
+    サブクラスは _do_search を実装する。search() がソース別並列制限 +
+    レート制限を適用した上で _do_search を呼び出す。
+
+    並列制限セマフォはインスタンスに保持し、イベントループ跨ぎを防ぐ。
     """
 
     @property
@@ -94,10 +141,36 @@ class BaseRetriever(ABC):
         """APIキー等の設定が揃っているか。"""
         ...
 
+    def _get_sem(self) -> asyncio.Semaphore:
+        """ソース別並列制限セマフォをインスタンス単位で遅延生成する。"""
+        sem: asyncio.Semaphore | None = getattr(self, "_sem", None)
+        if sem is None:
+            limit = _SOURCE_CONCURRENCY.get(self.source_name, _DEFAULT_CONCURRENCY)
+            self._sem: asyncio.Semaphore = asyncio.Semaphore(limit)
+        return self._sem
+
     async def search(self, query: str, max_results: int = 5) -> list[RawResult]:
-        """レート制限付き検索。サブクラスは _do_search を実装する。"""
-        await _rate_limit_wait(self.source_name)
-        return await self._do_search(query, max_results)
+        """ソース別並列制限 + レート制限付き検索。サブクラスは _do_search を実装する。"""
+        # 日次上限チェック（セマフォ取得前にスキップ判定）
+        daily_limit = _RATE_LIMIT_COUNTS.get(self.source_name)
+        if daily_limit is not None:
+            from src.llm.daily_usage_tracker import DailyLimitExceeded
+            try:
+                tracker = await _get_daily_tracker()
+                await tracker.check_and_increment(self.source_name, daily_limit)
+            except DailyLimitExceeded as exc:
+                logger.warning(
+                    "Daily limit reached for %s (%d/%d) — skipping query: %r",
+                    self.source_name, exc.current, exc.limit, query[:50],
+                )
+                return []
+
+        async with self._get_sem():
+            last_count = _last_request_counts.get(self.source_name, 0)
+            await _rate_limit_wait(self.source_name, last_count)
+            ret = await self._do_search(query, max_results)
+            _last_request_counts[self.source_name] = len(ret)
+            return ret
 
 
 # ============================================================================
@@ -115,7 +188,7 @@ class RetrieverRouter:
 
     def __init__(
         self,
-        timeout: float = 30.0,
+        timeout: float = 120.0,
         max_results_per_source: int = 5,
     ) -> None:
         self._retrievers: dict[str, BaseRetriever] = {}

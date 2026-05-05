@@ -36,7 +36,7 @@ class OrchestratorConfig:
         provider: str = "fastflowlm",
         model: Optional[str] = None,
         persona: str = "auto",        # 未使用（Reviewer タブが管理）
-        enrich_concurrency: int = 3,
+        enrich_concurrency: int = 1,
         mature_interval: float = 0.0,  # 未使用（Reviewer タブが管理）
         db_path: str = "data/metadata.db",
         cache_path: str = "data/umap_cache.npz",

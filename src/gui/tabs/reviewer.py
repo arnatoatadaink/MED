@@ -5,7 +5,9 @@
 
 from __future__ import annotations
 
+import sqlite3
 import time
+from pathlib import Path
 from typing import Optional
 
 import gradio as gr
@@ -20,7 +22,40 @@ from src.cycle.reviewer_worker import (
 from src.gui.utils import get_all_provider_choices
 
 _MAX_SLOTS = 4
+_DB_PATH = Path("data/metadata.db")
 _session: Optional[ReviewerSession] = None
+
+
+# ── キュー件数取得 ────────────────────────────────────────────
+
+def _get_queue_counts() -> tuple[int, int, int]:
+    """(unreviewed, needs_update, total) を返す。DB がなければ (0, 0, 0)。"""
+    if not _DB_PATH.exists():
+        return 0, 0, 0
+    try:
+        conn = sqlite3.connect(str(_DB_PATH))
+        row = conn.execute(
+            "SELECT "
+            "  SUM(CASE WHEN review_status='unreviewed'   THEN 1 ELSE 0 END), "
+            "  SUM(CASE WHEN review_status='needs_update' THEN 1 ELSE 0 END) "
+            "FROM documents"
+        ).fetchone()
+        conn.close()
+        unreviewed   = int(row[0] or 0)
+        needs_update = int(row[1] or 0)
+        return unreviewed, needs_update, unreviewed + needs_update
+    except Exception:
+        return 0, 0, 0
+
+
+def _format_queue_md() -> str:
+    """キュー件数を Markdown 文字列にフォーマットする。"""
+    unreviewed, needs_update, total = _get_queue_counts()
+    return (
+        f"unreviewed: **{unreviewed:,}** 件 ｜ "
+        f"needs_update: **{needs_update:,}** 件 ｜ "
+        f"合計: **{total:,}** 件"
+    )
 
 
 # ── セッション管理 ────────────────────────────────────────────
@@ -134,6 +169,12 @@ def build_tab() -> tuple:
                 label="needs_update も含む", value=True, scale=1,
                 elem_id="med-rev-low-q",
             )
+        with gr.Row():
+            with gr.Column(scale=5):
+                queue_md = gr.Markdown(_format_queue_md())
+            queue_refresh_btn = gr.Button(
+                "⟳ 件数更新", size="sm", scale=1, min_width=90, variant="secondary"
+            )
 
     # ── モデルスロット ─────────────────────────────────────────
     gr.Markdown("#### モデルスロット（最大 4）")
@@ -199,6 +240,7 @@ def build_tab() -> tuple:
     )
     stop_btn.click(fn=_stop_review, outputs=[action_status])
     refresh_btn.click(fn=_refresh_all, outputs=[status_md, task_df])
+    queue_refresh_btn.click(fn=_format_queue_md, outputs=[queue_md])
 
     # ── localStorage 保存 ─────────────────────────────────────
     for _comp, _key in [(limit_nb, "med-rev-limit"), (timeout_nb, "med-rev-timeout")]:
