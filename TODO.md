@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-05-17 (AWEP Journal API ルール追加: `.claude/rules/awep-journal.md` / `forUser/rules/awep-journal.md`)
+> 最終更新: 2026-05-17 (Q章追加: エピソード記憶ゾーニング設計 / AWEP Journal API ルール追加)
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_translate.md` / `plan_version_aware.md` / `plan_neat_hyp_e.md` / `plan_programming_seed.md` / `med_enhancement_seed.md` / `med_seed_papers.md`
 
 ---
@@ -1208,8 +1208,136 @@ APIの使い方・統合方針は `.claude/rules/awep-journal.md` / `forUser/rul
   ```
 - 🟡 **AWEP サーバー起動手順の文書化**: `docs/awep_setup.md` にまとめる（未作成）
 - 🟢 **5-3: セマンティック検索** `GET /search/semantic`（AWEP 側未実装）→ 完了後に `topic_hook.py` を FAISS 版に切り替え（awep-journal.md §4-1）
-- 🟢 **5-5: 双方向連携パイプライン設計**: AWEP サマリー → MED FAISS 投入 / MED 検索結果 → AWEP KG（awep-journal.md §4-2/4-3）
+- 🟢 **5-5: 双方向連携パイプライン設計**: AWEP サマリー → MED エピソード FAISS 投入 / MED 検索結果 → AWEP KG（awep-journal.md §4-2/4-3 / **Q-3a** 参照）
 - **注意**: P-SYS-1（journal_hook.sh）は Stop Hook から削除済み。スクリプトファイル（`~/.claude/journal/scripts/`）は残存しているが、現在は何も呼び出していない。Stop Hook は pytest runner と awep-stop のみ。
+
+---
+
+## Q. エピソード記憶ゾーニング（Episodic Memory Zoning）🟡
+
+> **設計方針**: 人間の記憶モデルを参考に、知識記憶（semantic memory）とエピソード記憶（episodic memory）を
+> 別 FAISS インデックスで管理する。エピソードは時系列減衰スコアでランキングし、知識検索と混合しない。
+
+### 現行ゾーン構成（知識記憶のみ）
+
+```
+data/faiss_indices/
+  code/       ← コード・技術文書          （知識記憶ゾーン）
+  academic/   ← arXiv 論文               （知識記憶ゾーン）
+  general/    ← 汎用                     （知識記憶ゾーン）
+```
+
+### 追加するゾーン
+
+```
+data/faiss_indices/
+  episodic/   ← 会話・作業・思考ログ       （エピソード記憶ゾーン）← 新設
+```
+
+**エピソードゾーンに入るデータ源（3種）:**
+
+| 源 | 接続タスク | SourceType |
+|----|-----------|-----------|
+| AWEP 会話サマリー | Q-3a | `AWEP`（新設） |
+| thought_logs（N-1）| Q-3b | `TEACHER`（既存）+ zone フラグ |
+| 会話ターン（A-1）| Q-3c | `MANUAL`（既存）+ zone フラグ |
+
+---
+
+### Q-1. Schema 拡張 🟡
+
+- 🟡 `src/memory/schema.py` — `Domain.EPISODIC = "episodic"` 追加
+- 🟡 `src/memory/schema.py` — `SourceType.AWEP = "awep"` 追加
+- 🟡 `src/memory/schema.py` — `Document` に `memory_zone: Literal["knowledge", "episodic"] = "knowledge"` フィールド追加
+  - `SourceType.AWEP` は自動的に `"episodic"` に設定（`__post_init__` or `model_validator`）
+  - thought_logs / 会話ターンは投入時に明示指定
+
+---
+
+### Q-2. FAISS エピソードインデックス追加 🟡
+
+- 🟡 `configs/faiss_config.yaml` に `episodic:` セクション追加:
+  ```yaml
+  episodic:
+    dim: 384
+    initial_type: "Flat"
+    metric: "inner_product"
+    nprobe: 32
+    scale_rules:
+      - threshold: 100000
+        migrate_to: "HNSW32"
+  ```
+- 🟡 `configs/default.yaml` に `rag.episodic_decay_halflife_days: 30` 追加（チューニング対象パラメーター）
+- 🟡 `Domain` enum 追加に伴い `FAISSIndexManager` の型チェック・ロード処理が自動対応することを確認
+
+---
+
+### Q-3. エピソードデータ投入パイプライン 🟡
+
+#### Q-3a. AWEP 会話サマリー → episodic FAISS（P-SYS-2 / 5-5）
+- 🟡 `scripts/seed_from_awep.py` 新規作成
+  - AWEP `GET /sessions` → 未取込セッション列挙
+  - `GET /sessions/{id}/conversations` → サマリー + topics + created_at 取得
+  - チャンク化（サマリーをそのまま1文書として扱う）→ 埋め込み
+  - `Document(memory_zone="episodic", source_type=SourceType.AWEP, created_at=...)` として MED FAISS + metadata DB へ投入
+  - カーソル管理: `data/awep_cursor.db` に最終取込 conversation_id を保存（差分取込）
+
+#### Q-3b. thought_logs → episodic FAISS（N-1 連携）
+- 🟡 N-1 `save_thought_log()` 呼び出し後に `memory_zone="episodic"` で FAISS 投入するフック設計
+  - 対象: `reward > 0` の ThoughtLog（低品質エピソードを排除）
+  - 内容: `input + reasoning summary + output` を連結してチャンク化
+
+#### Q-3c. 会話ターン → episodic FAISS（A-1 連携）
+- 🟢 `src/conversation/` の Turn / Session を episodic FAISS に投入するパイプライン設計
+  - A-1 の `ConversationManager` から未投入ターンを取得して差分投入
+  - 対象: assistant ターンのみ（user 側は個人情報リスクを考慮）
+
+---
+
+### Q-4. Recency-Weighted Episodic Retrieval 🟡
+
+**設計:**
+- `FAISSIndexManager.search_episodic(query, k, decay_halflife_days)` を新設
+- スコアリング式（指数減衰）:
+  ```python
+  # decay_halflife_days は configs/default.yaml で調整
+  age_days = (now - doc.created_at).days
+  recency_weight = 2 ** (-age_days / decay_halflife_days)
+  final_score = cosine_sim * recency_weight
+  ```
+- `k` は知識ゾーン検索と独立して設定可能（`rag.episodic_k` を外出し）
+
+**チューニング対象パラメーター（configs/default.yaml）:**
+
+| パラメーター | 初期値 | 意味 |
+|-------------|--------|------|
+| `rag.episodic_k` | 3 | エピソード取得件数 |
+| `rag.episodic_decay_halflife_days` | 30 | 半減期（30日で重みが0.5倍） |
+| `rag.episodic_min_score` | 0.0 | 足切りスコア（0.0=無効） |
+| `rag.episodic_enabled` | false | エピソードゾーン検索の有効フラグ |
+
+**検索フロー（知識とエピソードの分離）:**
+```
+クエリ
+  ├─ search_knowledge(domains=[code, academic, general], k=5)  ← 常時
+  └─ search_episodic(domain=episodic, k=3, decay=30d)          ← episodic_enabled=true のみ
+         ↓ RRF または concat でマージ
+     最終ランキング（知識 + エピソード混在なし → 別セクションで提示）
+```
+
+- 🟡 `src/memory/memory_manager.py` に `search_episodic()` 追加
+- 🟡 `src/rag/retriever.py` の `RetrieverRouter` に `episodic_enabled` フラグ対応
+- 🟢 GUI の Chat タブに「エピソード参照」トグル追加（`episodic_enabled` を動的切替）
+
+---
+
+### Q-5. 将来: エピソード→知識への固定化（Consolidation）🟢
+
+人間の記憶固定化（hippocampus → neocortex）に相当するプロセス。
+
+- 🟢 条件: エピソードが閾値以上の頻度で参照された場合 → knowledge ゾーンに昇格
+  - `episodic_access_count >= consolidation_threshold`（例: 5回参照）かつ `reward_avg > 0.8`
+- 🟢 `scripts/consolidate_episodic.py` — 対象エピソードを knowledge ゾーン（domain=general）に再投入、episodic から削除
 
 ---
 
