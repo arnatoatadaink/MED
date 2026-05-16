@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-05-05 (シーダー/レビュアー動作確認・arXiv 429 / SO 400 対策・SO 日次制限・GUI ポーリング強化・タブ名変更)
+> 最終更新: 2026-05-17 (AWEP Journal API ルール追加: `.claude/rules/awep-journal.md` / `forUser/rules/awep-journal.md`)
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_translate.md` / `plan_version_aware.md` / `plan_neat_hyp_e.md` / `plan_programming_seed.md` / `med_enhancement_seed.md` / `med_seed_papers.md`
 
 ---
@@ -17,6 +17,19 @@
 ---
 
 ## A. 新機能 — 実装済み
+
+### A-0. GUI 改善 ✅ **完了（2026-05-10）**
+- ✅ `src/gui/tabs/reviewer.py` — 各スロットに「有効」チェックボックス追加（設定を保持したまま無効化可能）
+  - `_start_review()` のシグネチャを `(en1, p1, m1, ps1, ...)` に変更
+  - localStorage キー: `med-rev-slot{i}-enabled`
+- ✅ `src/gui/tabs/plan.py` — ソース選択フラグ追加（GitHub/SO/Tavily/arXiv/OpenReview）
+  - arXiv はデフォルト OFF（BAN 中）。5/17 以降に解除確認して手動 ON
+  - `_trigger_cycle()` が `disabled_sources` を `OrchestratorConfig` に渡す
+  - localStorage キー: `med-plan-src-{source}`
+- ✅ `src/cycle/orchestrator.py` — `OrchestratorConfig` に `disabled_sources: frozenset[str]` 追加
+- ✅ `src/cycle/query_runner.py` — `QueryRunnerConfig` に `disabled_sources` 追加、`_select_sources()` で除外
+  - retrievers.yaml を書き換えない（コメント保持）
+- ✅ `src/gui/app.py` — reviewer/plan の localStorage restore 更新
 
 ### A-1. 会話履歴の永続化 + ユーザー管理 ✅ **完了**
 - ✅ `src/auth/` — User / JWT 認証（bcrypt + python-jose）
@@ -43,9 +56,31 @@
 
 ### B-1〜4. testmon + xdist 移行
 - ✅ `pytest-testmon>=2.2` 導入・ローカル動作確認済み
+- ✅ Stop hook に `--testmon` 追加 (`.claude/settings.json`)（2026-05-09）
+- ✅ `poetry install --extras dev` で `pytest-asyncio 1.3.0` インストール済み
+  - `[project.optional-dependencies].dev` に定義されているため `--extras dev` が必須
 - 🟡 `Dockerfile.test` — testmon/xdist 入り軽量イメージ
 - 🟡 `.github/workflows/test.yml` — testmon差分 → xdist並列実行ワークフロー
 - 🟡 `.github/workflows/test-full.yml` — 週次フルラン + `.testmondata` 再生成
+
+### B-5. ユニットテスト 残存 16 件 🟡（2026-05-09 判明）
+
+`poetry run python -m pytest tests/unit/ --testmon` で検出。
+
+| グループ | 件数 | ファイル | 原因 |
+|---------|------|---------|------|
+| 環境変数リーク | 3 | `test_config.py` | 実 API キーが env に存在 → 「空」テストが失敗。`monkeypatch.delenv()` で隔離が必要 |
+| モック署名不一致 | 5 | `test_llm_gateway.py` | `gateway.py` が `timeout=` を渡すようになったが `SuccessProvider.complete()` が引数未定義 |
+| ロジック変更追従 | 1 | `test_maturation.py::TestMemoryReviewer::test_review_rejected` | `ReviewStatus.REJECTED` 期待 → `HOLD` が返る |
+| コードパス変更 | 1 | `test_iterative_retrieval.py::TestLLMRewrite::test_llm_is_called` | `MockLLM.calls == 0`（LLM が呼ばれていない） |
+| フラッシュ未実行 | 1 | `test_teacher_provenance_step5.py::TestBackgroundLoop::test_loop_executes_flush` | `n_feedback == 0`（バックグラウンドループ未動作） |
+| ハング | 3 | `test_memory_manager.py::TestSearch`(3) | 実行すると無限ブロック — FAISS/DB 初期化待ちが疑われる。`MemoryManager()` がモックではなく実リソースを開こうとしている可能性 |
+| 未調査 | 1 | `test_orchestrator.py::TestMEDPipeline::test_query_with_memory` | 上記ハングと同様の可能性（memory 経路を通るテスト）。testmon が deselected するため通常の差分実行には影響しない |
+
+**修正方針:**
+- `test_config.py` → `monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)` 等を追加
+- `test_llm_gateway.py` → モックの `complete()` に `timeout=None, **kwargs` 追加
+- その他 → 各テストの期待値をコード変更後の実態に合わせて更新
 
 ---
 
@@ -93,15 +128,18 @@
 - unreviewed: 765件（シーダーによる新規投入が進行中）
 - mature はローカルモデル（LM Studio / FastFlowLM）が継続稼働中
 
-### F-1. 日次 seed_and_mature ジョブ 🟡（mature はローカル継続中）
+### F-1. 日次 seed_and_mature ジョブ ⏸️ **seeder 中断中 / mature 後回し**
 - ✅ Apr 9: approved +302件
 - ✅ Apr 10: approved +175件
 - ✅ **approved 10,000件 目標達成**（2026-04-28確認）
-- mature 継続: LM Studio / FastFlowLM がローカルで稼働。OpenRouter は停止中（厳格さ不足 + 429問題）
+- ⏸️ **seeder 中断 (2026-05-09)**: arXiv BAN 中。永続バックオフが `data/arxiv_backoff.db` に記録中。
+  - 🟡 **2026-05-17 以降: arXiv BAN 解除確認** → 解除後に Seeder タブの arXiv チェックを ON にする
+  - BAN 確認コマンド: `poetry run python -c "import asyncio; from src.rag.retrievers.arxiv import ArXivRetriever; print(asyncio.run(ArXivRetriever.current_backoff_state()))"`
+- ⏸️ **mature 後回し**: 未処理件数が少ないため優先度低。LM Studio / FastFlowLM はローカル待機中。
 - OpenRouter 再活用候補: `openai/gpt-4o-mini` 系 — 厳格さが若干不足するため「切り口の異なるドメイン」のmatureに限定使用を検討
 - 🟡 **OpenRouter 再活用**: GPT-OSS-120b を異なる観点でのmaturation（F-2と連携）
 
-### F-2. seed_from_docs.py 本番実行 🟡（mature なし seed 継続中）
+### F-2. seed_from_docs.py 本番実行 ⏸️ **arXiv BAN 解除待ち**
 > 📄 `plan_programming_seed.md` カテゴリ I〜L（見込み 2,150〜4,200件）
 
 **2026-04-28 現状**:
@@ -115,7 +153,7 @@
 - 代替案: `man7.org` の HTML を url_list で取得（`data/doc_urls/man7org.txt` 作成が必要）
 - 🟡 `data/doc_urls/man7org.txt` 作成（man1コマンド / man7概念 優先URL列挙）
 
-- 🟡 GitHub ドキュメントリポジトリ（成熟 repos はローカル mature 待ち）
+- 🟡 GitHub ドキュメントリポジトリ（成熟 repos はローカル mature 待ち、arXiv BAN 解除後に再開）
   ```bash
   poetry run python scripts/seed_from_docs.py --source github_docs --max-files 100
   ```
@@ -124,8 +162,8 @@
   poetry run python scripts/seed_only.py --questions-file scripts/questions_bridge.txt
   ```
 
-### F-3. needs_update 再mature 🟡
-- 現状: needs_update **326件**（arXiv中心）
+### F-3. needs_update 再mature ⏸️ **後回し（未処理少）**
+- 現状: needs_update **326件**（arXiv中心）。件数少ないため次フェーズまで保留。
   ```bash
   poetry run python scripts/remature_needs_update.py --provider openrouter --model nvidia/nemotron-3-nano-30b-a3b:free --limit 200
   ```
@@ -163,6 +201,29 @@
   ```
 - 🟡 cpython/fastapi/rust の needs_update も同コマンドで再投入可能
 - 🟢 `**See also:**` / `**History:**` セクションのみのチャンク除外（現状 min_body_lines でほぼカバー）
+
+### F-7. 永続バックオフ汎用化 ✅ **完了（2026-05-09）**
+- ✅ `src/rag/retrievers/persistent_backoff.py` — `arxiv_backoff.py` を汎用クラスに昇格
+  - `BackoffState` dataclass + `PersistentBackoffStore(source_name, db_path)`
+  - テーブル名 = `{source_name}_backoff`（arXiv は既存 `arxiv_backoff` テーブル継続使用）
+  - `minutes_level` 1日1段階緩和 / `days_level` 1週1段階緩和 / ban 期間 = 2^(N-1) 日
+  - 純粋関数: `wait_secs()` / `ban_days()` / `apply_relaxation()` / `is_banned()`
+- ✅ `arxiv_backoff.py` 削除 → `arxiv.py` のインポートを `persistent_backoff` に更新
+- ✅ `ArXivRetriever.current_backoff_state()` — クラスメソッドで状態参照可
+  - BAN 確認コマンド: `poetry run python -c "import asyncio; from src.rag.retrievers.arxiv import ArXivRetriever; print(asyncio.run(ArXivRetriever.current_backoff_state()))"`
+
+### F-8. OpenReview retriever ✅ **完了（2026-05-09）**
+> semantic_map_plan_en.md Layer A（高信頼性学術ソース）実装
+
+- ✅ `src/rag/retrievers/openreview.py` — OpenReview API v2 対応 retriever
+  - 対象: ICLR / NeurIPS の accepted 論文（poster / oral / spotlight）
+  - クエリ照合: title + abstract へのクライアント側スコアリング（語出現率）
+  - `PersistentBackoffStore("openreview", "data/openreview_backoff.db")` で 429 永続管理
+  - base=1s / multiplier=5 / ban_threshold=120s / max_level=5（API: 60req/min）
+  - デフォルト venue: ICLR 2025/2024・NeurIPS 2024/2023（`retrievers.yaml` で変更可）
+- ✅ `RetrieverRouter` に登録（`_SOURCE_CONCURRENCY["openreview"] = 1`）
+- ✅ `configs/retrievers.yaml` に `openreview:` セクション追加
+- 🟢 ACL / EMNLP 等の venue 追加（`retrievers.yaml` の `venues:` に追記するだけ）
 
 ### F-6. レトリーバー品質改善 ✅ **完了（2026-04-28）**
 
@@ -1113,6 +1174,43 @@ Reviewer の分析結果を使って UMAP 上の島間ブリッジを伸ばす�
 
 #### P-R9. シーダータブの「タスクスキップ」オーバーライド機能 🟢
 
+#### P-SYS-1. ジャーナルシステム構築 ✅ **完了（2026-05-08）** → **Stop Hook 削除済み**
+Stop Hook → LMStudio Gemma 4 31B → SQLite FTS5 によるセッション自動記録。その後 Stop Hook から削除（AWEP ClaudeJournal に移行）。
+
+- ✅ `~/.claude/journal/scripts/journal_hook.sh` — スクリプト残存（フック未登録）
+- ✅ `~/.claude/journal/scripts/conv_to_text.py` — JSONL → プレーンテキスト変換
+- ✅ `~/.claude/journal/scripts/summarize.py` — LMStudio API 呼び出し（Gemma 4 31B）
+- ✅ `~/.claude/journal/scripts/register_topics.py` — `journal.db` (SQLite FTS5) へ登録
+- ✅ `~/.claude/journal/scripts/search_journal.py` — トピック検索 / 最近セッション取得 CLI
+- ~~`.claude/settings.json` Stop Hook に `journal_hook.sh` を追加~~ → **削除済み**（P-SYS-2 に移行）
+
+#### P-SYS-2. AWEP（ai_workspace_event_platform）ClaudeJournal プラグイン統合（2026-05-17 更新）
+`~/.claude/settings.json` に3つのフックを追加。全イベントを AWEP サーバー（localhost:8001）へ転送。
+APIの使い方・統合方針は `.claude/rules/awep-journal.md` / `forUser/rules/awep-journal.md` を参照。
+
+- ✅ **フック追加**（`.claude/settings.json`）:
+  - `awep-pre`：PreToolUse → `POST http://localhost:8001/ingest`（ツール呼び出し前）
+  - `awep-post`：PostToolUse → `POST http://localhost:8001/ingest`（ツール呼び出し後）
+  - `awep-stop`：Stop → `POST http://localhost:8001/ingest`（セッション終了時）
+  - いずれも `|| true` で AWEP サーバー未起動時のエラーを無視（サイレントフォールバック）
+- ✅ **AWEP 検索 API 実装（AWEP STEP 5、2026-05-16 完了）**:
+  - `GET /search/conversations` — FTS5 全文検索（trigram、最低3文字）
+  - `GET /search/topics` — トピックキーワード部分一致
+  - `GET /context/recent` — 最近N会話サマリー注入
+  - `scripts/context_hook.py` / `scripts/topic_hook.py` — UserPromptSubmit オプショナルフック
+- ✅ **API ルール文書化（2026-05-17）**: `.claude/rules/awep-journal.md` に API 仕様・クライアントパターン・統合ロードマップを記録
+- 🟡 **UserPromptSubmit フック有効化（オプション）**:
+  ```bash
+  cd /mnt/d/Projects/claude_work/ai_workspace_evnet_platform
+  ./scripts/install-hooks.sh --with-context   # 最近の会話サマリー注入
+  # または
+  ./scripts/install-hooks.sh --with-topics    # FTS5マッチした関連会話注入
+  ```
+- 🟡 **AWEP サーバー起動手順の文書化**: `docs/awep_setup.md` にまとめる（未作成）
+- 🟢 **5-3: セマンティック検索** `GET /search/semantic`（AWEP 側未実装）→ 完了後に `topic_hook.py` を FAISS 版に切り替え（awep-journal.md §4-1）
+- 🟢 **5-5: 双方向連携パイプライン設計**: AWEP サマリー → MED FAISS 投入 / MED 検索結果 → AWEP KG（awep-journal.md §4-2/4-3）
+- **注意**: P-SYS-1（journal_hook.sh）は Stop Hook から削除済み。スクリプトファイル（`~/.claude/journal/scripts/`）は残存しているが、現在は何も呼び出していない。Stop Hook は pytest runner と awep-stop のみ。
+
 ---
 
 ## 完了済みモジュール一覧
@@ -1135,3 +1233,4 @@ Reviewer の分析結果を使って UMAP 上の島間ブリッジを伸ばす�
 | J: restic + NAS バックアップ基盤 | ✅ |
 | K: CRAG Query Rewriter 4戦略 + タイムアウト伝播 | ✅ |
 | P: サイクル管理（Orchestrator + cycle/plan GUI タブ） | ✅ |
+| P-SYS-1: ジャーナルシステム（Stop Hook → Gemma 4 31B → SQLite FTS5） | ✅ |
