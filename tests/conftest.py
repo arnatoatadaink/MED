@@ -14,6 +14,9 @@ from pathlib import Path
 
 import pytest
 
+# dynamic_capture は typeguard がない場合も安全（TypeCheckError を lazy import）
+pytest_plugins = ["src.analysis.type_check.dynamic_capture"]
+
 logger = logging.getLogger(__name__)
 
 

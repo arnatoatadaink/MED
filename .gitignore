@@ -49,3 +49,6 @@ temperature/
 
 # Windows/WSL 改行制御（ローカル環境固有）
 .gitattributes
+
+# 動的型チェックレポート（on-demand 生成）
+runtime/

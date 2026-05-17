@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-05-17 (Q章追加: エピソード記憶ゾーニング設計 / AWEP Journal API ルール追加)
+> 最終更新: 2026-05-18 (P-SYS-3追加: 型不一致チェッカー実装完了)
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_translate.md` / `plan_version_aware.md` / `plan_neat_hyp_e.md` / `plan_programming_seed.md` / `med_enhancement_seed.md` / `med_seed_papers.md`
 
 ---
@@ -1211,6 +1211,25 @@ APIの使い方・統合方針は `.claude/rules/awep-journal.md` / `forUser/rul
 - 🟢 **5-5: 双方向連携パイプライン設計**: AWEP サマリー → MED エピソード FAISS 投入 / MED 検索結果 → AWEP KG（awep-journal.md §4-2/4-3 / **Q-3a** 参照）
 - **注意**: P-SYS-1（journal_hook.sh）は Stop Hook から削除済み。スクリプトファイル（`~/.claude/journal/scripts/`）は残存しているが、現在は何も呼び出していない。Stop Hook は pytest runner と awep-stop のみ。
 
+#### P-SYS-3. 型不一致チェッカー実装 ✅ **完了（2026-05-18）**
+AWEP `src/analysis/type_check/` を MED に移植。静的（AST+CGA）+ 動的（typeguard）の2層型検出。
+
+- ✅ `src/analysis/type_check/` サブパッケージ作成（6モジュール）
+  - `ast_extractor.py` — FunctionInfo / CallSiteInfo 抽出
+  - `call_graph.py` — CallEdge / build_call_graph / build_reverse_call_graph
+  - `type_mismatch.py` — TypeMismatch / detect_mismatches（プリミティブのみ・false positive 防止）
+  - `checker.py` — check_directory / CheckResult（CLI: `python -m src.analysis.type_check.checker src/`）
+  - `dynamic_capture.py` — pytest プラグイン（TypeCheckError を JSONL にキャプチャ）
+  - `dynamic_checker.py` — オフライン解析器（JSONL → JSON+Markdown レポート）
+- ✅ `tests/unit/test_type_checker.py` — 35テスト（AST抽出/呼び出しグラフ/不一致検出/統合）
+- ✅ `tests/conftest.py` — `pytest_plugins = ["src.analysis.type_check.dynamic_capture"]` 追加
+- ✅ `pyproject.toml` — `typeguard>=4.0.0` dev extras に追加
+- ✅ `.gitignore` — `runtime/` 追加（動的チェックレポート出力先）
+- ✅ `.claude/rules/type-mismatch.md` / `forUser/rules/type-mismatch.md` 作成
+- **ガードテスト**: `test_no_type_mismatches_in_src_analysis`（`src/analysis/` スコープ限定）
+  - `src/` 全体は false positive 153件（`execute`/`max`/`min` の名前衝突）→ 将来 CGA 改善後に拡張予定
+- **動的チェッカー実行**: `poetry run pytest tests/unit/ --typeguard-packages=src -q`（オンデマンド）
+
 ---
 
 ## Q. エピソード記憶ゾーニング（Episodic Memory Zoning）🟡
@@ -1362,3 +1381,4 @@ data/faiss_indices/
 | K: CRAG Query Rewriter 4戦略 + タイムアウト伝播 | ✅ |
 | P: サイクル管理（Orchestrator + cycle/plan GUI タブ） | ✅ |
 | P-SYS-1: ジャーナルシステム（Stop Hook → Gemma 4 31B → SQLite FTS5） | ✅ |
+| P-SYS-3: 型不一致チェッカー（src/analysis/type_check/ + 35テスト + type-mismatch.md ルール） | ✅ |
