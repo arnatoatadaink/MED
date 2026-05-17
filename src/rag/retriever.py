@@ -107,6 +107,7 @@ async def _rate_limit_wait(source: str,last_results: int = 0) -> None:
 _SOURCE_CONCURRENCY: dict[str, int] = {
     "arxiv": 1,
     "stackoverflow": 1,
+    "openreview": 1,
 }
 _DEFAULT_CONCURRENCY = 2
 
@@ -200,6 +201,7 @@ class RetrieverRouter:
         """デフォルトのレトリーバーを登録する。retrievers.yaml の設定を反映。"""
         from src.rag.retrievers.arxiv import ArXivRetriever
         from src.rag.retrievers.github import GitHubRetriever
+        from src.rag.retrievers.openreview import OpenReviewRetriever
         from src.rag.retrievers.stackoverflow import StackOverflowRetriever
         from src.rag.retrievers.tavily import TavilyRetriever
 
@@ -218,12 +220,23 @@ class RetrieverRouter:
         arxiv_categories = arxiv_cfg.get("categories", None)
         arxiv_retriever = ArXivRetriever(categories=arxiv_categories)
 
-        for retriever in [
+        # OpenReview 設定
+        or_cfg = sources_cfg.get("openreview", {})
+        or_enabled = or_cfg.get("enabled", True)
+        or_venues_raw: list[list] = or_cfg.get("venues", [])
+        or_venues = [(v[0], int(v[1])) for v in or_venues_raw] if or_venues_raw else None
+        openreview_retriever = OpenReviewRetriever(venues=or_venues) if or_enabled else None
+
+        retrievers: list[BaseRetriever] = [
             GitHubRetriever(),
             so_retriever,
             TavilyRetriever(),
             arxiv_retriever,
-        ]:
+        ]
+        if openreview_retriever is not None:
+            retrievers.append(openreview_retriever)
+
+        for retriever in retrievers:
             self._retrievers[retriever.source_name] = retriever
             logger.debug(
                 "Registered retriever: %s (available=%s)",

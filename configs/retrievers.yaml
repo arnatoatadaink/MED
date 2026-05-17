@@ -47,3 +47,10 @@ sources:
       - "cs.IR"
       - "cs.DB"
       - "stat.ML"
+
+  openreview:
+    enabled: true
+    max_results: 3
+    # 検索対象 venue: [conference_prefix, year] のリスト
+    # 省略時はデフォルト (ICLR 2025/2024, NeurIPS 2024/2023) を使用
+    venues: []

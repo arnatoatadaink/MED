@@ -10,7 +10,7 @@ SOURCE_IMBALANCE : dominant_source を除外し多様性を確保。
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
@@ -41,6 +41,7 @@ class QueryRunnerConfig:
     relevance_threshold: float = 0.25
     domain: str = "code"
     max_queries: int = _MAX_QUERIES_PER_TASK
+    disabled_sources: frozenset[str] = field(default_factory=frozenset)
 
 
 class QueryRunner:
@@ -136,19 +137,23 @@ class QueryRunner:
 
         SOURCE_IMBALANCE: dominant_source を除外して多様性を確保。
         その他: 利用可能な全ソース（None = 制限なし）。
+        disabled_sources が設定されている場合は対象外ソースを除外する。
         """
+        available = self._router.available_sources()
+        if self._cfg.disabled_sources:
+            available = [s for s in available if s not in self._cfg.disabled_sources]
+
         if task.gap_type != GapType.SOURCE_IMBALANCE:
-            return None
+            return available if self._cfg.disabled_sources else None
 
         dominant = task.signals.get("dominant_source", "")
-        available = self._router.available_sources()
         filtered = [s for s in available if s != dominant]
         if not filtered:
             logger.warning(
                 "SOURCE_IMBALANCE: no sources remain after excluding '%s' — using all",
                 dominant,
             )
-            return None
+            return available or None
         logger.info("SOURCE_IMBALANCE: excluding '%s', using %s", dominant, filtered)
         return filtered
 

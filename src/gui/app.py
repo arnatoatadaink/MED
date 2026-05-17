@@ -275,7 +275,7 @@ def build_app() -> gr.Blocks:
                 gr.Markdown(
                     "_サイクル履歴の詳細プラン閲覧・実行コントロール。_"
                 )
-                plan_provider_dd, plan_model_tb = plan.build_tab()
+                plan_provider_dd, plan_model_tb, plan_src_checks = plan.build_tab()
 
             with gr.TabItem("🔬 レビュアー"):
                 gr.Markdown(
@@ -318,12 +318,18 @@ def build_app() -> gr.Blocks:
             fn=None,
             js="""() => {
                 function ls(k, d) { var v = localStorage.getItem(k); return v !== null ? v : d; }
+                function lsj(k, d) { try { var v = localStorage.getItem(k); return v !== null ? JSON.parse(v) : d; } catch(e) { return d; } }
                 return [
                     ls('med-plan-provider', 'fastflowlm'),
-                    ls('med-plan-model', '')
+                    ls('med-plan-model', ''),
+                    lsj('med-plan-src-github', true),
+                    lsj('med-plan-src-stackoverflow', true),
+                    lsj('med-plan-src-tavily', true),
+                    lsj('med-plan-src-arxiv', false),
+                    lsj('med-plan-src-openreview', true)
                 ];
             }""",
-            outputs=[plan_provider_dd, plan_model_tb],
+            outputs=[plan_provider_dd, plan_model_tb, *plan_src_checks.values()],
         )
         _cr = _chat_restore
         _chat_initial_provider = get_all_provider_choices()
@@ -359,7 +365,7 @@ def build_app() -> gr.Blocks:
         )
 
         # reviewer restore
-        _rev_slot_outputs = [c for trio in _rev_slots for c in trio]
+        _rev_slot_outputs = [c for quartet in _rev_slots for c in quartet]
         app.load(
             fn=None,
             js="""() => {
@@ -369,15 +375,19 @@ def build_app() -> gr.Blocks:
                     lsj('med-rev-limit', 200),
                     lsj('med-rev-timeout', 60),
                     lsj('med-rev-low-q', true),
+                    lsj('med-rev-slot1-enabled', true),
                     ls('med-rev-slot1-provider', 'fastflowlm'),
                     ls('med-rev-slot1-model', ''),
                     lsj('med-rev-slot1-personas', ['auto']),
+                    lsj('med-rev-slot2-enabled', false),
                     ls('med-rev-slot2-provider', null),
                     ls('med-rev-slot2-model', ''),
                     lsj('med-rev-slot2-personas', []),
+                    lsj('med-rev-slot3-enabled', false),
                     ls('med-rev-slot3-provider', null),
                     ls('med-rev-slot3-model', ''),
                     lsj('med-rev-slot3-personas', []),
+                    lsj('med-rev-slot4-enabled', false),
                     ls('med-rev-slot4-provider', null),
                     ls('med-rev-slot4-model', ''),
                     lsj('med-rev-slot4-personas', [])

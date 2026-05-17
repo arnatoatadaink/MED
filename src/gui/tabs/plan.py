@@ -23,6 +23,22 @@ from src.gui.utils import get_all_provider_choices
 _DB_PATH = Path("data/metadata.db")
 _LOCK_WINDOW_MIN = 30  # これ以内に running なら二重起動ブロック
 
+_SOURCES = ["github", "stackoverflow", "tavily", "arxiv", "openreview"]
+_SOURCE_LABELS = {
+    "github": "GitHub",
+    "stackoverflow": "StackOverflow",
+    "tavily": "Tavily",
+    "arxiv": "arXiv",
+    "openreview": "OpenReview",
+}
+_SOURCE_DEFAULTS = {
+    "github": True,
+    "stackoverflow": True,
+    "tavily": True,
+    "arxiv": False,   # BAN 中 — 5/17 以降に解除確認してから ON にする
+    "openreview": True,
+}
+
 log = logging.getLogger(__name__)
 
 # 遷移検知: {run_id: prev_status}
@@ -254,13 +270,16 @@ def _is_cycle_running() -> bool:
     return bool(rows)
 
 
-def _run_cycle_background(provider: str, model: str) -> None:
+def _run_cycle_background(
+    provider: str, model: str, disabled_sources: frozenset[str]
+) -> None:
     """別スレッドでサイクルを起動する。"""
     from src.cycle.orchestrator import Orchestrator, OrchestratorConfig
 
     cfg = OrchestratorConfig(
         provider=provider,
         model=model or None,
+        disabled_sources=set(disabled_sources),
     )
     orch = Orchestrator(config=cfg)
 
@@ -275,7 +294,15 @@ def _run_cycle_background(provider: str, model: str) -> None:
         loop.close()
 
 
-def _trigger_cycle(provider: str, model: str) -> str:
+def _trigger_cycle(
+    provider: str,
+    model: str,
+    src_github: bool,
+    src_stackoverflow: bool,
+    src_tavily: bool,
+    src_arxiv: bool,
+    src_openreview: bool,
+) -> str:
     """Run Cycle ボタンのハンドラー。ステータス文字列を返す。"""
     p = (provider or "fastflowlm").strip()
     if p.startswith("auto"):
@@ -284,23 +311,37 @@ def _trigger_cycle(provider: str, model: str) -> str:
     if _is_cycle_running():
         return f"⚠️ サイクルが既に実行中です（直近 {_LOCK_WINDOW_MIN} 分以内に running あり）。"
 
+    src_flags = {
+        "github": src_github,
+        "stackoverflow": src_stackoverflow,
+        "tavily": src_tavily,
+        "arxiv": src_arxiv,
+        "openreview": src_openreview,
+    }
+    disabled = frozenset(s for s, enabled in src_flags.items() if not enabled)
+    disabled_label = ", ".join(sorted(disabled)) if disabled else "なし"
+
     t = threading.Thread(
         target=_run_cycle_background,
-        args=(p, model or ""),
+        args=(p, model or "", disabled),
         daemon=True,
         name="cycle-runner",
     )
     t.start()
-    return f"🚀 サイクル起動しました（provider={p}）。サイクルタブで進捗を確認してください。"
+    return (
+        f"🚀 サイクル起動しました（provider={p}）。"
+        f"無効ソース: {disabled_label}。"
+        "サイクルタブで進捗を確認してください。"
+    )
 
 
 # ── タブ構築 ───────────────────────────────────────────────────
 
-def build_tab() -> tuple[gr.Dropdown, gr.Textbox]:
+def build_tab() -> tuple[gr.Dropdown, gr.Textbox, dict[str, gr.Checkbox]]:
     """プランビューア & 実行コントロールタブを構築する。
 
     Returns:
-        (provider_dd, model_tb) — localStorage 復元用に app.py へ渡す。
+        (provider_dd, model_tb, src_checks) — localStorage 復元用に app.py へ渡す。
     """
 
     # ── P4b: 実行コントロール ──────────────────────────────────
@@ -320,11 +361,28 @@ def build_tab() -> tuple[gr.Dropdown, gr.Textbox]:
                 elem_id="med-plan-model",
             )
             run_btn = gr.Button("▶ Run Cycle", variant="primary", scale=1)
+
+        # ── ソース設定 ─────────────────────────────────────────
+        with gr.Accordion("🗂️ ソース設定", open=True):
+            gr.Markdown(
+                "取得するソースを選択します。"
+                "**arXiv は BAN 中 — 5/17 以降に解除確認してから ON にしてください。**"
+            )
+            with gr.Row():
+                src_checks: dict[str, gr.Checkbox] = {}
+                for src in _SOURCES:
+                    src_checks[src] = gr.Checkbox(
+                        label=_SOURCE_LABELS[src],
+                        value=_SOURCE_DEFAULTS[src],
+                        scale=1,
+                        elem_id=f"med-plan-src-{src}",
+                    )
+
         trigger_status = gr.Markdown("_ここにステータスが表示されます。_")
 
         run_btn.click(
             fn=_trigger_cycle,
-            inputs=[provider_dd, model_tb],
+            inputs=[provider_dd, model_tb, *src_checks.values()],
             outputs=[trigger_status],
         )
         with gr.Row():
@@ -334,7 +392,7 @@ def build_tab() -> tuple[gr.Dropdown, gr.Textbox]:
             with gr.Column(scale=10):
                 cycle_status_md = gr.Markdown("_ポーリング待機中…_")
 
-    # localStorage 保存（Dropdown: change、Textbox: blur）
+    # localStorage 保存（Dropdown: change、Textbox: blur、Checkbox: change）
     provider_dd.change(
         fn=None,
         inputs=[provider_dd],
@@ -345,6 +403,12 @@ def build_tab() -> tuple[gr.Dropdown, gr.Textbox]:
         inputs=[model_tb],
         js="(v) => { localStorage.setItem('med-plan-model', v ?? ''); }",
     )
+    for src, chk in src_checks.items():
+        chk.change(
+            fn=None,
+            inputs=[chk],
+            js=f"(v) => {{ localStorage.setItem('med-plan-src-{src}', JSON.stringify(v)); }}",
+        )
 
     gr.Markdown("---")
 
@@ -396,4 +460,4 @@ def build_tab() -> tuple[gr.Dropdown, gr.Textbox]:
     except AttributeError:
         log.warning("gr.Timer not available — plan tab polling disabled")
 
-    return provider_dd, model_tb
+    return provider_dd, model_tb, src_checks

@@ -65,20 +65,24 @@ def _start_review(
     timeout_sec: int,
     include_low_quality: bool,
     # slot 1
-    p1: str, m1: str, ps1: list[str],
+    en1: bool, p1: str, m1: str, ps1: list[str],
     # slot 2
-    p2: str, m2: str, ps2: list[str],
+    en2: bool, p2: str, m2: str, ps2: list[str],
     # slot 3
-    p3: str, m3: str, ps3: list[str],
+    en3: bool, p3: str, m3: str, ps3: list[str],
     # slot 4
-    p4: str, m4: str, ps4: list[str],
+    en4: bool, p4: str, m4: str, ps4: list[str],
 ) -> str:
     global _session
     if _session and _session.get_stats()["is_running"]:
         return "⚠️ 既にセッションが実行中です。停止してから再実行してください。"
 
     slots: list[SlotConfig] = []
-    for provider, model, personas in [(p1, m1, ps1), (p2, m2, ps2), (p3, m3, ps3), (p4, m4, ps4)]:
+    for enabled, provider, model, personas in [
+        (en1, p1, m1, ps1), (en2, p2, m2, ps2), (en3, p3, m3, ps3), (en4, p4, m4, ps4),
+    ]:
+        if not enabled:
+            continue
         provider = (provider or "").strip()
         if not provider or provider.startswith("auto"):
             continue
@@ -178,9 +182,16 @@ def build_tab() -> tuple:
 
     # ── モデルスロット ─────────────────────────────────────────
     gr.Markdown("#### モデルスロット（最大 4）")
-    slot_inputs: list[tuple[gr.Dropdown, gr.Textbox, gr.CheckboxGroup]] = []
+    slot_inputs: list[tuple[gr.Checkbox, gr.Dropdown, gr.Textbox, gr.CheckboxGroup]] = []
     for i in range(1, _MAX_SLOTS + 1):
         with gr.Row():
+            en = gr.Checkbox(
+                label="有効",
+                value=(i == 1),
+                scale=0,
+                min_width=60,
+                elem_id=f"med-rev-slot{i}-enabled",
+            )
             p = gr.Dropdown(
                 choices=provider_choices,
                 label=f"Slot {i} Provider",
@@ -201,7 +212,7 @@ def build_tab() -> tuple:
                 scale=4,
                 elem_id=f"med-rev-slot{i}-personas",
             )
-        slot_inputs.append((p, m, ps))
+        slot_inputs.append((en, p, m, ps))
 
     # ── 開始/停止 ──────────────────────────────────────────────
     gr.Markdown("---")
@@ -231,7 +242,7 @@ def build_tab() -> tuple:
         pass  # 旧バージョンは手動更新のみ
 
     # ── イベント接続 ───────────────────────────────────────────
-    all_slot_inputs = [c for trio in slot_inputs for c in trio]
+    all_slot_inputs = [c for quartet in slot_inputs for c in quartet]
 
     start_btn.click(
         fn=_start_review,
@@ -252,7 +263,11 @@ def build_tab() -> tuple:
         fn=None, inputs=[low_q_cb],
         js="(v) => { localStorage.setItem('med-rev-low-q', JSON.stringify(v)); }",
     )
-    for i, (p, m, ps) in enumerate(slot_inputs, start=1):
+    for i, (en, p, m, ps) in enumerate(slot_inputs, start=1):
+        en.change(
+            fn=None, inputs=[en],
+            js=f"(v) => {{ localStorage.setItem('med-rev-slot{i}-enabled', JSON.stringify(v)); }}",
+        )
         p.change(
             fn=None, inputs=[p],
             js=f"(v) => {{ if (v == null || v === '') {{ localStorage.removeItem('med-rev-slot{i}-provider'); }} else {{ localStorage.setItem('med-rev-slot{i}-provider', v); }} }}",

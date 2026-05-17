@@ -41,6 +41,7 @@ class OrchestratorConfig:
         db_path: str = "data/metadata.db",
         cache_path: str = "data/umap_cache.npz",
         detector_config: Optional[GapDetectorConfig] = None,
+        disabled_sources: Optional[set[str]] = None,
     ) -> None:
         self.provider = provider
         self.model = model
@@ -50,6 +51,7 @@ class OrchestratorConfig:
         self.db_path = db_path
         self.cache_path = cache_path
         self.detector_config = detector_config or GapDetectorConfig()
+        self.disabled_sources: frozenset[str] = frozenset(disabled_sources or ())
 
 
 class Orchestrator:
@@ -130,7 +132,7 @@ class Orchestrator:
         runner: QueryRunner | None = None
         collector_tasks = [t for t in tasks if t.gap_type in _COLLECTOR_GAP_TYPES]
         if collector_tasks:
-            runner = QueryRunner(QueryRunnerConfig())
+            runner = QueryRunner(QueryRunnerConfig(disabled_sources=self._cfg.disabled_sources))
             await runner.initialize()
 
         try:
