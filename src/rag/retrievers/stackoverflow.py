@@ -12,13 +12,15 @@ from __future__ import annotations
 
 import html as html_lib
 import logging
+import os
 import re
 
 from src.rag.retriever import BaseRetriever, RawResult
 
 logger = logging.getLogger(__name__)
 
-_API_BASE = "https://api.stackexchange.com/2.3"
+# MED_SO_API_BASE でスタブサーバーに切り替え可能（テスト用）
+_API_BASE = os.environ.get("MED_SO_API_BASE", "https://api.stackexchange.com/2.3")
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 
 # プロンプトインジェクションによく使われるパターン

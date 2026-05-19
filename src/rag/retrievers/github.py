@@ -18,7 +18,8 @@ from src.rag.retriever import BaseRetriever, RawResult
 
 logger = logging.getLogger(__name__)
 
-_GITHUB_API = "https://api.github.com"
+# MED_GITHUB_API_BASE でスタブサーバーに切り替え可能（テスト用）
+_GITHUB_API = os.environ.get("MED_GITHUB_API_BASE", "https://api.github.com")
 _RATE_SEC = 1.0
 
 

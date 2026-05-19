@@ -36,6 +36,7 @@ class SourceType(str, Enum):
     STACKOVERFLOW = "stackoverflow"
     TAVILY = "tavily"
     ARXIV = "arxiv"
+    OPENREVIEW = "openreview"  # OpenReview API (ICLR/NeurIPS)
     MANUAL = "manual"  # 手動投入
     TEACHER = "teacher"  # Teacher Model 生成
     SEED = "seed"  # シードデータ

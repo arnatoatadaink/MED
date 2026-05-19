@@ -39,7 +39,7 @@ data/                       ← バックアップ対象
         │
         ▼  rsync --no-perms --no-owner --no-group --no-times --delete
 
-/mnt/z/med-backup/          ← NAS (\\192.168.2.105\Public\datarepository)
+/mnt/z/med-backup/          ← NAS (\\192.168.1.105\Public\datarepository)
 ```
 
 ### 設計判断

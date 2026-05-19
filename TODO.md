@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-05-18 (P-SYS-3追加: 型不一致チェッカー実装完了)
+> 最終更新: 2026-05-19 (OpenReview venue ループ rate-limit 修正 + iptestserver スタブテスト完了)
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_translate.md` / `plan_version_aware.md` / `plan_neat_hyp_e.md` / `plan_programming_seed.md` / `med_enhancement_seed.md` / `med_seed_papers.md`
 
 ---
@@ -135,6 +135,31 @@
 - ⏸️ **seeder 中断 (2026-05-09)**: arXiv BAN 中。永続バックオフが `data/arxiv_backoff.db` に記録中。
   - 🟡 **2026-05-17 以降: arXiv BAN 解除確認** → 解除後に Seeder タブの arXiv チェックを ON にする
   - BAN 確認コマンド: `poetry run python -c "import asyncio; from src.rag.retrievers.arxiv import ArXivRetriever; print(asyncio.run(ArXivRetriever.current_backoff_state()))"`
+
+#### arXiv 429 対策 TODO（2026-05-18 調査結果）
+- ✅ `arxiv.py`: `Retry-After` ヘッダー読み取り対応済み（arXiv は現状ヘッダーを返さない）
+- ✅ `seed_only.py`: `memory_manager.add()` 呼び出し誤り修正済み（以前から 0 件追加が続いていた）
+- ✅ `seed_only.py`: `openreview` を `RATE_LIMITS` に追加済み
+- ✅ `schema.py`: `SourceType.OPENREVIEW` 追加済み
+- 🟡 **arXiv User-Agent 変更**: `arxiv.py` の httpx リクエストに公式推奨形式を設定する
+  ```python
+  headers={"User-Agent": "MEDProject/1.0 (yuihout2@gmail.com)"}
+  ```
+- 🟡 **VPN 迂回（route add）**: arXiv は Fastly CDN のため IP が動的に変わる。Fastly IP レンジ全体を Ethernet 経由にする
+  ```powershell
+  # Windows 管理者 PowerShell で実行（-p で永続化）
+  route add -p 151.101.0.0 mask 255.255.0.0 192.168.1.1 metric 1
+  route add -p 199.232.0.0 mask 255.254.0.0 192.168.1.1 metric 1
+  ```
+  - `192.168.1.1` は実 Ethernet ゲートウェイ（VPN 切断時に要変更）
+  - `wsl.exe` / `wslrelay.exe` の NordVPN 除外は WSL2 Hyper-V NAT の制約で**効かない**（調査済み）
+- ✅ **iptestserver スタブテスト実施（2026-05-19）**: arXiv / OpenReview / SO / GitHub 全 4 ソース正常動作確認
+  - マルチスレッドリクエスト発生なし（全 `client_ip: 192.168.1.101` 単一経路）
+  - OpenReview 429 バックオフ: minutes_level 0→4 昇格・RESET 後正常復帰確認済み
+  - テストコマンド: `STUB=http://192.168.1.101:8002 PYTHONPATH=/mnt/d/Projects/claude_work/MED poetry run python scripts/test_retriever_stub.py`
+- 🟡 **arXiv 解除後の動作確認手順**:
+  1. `curl -o /dev/null -w "%{http_code}" "https://export.arxiv.org/api/query?search_query=all:FAISS&max_results=1"`
+  2. 200 確認後に GUI Seeder タブの arXiv チェックを ON にしてサーバーポーリング再開
 - ⏸️ **mature 後回し**: 未処理件数が少ないため優先度低。LM Studio / FastFlowLM はローカル待機中。
 - OpenRouter 再活用候補: `openai/gpt-4o-mini` 系 — 厳格さが若干不足するため「切り口の異なるドメイン」のmatureに限定使用を検討
 - 🟡 **OpenRouter 再活用**: GPT-OSS-120b を異なる観点でのmaturation（F-2と連携）
@@ -223,6 +248,9 @@
   - デフォルト venue: ICLR 2025/2024・NeurIPS 2024/2023（`retrievers.yaml` で変更可）
 - ✅ `RetrieverRouter` に登録（`_SOURCE_CONCURRENCY["openreview"] = 1`）
 - ✅ `configs/retrievers.yaml` に `openreview:` セクション追加
+- ✅ **venue ループ rate-limit 修正（2026-05-19）**: `_do_search()` の 4 venue イテレーション間に `BACKOFF_BASE_SECS`（1s）待機を追加
+  - 修正前: 4 req / 556ms ≈ 7 req/s（60 req/min 制限超過 → 429 の原因）
+  - 修正後: 4 req / 3.6s ≈ 1.1 req/s → 制限内。iptestserver スタブで動作確認済み
 - 🟢 ACL / EMNLP 等の venue 追加（`retrievers.yaml` の `venues:` に追記するだけ）
 
 ### F-6. レトリーバー品質改善 ✅ **完了（2026-04-28）**

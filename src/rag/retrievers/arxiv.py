@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
 import xml.etree.ElementTree as ET
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from typing import TYPE_CHECKING, ClassVar
 
 from src.rag.retriever import BaseRetriever, RawResult
@@ -36,7 +38,8 @@ def _clean_arxiv_text(text: str) -> str:
 
 logger = logging.getLogger(__name__)
 
-_ARXIV_API = "https://export.arxiv.org/api/query"
+# MED_ARXIV_API_URL でスタブサーバーに切り替え可能（テスト用）
+_ARXIV_API = os.environ.get("MED_ARXIV_API_URL", "https://export.arxiv.org/api/query")
 _NS = {"atom": "http://www.w3.org/2005/Atom"}
 
 _DEFAULT_CATEGORIES = ["cs.AI", "cs.LG", "cs.CL", "cs.IR", "cs.DB", "stat.ML"]
@@ -176,10 +179,43 @@ class ArXivRetriever(BaseRetriever):
                 if exc.response.status_code != 429:
                     raise
 
+                # Retry-After ヘッダーを確認
+                retry_after_secs: float | None = None
+                ra_header = exc.response.headers.get("Retry-After", "")
+                if ra_header:
+                    try:
+                        retry_after_secs = float(ra_header)
+                        logger.warning("ArXiv 429 Retry-After: %.0fs", retry_after_secs)
+                    except ValueError:
+                        try:
+                            ra_dt = parsedate_to_datetime(ra_header)
+                            now = datetime.now(timezone.utc)
+                            retry_after_secs = max(0.0, (ra_dt - now).total_seconds())
+                            logger.warning(
+                                "ArXiv 429 Retry-After: %s (→ %.0fs)", ra_header, retry_after_secs
+                            )
+                        except Exception:
+                            logger.warning("ArXiv 429 Retry-After: %r (unparseable)", ra_header)
+                else:
+                    logger.warning("ArXiv 429: no Retry-After header")
+
                 # 429 受信 → バックオフレベルを上げて保存
                 store = self._get_store()
                 state = await store.load()
                 state = apply_relaxation(state)
+
+                # Retry-After が ban_threshold を超える場合は直接 ban_until に反映
+                if retry_after_secs is not None and retry_after_secs > self.BACKOFF_BAN_THRESHOLD_SECS:
+                    ban_end = date.today() + timedelta(seconds=retry_after_secs)
+                    state.days_level = max(state.days_level + 1, 1)
+                    state.days_date = date.today().isoformat()
+                    state.ban_until = ban_end.isoformat()
+                    await store.save(state)
+                    logger.warning(
+                        "ArXiv 429 Retry-After=%.0fs → day ban until %s",
+                        retry_after_secs, state.ban_until,
+                    )
+                    return []
 
                 new_level = min(state.minutes_level + 1, self.BACKOFF_MAX_MINUTES_LEVEL)
                 state.minutes_level = new_level

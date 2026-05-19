@@ -76,6 +76,7 @@ RATE_LIMITS = {
     "stackoverflow": 1.0,
     "github": 1.0,
     "tavily": 1.0,
+    "openreview": 1.0,   # API 60 req/min → 1s間隔
 }
 
 DEFAULT_SOURCES = list(RATE_LIMITS.keys())
@@ -123,15 +124,31 @@ async def execute_retrieval(
         if similarity < relevance_threshold:
             continue
 
-        # FAISS 追加（重複排除は memory_manager.add() で内部的に処理）
+        # FAISS 追加
         try:
-            doc_id = await memory_manager.add(
-                content=content,
-                source=retriever_name,
-                url=getattr(result, "url", ""),
-                title=getattr(result, "title", ""),
-                metadata=getattr(result, "metadata", {}),
+            from src.memory.schema import Document, Domain, SourceMeta, SourceType
+            _domain_map = {
+                "stackoverflow": Domain.CODE,
+                "github": Domain.CODE,
+                "tavily": Domain.GENERAL,
+                "arxiv": Domain.ACADEMIC,
+                "openreview": Domain.ACADEMIC,
+            }
+            try:
+                st = SourceType(retriever_name)
+            except ValueError:
+                st = SourceType.MANUAL
+            source = SourceMeta(
+                source_type=st,
+                url=getattr(result, "url", "") or "",
+                title=getattr(result, "title", None),
             )
+            doc = Document(
+                content=content,
+                domain=_domain_map.get(retriever_name, Domain.GENERAL),
+                source=source,
+            )
+            await memory_manager.add(doc)
             added += 1
         except Exception as e:
             logger.debug(f"  Failed to add document: {e}")

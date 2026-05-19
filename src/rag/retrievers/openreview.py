@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
 from datetime import date, timedelta
 from typing import TYPE_CHECKING, ClassVar
@@ -25,7 +26,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_OPENREVIEW_API = "https://api2.openreview.net/notes"
+# MED_OPENREVIEW_API_URL でスタブサーバーに切り替え可能（テスト用）
+_OPENREVIEW_API = os.environ.get("MED_OPENREVIEW_API_URL", "https://api2.openreview.net/notes")
 
 # (conference_prefix, year) → invitation = "{prefix}/{year}/Conference/-/Submission"
 _DEFAULT_VENUES: list[tuple[str, int]] = [
@@ -174,7 +176,9 @@ class OpenReviewRetriever(BaseRetriever):
         query_terms = raw_terms if raw_terms else [query.lower().strip()]
 
         candidates: list[RawResult] = []
-        for conference, year in self._venues:
+        for i, (conference, year) in enumerate(self._venues):
+            if i > 0:
+                await asyncio.sleep(self.BACKOFF_BASE_SECS)
             notes = await self._fetch_venue(conference, year)
             for note in notes:
                 result = self._note_to_result(note, query_terms)
