@@ -16,10 +16,11 @@ FAISS のベクトルインデックスと対になるメタデータ管理を�
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import random
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -255,6 +256,21 @@ _CREATE_BLACKLIST_INDICES_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_blacklist_title ON seed_blacklist(source_title) WHERE source_title != '';",
 ]
 
+_CREATE_SEED_QUERY_LOG_SQL = """
+CREATE TABLE IF NOT EXISTS seed_query_log (
+    query_hash   TEXT NOT NULL,
+    source       TEXT NOT NULL,
+    query_text   TEXT NOT NULL,
+    executed_at  TEXT NOT NULL,
+    result_count INT  NOT NULL DEFAULT 0,
+    PRIMARY KEY (query_hash, source)
+);
+"""
+
+_CREATE_SEED_QUERY_LOG_INDICES_SQL = [
+    "CREATE INDEX IF NOT EXISTS idx_seed_query_log_executed ON seed_query_log(executed_at);",
+]
+
 _CREATE_INDICES_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_documents_domain ON documents(domain);",
     "CREATE INDEX IF NOT EXISTS idx_documents_review_status ON documents(review_status);",
@@ -442,6 +458,7 @@ class MetadataStore:
         await self._db.execute(_CREATE_THOUGHT_LOGS_SQL)
         await self._db.execute(_CREATE_BLACKLIST_SQL)
         await self._db.execute(_CREATE_DOC_REVIEWS_SQL)
+        await self._db.execute(_CREATE_SEED_QUERY_LOG_SQL)
         await self._migrate()  # 列追加を先に行い、その後インデックス作成
         for idx_sql in (
             _CREATE_INDICES_SQL
@@ -450,6 +467,7 @@ class MetadataStore:
             + _CREATE_THOUGHT_LOGS_INDICES_SQL
             + _CREATE_BLACKLIST_INDICES_SQL
             + _CREATE_DOC_REVIEWS_INDICES_SQL
+            + _CREATE_SEED_QUERY_LOG_INDICES_SQL
         ):
             await self._db.execute(idx_sql)
         for trigger_sql in _CREATE_FTS_TRIGGERS_SQL:
@@ -565,6 +583,42 @@ class MetadataStore:
             )
         rows = await cur.fetchall()
         return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # seed_query_log — クエリキャッシュ
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _query_hash(query: str, source: str) -> str:
+        return hashlib.sha256(f"{source}:{query}".encode()).hexdigest()
+
+    async def is_query_cached(self, query: str, source: str, ttl_days: int = 7) -> bool:
+        """(query, source) ペアが TTL 内にキャッシュされているか返す。
+
+        0件だった過去の送信もキャッシュとして扱う（再送信を防ぐ）。
+        """
+        cutoff = (datetime.now(UTC) - timedelta(days=ttl_days)).isoformat()
+        cur = await self._db.execute(
+            "SELECT 1 FROM seed_query_log WHERE query_hash=? AND source=? AND executed_at>? LIMIT 1",
+            (self._query_hash(query, source), source, cutoff),
+        )
+        return await cur.fetchone() is not None
+
+    async def record_query(self, query: str, source: str, result_count: int = 0) -> None:
+        """クエリ送信履歴を記録する（INSERT OR REPLACE で最終実行日時を更新）。"""
+        await self._db.execute(
+            """INSERT OR REPLACE INTO seed_query_log
+               (query_hash, source, query_text, executed_at, result_count)
+               VALUES (?, ?, ?, ?, ?)""",
+            (
+                self._query_hash(query, source),
+                source,
+                query,
+                datetime.now(UTC).isoformat(),
+                result_count,
+            ),
+        )
+        await self._commit_with_retry()
 
     async def save(self, doc: Document) -> None:
         """Document を保存する (UPSERT)。"""

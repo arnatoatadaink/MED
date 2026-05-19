@@ -176,6 +176,95 @@ def show_request_log(stub_base: str, source: str | None = None, n: int = 20) -> 
 
 
 # ──────────────────────────────────────────────
+# seed_only.py クエリキャッシュ テスト
+# ──────────────────────────────────────────────
+
+async def test_query_cache(stub_base: str) -> None:
+    """seed_with_rate_control のクエリキャッシュ動作を確認する。
+
+    シナリオ:
+      1. 1回目: 2クエリ × arxiv → iptestserver に 2 リクエスト送信
+      2. 2回目: 同クエリ → キャッシュヒットで 0 リクエスト
+      3. cache_ttl_days=0: キャッシュ無効 → 再度 2 リクエスト送信
+    """
+    import tempfile
+    from seed_only import seed_with_rate_control
+
+    QUERIES = [
+        "FAISS similarity search Python",
+        "sentence-transformers embedding",
+    ]
+    SOURCES_CACHE = ["arxiv"]
+    TEMP_DB = "/tmp/seed_cache_stub_test.db"
+
+    def _count_new_requests(before: int) -> int:
+        data = _stub_get(stub_base, "/requests/recent", n=50)
+        return len(data.get("requests", [])) - before
+
+    def _request_count() -> int:
+        data = _stub_get(stub_base, "/requests/recent", n=50)
+        return len(data.get("requests", []))
+
+    print(f"\n{'='*60}")
+    print("Query Cache Test (seed_with_rate_control)")
+    print(f"{'='*60}")
+    print(f"  Queries   : {QUERIES}")
+    print(f"  DB        : {TEMP_DB}")
+
+    # テスト用 DB を毎回クリーン
+    import os as _os
+    if _os.path.exists(TEMP_DB):
+        _os.remove(TEMP_DB)
+
+    # ── Run 1: 初回送信 ──
+    _stub_delete(stub_base, "/requests")
+    print("\n[Run 1] 初回送信 (キャッシュなし)")
+    await seed_with_rate_control(
+        queries=QUERIES,
+        sources=SOURCES_CACHE,
+        cache_ttl_days=7,
+        metadata_db_path=TEMP_DB,
+    )
+    count1 = _request_count()
+    result1 = "PASS" if count1 >= len(QUERIES) else "FAIL"
+    print(f"  iptestserver リクエスト数: {count1}  (期待: >={len(QUERIES)})  [{result1}]")
+
+    # ── Run 2: 2回目（キャッシュヒット）──
+    _stub_delete(stub_base, "/requests")
+    print("\n[Run 2] 2回目 (キャッシュヒット → 0件送信)")
+    await seed_with_rate_control(
+        queries=QUERIES,
+        sources=SOURCES_CACHE,
+        cache_ttl_days=7,
+        metadata_db_path=TEMP_DB,
+    )
+    count2 = _request_count()
+    result2 = "PASS" if count2 == 0 else "FAIL"
+    print(f"  iptestserver リクエスト数: {count2}  (期待: 0)  [{result2}]")
+
+    # ── Run 3: cache_ttl_days=0（無効）──
+    _stub_delete(stub_base, "/requests")
+    print("\n[Run 3] cache_ttl_days=0 (キャッシュ無効 → 再送信)")
+    await seed_with_rate_control(
+        queries=QUERIES,
+        sources=SOURCES_CACHE,
+        cache_ttl_days=0,
+        metadata_db_path=TEMP_DB,
+    )
+    count3 = _request_count()
+    result3 = "PASS" if count3 >= len(QUERIES) else "FAIL"
+    print(f"  iptestserver リクエスト数: {count3}  (期待: >={len(QUERIES)})  [{result3}]")
+
+    # ── サマリ ──
+    print(f"\n{'─'*60}")
+    all_pass = result1 == "PASS" and result2 == "PASS" and result3 == "PASS"
+    print(f"  Run1 (初回送信)  : {result1}")
+    print(f"  Run2 (キャッシュ): {result2}")
+    print(f"  Run3 (ttl=0)     : {result3}")
+    print(f"  Overall          : {'ALL PASS' if all_pass else 'FAILED'}")
+
+
+# ──────────────────────────────────────────────
 # メイン
 # ──────────────────────────────────────────────
 
@@ -186,6 +275,7 @@ async def main() -> None:
     parser = argparse.ArgumentParser(description="retriever stub tester")
     parser.add_argument("--source", choices=SOURCES, help="テスト対象ソース（省略時は全て）")
     parser.add_argument("--test-429", action="store_true", help="429ハンドリングをテスト")
+    parser.add_argument("--test-cache", action="store_true", help="seed_only.py クエリキャッシュをテスト")
     parser.add_argument("--inspect", action="store_true", help="iptestserverのリクエストログを表示")
     parser.add_argument("--query", default="FAISS similarity search", help="検索クエリ")
     args = parser.parse_args()
@@ -220,6 +310,11 @@ async def main() -> None:
                 print(f"[skip] 429テストは arxiv/openreview のみ対応 (source={source})")
         return
 
+    if args.test_cache:
+        await test_query_cache(stub_base)
+        return
+
+    _stub_delete(stub_base, "/requests")
     for source in targets:
         await test_source(source, args.query)
 

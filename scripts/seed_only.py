@@ -163,6 +163,8 @@ async def seed_with_rate_control(
     queries: list[str],
     sources: list[str],
     dry_run: bool = False,
+    cache_ttl_days: int = 7,
+    metadata_db_path: str | None = None,
 ) -> dict:
     """
     Rate limit を遵守しながら Query × Retriever タスクを実行。
@@ -180,22 +182,31 @@ async def seed_with_rate_control(
     from src.memory.memory_manager import MemoryManager
 
     # ── 初期化 ──
+    from src.memory.metadata_store import MetadataStore
     router = RetrieverRouter()
     embedder = Embedder()
-    memory_manager = MemoryManager(embedder=embedder)
+    store = MetadataStore(db_path=metadata_db_path) if metadata_db_path else None
+    memory_manager = MemoryManager(embedder=embedder, store=store)
     await memory_manager.initialize()
 
-    # ── タスクスタック初期化 ──
+    # ── タスクスタック初期化（キャッシュ済みクエリをスキップ）──
     tasks_stack: dict[str, list[TaskItem]] = {s: [] for s in sources}
+    skipped = 0
 
     for qi, query in enumerate(queries):
         for source in sources:
+            if await memory_manager.store.is_query_cached(query, source, ttl_days=cache_ttl_days):
+                logger.debug(f"  [{source}] Query {qi+1} cached (ttl={cache_ttl_days}d), skip: {query[:60]}")
+                skipped += 1
+                continue
             tasks_stack[source].append(TaskItem(
                 query=query,
                 retriever_name=source,
                 query_index=qi + 1,
             ))
 
+    if skipped:
+        logger.info(f"Skipped {skipped} cached (query, source) pairs (ttl={cache_ttl_days}d)")
     logger.info(f"Created task stacks: {sum(len(s) for s in tasks_stack.values())} tasks total")
     logger.info(f"Task distribution: {', '.join(f'{s}: {len(tasks_stack[s])}' for s in sources)}")
 
@@ -244,6 +255,9 @@ async def seed_with_rate_control(
                             t, router, embedder, memory_manager
                         )
                         stats["added"] += added
+                        await memory_manager.store.record_query(
+                            t.query, t.retriever_name, added
+                        )
                     except Exception as e:
                         logger.exception(f"Task error: {e}")
                         stats["errors"] += 1
@@ -318,6 +332,12 @@ def main() -> None:
         type=int,
         help="Max queries to process",
     )
+    parser.add_argument(
+        "--cache-ttl-days",
+        type=int,
+        default=7,
+        help="Skip (query, source) pairs sent within N days (default: 7, 0=disable)",
+    )
 
     args = parser.parse_args()
 
@@ -351,6 +371,7 @@ def main() -> None:
             queries=queries,
             sources=sources,
             dry_run=args.dry_run,
+            cache_ttl_days=args.cache_ttl_days,
         )
     )
 

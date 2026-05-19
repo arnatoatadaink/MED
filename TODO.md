@@ -157,6 +157,12 @@
   - マルチスレッドリクエスト発生なし（全 `client_ip: 192.168.1.101` 単一経路）
   - OpenReview 429 バックオフ: minutes_level 0→4 昇格・RESET 後正常復帰確認済み
   - テストコマンド: `STUB=http://192.168.1.101:8002 PYTHONPATH=/mnt/d/Projects/claude_work/MED poetry run python scripts/test_retriever_stub.py`
+- ✅ **seed_only.py クエリキャッシュ実装（2026-05-20）**: 同一クエリの重複送信を防止し BAN リスクを低減
+  - `metadata.db` に `seed_query_log` テーブル追加（PRIMARY KEY: query_hash × source）
+  - `MetadataStore.is_query_cached(query, source, ttl_days=7)` / `record_query()` 追加
+  - `seed_only.py --cache-ttl-days N`（default=7, 0=無効）。0件結果でもキャッシュ記録
+  - iptestserver 3シナリオ全 PASS: 初回送信2件 / 2回目0件 / ttl=0再送信2件
+  - テストコマンド: `STUB=http://192.168.1.101:8002 poetry run python scripts/test_retriever_stub.py --test-cache`
 - 🟡 **arXiv 解除後の動作確認手順**:
   1. `curl -o /dev/null -w "%{http_code}" "https://export.arxiv.org/api/query?search_query=all:FAISS&max_results=1"`
   2. 200 確認後に GUI Seeder タブの arXiv チェックを ON にしてサーバーポーリング再開
