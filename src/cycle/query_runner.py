@@ -42,6 +42,7 @@ class QueryRunnerConfig:
     domain: str = "code"
     max_queries: int = _MAX_QUERIES_PER_TASK
     disabled_sources: frozenset[str] = field(default_factory=frozenset)
+    cache_ttl_days: int = 7
 
 
 class QueryRunner:
@@ -166,16 +167,40 @@ class QueryRunner:
         """1クエリを外部検索して FAISS に投入する。"""
         from src.memory.schema import Document, Domain, SourceMeta, SourceType
 
+        # キャッシュ済みソースを除外
+        all_sources: list[str] = sources if sources is not None else self._router.available_sources()
+        effective_sources: list[str] = [
+            s for s in all_sources
+            if not await self._mm.store.is_query_cached(query, s, ttl_days=self._cfg.cache_ttl_days)
+        ]
+        if not effective_sources:
+            logger.debug("All sources cached for query: %s", query[:60])
+            return
+        if len(effective_sources) < len(all_sources):
+            logger.debug(
+                "Skipped %d cached source(s) for: %s",
+                len(all_sources) - len(effective_sources), query[:60],
+            )
+
         try:
             results = await self._router.search(
                 query,
                 max_results=self._cfg.top_k,
-                sources=sources,
+                sources=effective_sources,
             )
         except Exception as exc:
             logger.warning("RAG search failed: %s", exc)
             stats["errors"] += 1
             return
+
+        # ソース別取得件数を集計してキャッシュ記録
+        counts_by_source: dict[str, int] = {s: 0 for s in effective_sources}
+        for r in results:
+            src = getattr(r, "source", "")
+            if src in counts_by_source:
+                counts_by_source[src] += 1
+        for src, cnt in counts_by_source.items():
+            await self._mm.store.record_query(query, src, cnt)
 
         stats["retrieved"] += len(results)
         query_vec = self._embedder.embed(query)

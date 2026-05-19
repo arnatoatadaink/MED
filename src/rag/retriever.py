@@ -85,9 +85,9 @@ _last_request_times: dict[str, float] = {}
 # ソース毎の前回取得ドキュメント数
 _last_request_counts: dict[str, int] = {}
 
-async def _rate_limit_wait(source: str,last_results: int = 0) -> None:
+async def _rate_limit_wait(source: str, last_results: int = 0) -> None:
     """ソース別のレート制限待機。各 API に対して最低間隔を保証する。"""
-    interval = _RATE_LIMIT_INTERVALS.get(source, _DEFAULT_RATE_LIMIT)*last_results
+    interval = _RATE_LIMIT_INTERVALS.get(source, _DEFAULT_RATE_LIMIT) * max(last_results, 1)
     last = _last_request_times.get(source, 0.0)
     now = time.monotonic()
     elapsed = now - last
