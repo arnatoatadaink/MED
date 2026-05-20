@@ -207,7 +207,7 @@ class LLMGateway:
                         base_url=base_url,
                         default_model=conf.get("default_model", ""),
                         api_key_env=api_key_env,
-                        timeout=float(conf.get("timeout", 600)),
+                        timeout=float(conf.get("timeout", 30)),
                         default_max_tokens=default_max_tokens,
                         default_temperature=default_temperature,
                         extra_params=extra_params,

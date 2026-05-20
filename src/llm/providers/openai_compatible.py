@@ -59,7 +59,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         default_model: str,
         api_key: str = "",
         api_key_env: str = "",
-        timeout: float = 600.0,
+        timeout: float = 30.0,
         default_max_tokens: int | None = None,
         default_temperature: float | None = None,
         extra_params: dict | None = None,
