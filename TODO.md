@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-05-21 (P-QE クエリ生成環境拡張 全5タスク完了 / iptestserver Test4・Test5 全PASS)
+> 最終更新: 2026-05-21 (P-QE クエリ生成環境拡張 全5タスク完了 / P-SYS-2 AWEP hookフォーマット修正)
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_translate.md` / `plan_version_aware.md` / `plan_neat_hyp_e.md` / `plan_programming_seed.md` / `med_enhancement_seed.md` / `med_seed_papers.md`
 
 ---
@@ -1230,6 +1230,10 @@ APIの使い方・統合方針は `.claude/rules/awep-journal.md` / `forUser/rul
 - 🟡 **AWEP サーバー起動手順の文書化**: `docs/awep_setup.md` にまとめる（未作成）
 - 🟢 **5-3: セマンティック検索** `GET /search/semantic`（AWEP 側未実装）→ 完了後に `topic_hook.py` を FAISS 版に切り替え（awep-journal.md §4-1）
 - 🟢 **5-5: 双方向連携パイプライン設計**: AWEP サマリー → MED エピソード FAISS 投入 / MED 検索結果 → AWEP KG（awep-journal.md §4-2/4-3 / **Q-3a** 参照）
+- ✅ **hookフォーマット修正（2026-05-21）**: curl が raw Claude CLI ペイロードをそのまま送信していたため 422 エラーが発生していた問題を修正
+  - 修正前: stdin を直接 `/ingest` に転送（`source` / `payload` フィールドなし → Pydantic 422）
+  - 修正後: `python3 -c "import json,sys; ..."` でラップし `{"source":"claude_cli","payload":{...}}` 形式に変換してから送信
+  - 対象フック: `awep-pre`（PreToolUse）/ `awep-post`（PostToolUse）/ `awep-stop`（Stop）の3件
 - **注意**: P-SYS-1（journal_hook.sh）は Stop Hook から削除済み。スクリプトファイル（`~/.claude/journal/scripts/`）は残存しているが、現在は何も呼び出していない。Stop Hook は pytest runner と awep-stop のみ。
 
 #### P-BUG-4. QueryRunner バグ修正 ✅ **完了（2026-05-20）**
