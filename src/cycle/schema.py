@@ -12,10 +12,11 @@ from typing import Any
 class GapType(str, Enum):
     """ギャップの種類 — downstream action を分岐させる。"""
 
-    SMALL_CLUSTER     = "small_cluster"      # 小さい島 → 収集
-    UNREVIEWED_BACKLOG = "unreviewed_backlog" # 未レビュー多い → mature
-    SOURCE_IMBALANCE  = "source_imbalance"   # ソース偏り → 別ソースで収集
-    LOW_QUALITY       = "low_quality"        # 低品質クラスタ → re-mature
+    SMALL_CLUSTER       = "small_cluster"        # 小さい島 → 収集
+    UNREVIEWED_BACKLOG  = "unreviewed_backlog"    # 未レビュー多い → mature
+    SOURCE_IMBALANCE    = "source_imbalance"      # ソース偏り → 別ソースで収集
+    LOW_QUALITY         = "low_quality"           # 低品質クラスタ → re-mature
+    INTER_ISLAND_BRIDGE = "inter_island_bridge"   # 離れた島ペア → 橋渡し収集
 
 
 @dataclass

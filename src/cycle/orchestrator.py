@@ -21,7 +21,7 @@ from src.cycle.schema import CollectionTask, GapType
 logger = logging.getLogger(__name__)
 
 _MATURE_GAP_TYPES = {GapType.UNREVIEWED_BACKLOG, GapType.LOW_QUALITY}
-_COLLECTOR_GAP_TYPES = {GapType.SMALL_CLUSTER, GapType.SOURCE_IMBALANCE}
+_COLLECTOR_GAP_TYPES = {GapType.SMALL_CLUSTER, GapType.SOURCE_IMBALANCE, GapType.INTER_ISLAND_BRIDGE}
 
 
 class OrchestratorConfig:

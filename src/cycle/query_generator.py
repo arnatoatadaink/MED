@@ -15,6 +15,7 @@ import sqlite3
 from pathlib import Path
 from typing import Optional
 
+from src.cycle.query_prompts import _build_pivot_prompt, _build_prompt
 from src.cycle.schema import CollectionTask, GapType
 
 logger = logging.getLogger(__name__)
@@ -88,6 +89,29 @@ class QueryGenerator:
 
         return list(await asyncio.gather(*[_bounded(t) for t in tasks]))
 
+    async def enrich_pivot(
+        self,
+        task: CollectionTask,
+        zero_result_queries: list[str],
+    ) -> CollectionTask:
+        """0件クエリに基づいてクエリ方向を変えて task を補完する。
+
+        LLM が利用できない場合は元の task をそのまま返す。
+        """
+        titles = await self._fetch_titles(task.signals.get("sample_doc_ids", []))
+        try:
+            gateway = await self._get_gateway()
+            keywords, queries = await self._call_llm_pivot(
+                task, titles, zero_result_queries, gateway
+            )
+        except Exception as exc:
+            logger.warning("LLM pivot failed (%s); keeping original queries", exc)
+            return task
+
+        task.keywords = keywords
+        task.queries  = queries
+        return task
+
     # ---- private ---------------------------------------------------
 
     async def _get_gateway(self) -> object:
@@ -147,51 +171,34 @@ class QueryGenerator:
 
         raise ValueError("LLM returned no parseable keywords/queries")
 
+    async def _call_llm_pivot(
+        self,
+        task: CollectionTask,
+        titles: list[str],
+        zero_result_queries: list[str],
+        gateway: object,
+    ) -> tuple[list[str], list[str]]:
+        """LLM にピボットプロンプトを送り (keywords, queries) を返す。"""
+        prompt = _build_pivot_prompt(task, titles, zero_result_queries)
 
-# ---- プロンプト ビルダー ------------------------------------------
+        for attempt in range(_MAX_QUERY_RETRIES + 1):
+            resp = await gateway.complete(
+                prompt,
+                provider=self._provider,
+                model=self._model,
+                max_tokens=self._max_tokens,
+                temperature=self._temperature,
+            )
+            text = resp.content.strip()
+            result = _parse_json(text)
+            if result is not None:
+                keywords = [str(k) for k in result.get("keywords", [])][:8]
+                queries  = [str(q) for q in result.get("queries", [])][:8]
+                if keywords or queries:
+                    return keywords, queries
+            logger.debug("Pivot JSON parse failed on attempt %d; retrying", attempt + 1)
 
-def _build_prompt(task: CollectionTask, titles: list[str]) -> str:
-    """CollectionTask から LLM 用プロンプトを組み立てる。"""
-    sig = task.signals
-    src_lines = "\n".join(
-        f"  {src}: {cnt} docs"
-        for src, cnt in sorted(
-            sig.get("source_dist", {}).items(),
-            key=lambda x: -x[1],
-        )
-    )
-    title_lines = "\n".join(f"  - {t}" for t in titles) if titles else "  (none available)"
-
-    gap_hint = {
-        GapType.SMALL_CLUSTER:      "This topic area is under-represented. Find diverse sources.",
-        GapType.UNREVIEWED_BACKLOG: "This cluster has many unreviewed docs. Find high-quality sources.",
-        GapType.SOURCE_IMBALANCE:   f"The cluster relies too heavily on '{sig.get('dominant_source', 'unknown')}'. Suggest queries for other sources.",
-        GapType.LOW_QUALITY:        "Quality is low here. Prioritize authoritative, detailed sources.",
-    }.get(task.gap_type, "")
-
-    return f"""You are a knowledge collection assistant for a machine learning memory system.
-A gap was detected in the knowledge base. Your task: generate search keywords and queries
-to find documents that would fill this gap.
-
-Gap type: {task.gap_type.value}
-Reason: {task.reason}
-Cluster size: {sig.get('size', '?')} docs  quality_avg: {sig.get('q_avg', 0):.2f}
-Approved: {sig.get('approved_pct', 0) * 100:.0f}%
-
-Source distribution:
-{src_lines}
-
-Sample document titles (what already exists in this cluster):
-{title_lines}
-
-Hint: {gap_hint}
-
-Generate 4-6 search keywords and 4-6 search queries in English.
-Keywords should be concise terms (1-4 words each).
-Queries should be natural language questions or search strings suitable for arXiv / GitHub / web search.
-
-Respond ONLY with valid JSON, no explanation:
-{{"keywords": ["...", "..."], "queries": ["...", "..."]}}"""
+        raise ValueError("LLM pivot returned no parseable keywords/queries")
 
 
 # ---- JSON パーサー ------------------------------------------------
@@ -226,10 +233,11 @@ def _fallback(task: CollectionTask) -> tuple[list[str], list[str]]:
 
     # gap_type ベースのキーワード接頭語
     prefix_map = {
-        GapType.SMALL_CLUSTER:      ["tutorial", "guide", "introduction"],
-        GapType.UNREVIEWED_BACKLOG: ["review", "survey", "overview"],
-        GapType.SOURCE_IMBALANCE:   ["alternative", "comparison", "benchmark"],
-        GapType.LOW_QUALITY:        ["best practices", "authoritative", "documentation"],
+        GapType.SMALL_CLUSTER:        ["tutorial", "guide", "introduction"],
+        GapType.UNREVIEWED_BACKLOG:   ["review", "survey", "overview"],
+        GapType.SOURCE_IMBALANCE:     ["alternative", "comparison", "benchmark"],
+        GapType.LOW_QUALITY:          ["best practices", "authoritative", "documentation"],
+        GapType.INTER_ISLAND_BRIDGE:  ["bridge", "cross-domain", "survey"],
     }
     prefixes = prefix_map.get(task.gap_type, ["guide"])
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 
@@ -43,6 +43,8 @@ class QueryRunnerConfig:
     max_queries: int = _MAX_QUERIES_PER_TASK
     disabled_sources: frozenset[str] = field(default_factory=frozenset)
     cache_ttl_days: int = 7
+    pivot_threshold: float = 0.5   # 0件クエリがこの割合以上でピボット実行
+    pivot_enabled: bool = True
 
 
 class QueryRunner:
@@ -119,9 +121,20 @@ class QueryRunner:
             task.task_id[:8], task.gap_type.value, len(queries), sources,
         )
 
+        zero_result_queries: list[str] = []
         for qi, query in enumerate(queries):
             logger.info("[%d/%d] %s", qi + 1, len(queries), query[:80])
-            await self._run_query(query, sources, stats)
+            retrieved = await self._run_query(query, sources, stats)
+            if retrieved == 0:  # None (全キャッシュ済み) は除外
+                zero_result_queries.append(query)
+
+        # 0件クエリが threshold 以上ならピボット（1回のみ）
+        if (
+            self._cfg.pivot_enabled
+            and zero_result_queries
+            and len(zero_result_queries) / len(queries) >= self._cfg.pivot_threshold
+        ):
+            await self._run_pivot(task, sources, stats, zero_result_queries)
 
         logger.info(
             "Task %s done: retrieved=%d added=%d dup=%d irrel=%d err=%d",
@@ -158,13 +171,49 @@ class QueryRunner:
         logger.info("SOURCE_IMBALANCE: excluding '%s', using %s", dominant, filtered)
         return filtered
 
+    async def _run_pivot(
+        self,
+        task: CollectionTask,
+        sources: Optional[list[str]],
+        stats: dict,
+        zero_result_queries: list[str],
+    ) -> None:
+        """0件クエリに基づいてクエリを再生成し、1回だけ再実行する。"""
+        from src.cycle.query_generator import QueryGenerator
+
+        logger.info(
+            "Task %s: %d/%d zero-result queries — running pivot",
+            task.task_id[:8], len(zero_result_queries), len(task.queries),
+        )
+        try:
+            gen = QueryGenerator()
+            pivoted = await gen.enrich_pivot(task, zero_result_queries)
+        except Exception as exc:
+            logger.warning("Pivot enrich failed: %s", exc)
+            return
+
+        zero_set = set(zero_result_queries)
+        pivot_queries = [q for q in pivoted.queries if q not in zero_set]
+        pivot_queries = pivot_queries[: self._cfg.max_queries]
+        if not pivot_queries:
+            logger.info("No new pivot queries generated — skipping pivot run")
+            return
+
+        for qi, query in enumerate(pivot_queries):
+            logger.info("[pivot %d/%d] %s", qi + 1, len(pivot_queries), query[:80])
+            await self._run_query(query, sources, stats)
+
     async def _run_query(
         self,
         query: str,
         sources: Optional[list[str]],
         stats: dict,
-    ) -> None:
-        """1クエリを外部検索して FAISS に投入する。"""
+    ) -> Optional[int]:
+        """1クエリを外部検索して FAISS に投入する。
+
+        Returns:
+            取得件数（None = 全ソースがキャッシュ済みでスキップ、0 = 取得0件）。
+        """
         from src.memory.schema import Document, Domain, SourceMeta, SourceType
 
         # キャッシュ済みソースを除外
@@ -175,7 +224,7 @@ class QueryRunner:
         ]
         if not effective_sources:
             logger.debug("All sources cached for query: %s", query[:60])
-            return
+            return None  # 全キャッシュ済み — ゼロ結果とは区別する
         if len(effective_sources) < len(all_sources):
             logger.debug(
                 "Skipped %d cached source(s) for: %s",
@@ -191,7 +240,7 @@ class QueryRunner:
         except Exception as exc:
             logger.warning("RAG search failed: %s", exc)
             stats["errors"] += 1
-            return
+            return 0
 
         # ソース別取得件数を集計してキャッシュ記録
         counts_by_source: dict[str, int] = {s: 0 for s in effective_sources}
@@ -260,3 +309,5 @@ class QueryRunner:
             except Exception as exc:
                 logger.warning("Add failed: %s", exc)
                 stats["errors"] += 1
+
+        return len(results)

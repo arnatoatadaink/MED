@@ -17,6 +17,7 @@ from src.cycle.umap_islands import (
     Island,
     IslandSet,
     compute_islands,
+    detect_isolated_pairs,
 )
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,11 @@ class GapDetectorConfig:
     # LOW_QUALITY: q_avg がこれ未満 かつ size がこれ以上
     low_quality_threshold:      float = 0.30
     low_quality_min_size:       int   = 100
+
+    # INTER_ISLAND_BRIDGE: 離れた島ペアの検出
+    inter_island_min_dist_percentile: int   = 75  # 距離のパーセンタイルしきい値
+    inter_island_max_pairs:           int   = 3   # 最大ペア数
+    inter_island_min_size:            int   = 20  # 両島ともこれ以上のサイズが必要
 
     # 出力上限
     max_tasks:                  int   = 20
@@ -101,6 +107,7 @@ class GapDetector:
         tasks.extend(self._detect_unreviewed_backlog(island_set))
         tasks.extend(self._detect_source_imbalance(island_set))
         tasks.extend(self._detect_low_quality(island_set))
+        tasks.extend(self._detect_inter_island_bridges(island_set))
 
         tasks.sort(key=lambda t: t.priority, reverse=True)
         tasks = tasks[: self._cfg.max_tasks]
@@ -195,6 +202,71 @@ class GapDetector:
 
         return tasks
 
+    def _detect_inter_island_bridges(self, iset: IslandSet) -> list[CollectionTask]:
+        """空間的に離れた島ペアを検出して橋渡しクエリタスクを生成する。"""
+        tasks: list[CollectionTask] = []
+        cfg = self._cfg
+
+        pairs = detect_isolated_pairs(
+            iset,
+            min_dist_percentile=cfg.inter_island_min_dist_percentile,
+            max_pairs=cfg.inter_island_max_pairs,
+        )
+
+        for island_a, island_b, dist in pairs:
+            if (
+                island_a.size < cfg.inter_island_min_size
+                or island_b.size < cfg.inter_island_min_size
+            ):
+                continue
+
+            # 距離を正規化してプライオリティに変換（0.55–0.85）
+            ref_dist = (iset.sigma_x + iset.sigma_y) * 2.0 + 1e-8
+            priority = min(0.85, 0.55 + _scale(dist, 0.0, ref_dist) * 0.30)
+
+            # 両島の source_dist をマージ
+            merged_src: dict[str, int] = {}
+            for k, v in island_a.source_dist.items():
+                merged_src[k] = merged_src.get(k, 0) + v
+            for k, v in island_b.source_dist.items():
+                merged_src[k] = merged_src.get(k, 0) + v
+
+            total = island_a.size + island_b.size
+            q_avg = (island_a.q_avg * island_a.size + island_b.q_avg * island_b.size) / total
+            approved_pct = (
+                island_a.approved_pct * island_a.size
+                + island_b.approved_pct * island_b.size
+            ) / total
+            theory_cnt = merged_src.get("arxiv", 0)
+            impl_cnt = merged_src.get("github", 0) + merged_src.get("stackoverflow", 0)
+
+            signals: dict = {
+                "island_a":     _island_signals(island_a, iset),
+                "island_b":     _island_signals(island_b, iset),
+                "bridge_dist":  round(dist, 4),
+                # _build_prompt() 互換フィールド
+                "sample_doc_ids": island_a.doc_ids[:5] + island_b.doc_ids[:5],
+                "size":          total,
+                "q_avg":         round(q_avg, 3),
+                "approved_pct":  round(approved_pct, 3),
+                "source_dist":   merged_src,
+                "dominant_source": max(merged_src, key=merged_src.__getitem__) if merged_src else "unknown",
+                "theory_pct":    round(theory_cnt / total, 3) if total > 0 else 0.0,
+                "impl_pct":      round(impl_cnt / total, 3) if total > 0 else 0.0,
+            }
+
+            tasks.append(CollectionTask(
+                gap_type=GapType.INTER_ISLAND_BRIDGE,
+                priority=priority,
+                reason=(
+                    f"Islands #{island_a.id} and #{island_b.id} are spatially distant "
+                    f"(dist={dist:.3f}). Find bridging papers or implementations."
+                ),
+                signals=signals,
+            ))
+
+        return tasks
+
     def _detect_low_quality(self, iset: IslandSet) -> list[CollectionTask]:
         """品質スコアが低い中規模以上の島 → re-mature が有効。"""
         tasks: list[CollectionTask] = []
@@ -227,20 +299,25 @@ class GapDetector:
 
 def _island_signals(island: Island, iset: IslandSet) -> dict:
     """CollectionTask.signals に格納するクラスタ情報。"""
+    total = island.size
+    theory_cnt = island.source_dist.get("arxiv", 0)
+    impl_cnt = island.source_dist.get("github", 0) + island.source_dist.get("stackoverflow", 0)
     return {
-        "cluster_id":       island.id,
-        "size":             island.size,
-        "q_avg":            round(island.q_avg, 3),
-        "centroid":         list(island.centroid),
-        "source_dist":      island.source_dist,
-        "review_dist":      island.review_dist,
-        "dominant_source":  island.dominant_source,
+        "cluster_id":          island.id,
+        "size":                island.size,
+        "q_avg":               round(island.q_avg, 3),
+        "centroid":            list(island.centroid),
+        "source_dist":         island.source_dist,
+        "review_dist":         island.review_dist,
+        "dominant_source":     island.dominant_source,
         "dominant_source_pct": round(island.dominant_source_pct, 3),
-        "approved_pct":     round(island.approved_pct, 3),
-        "unreviewed_pct":   round(island.unreviewed_pct, 3),
-        "sample_doc_ids":   island.doc_ids[:10],
-        "n_total_islands":  iset.n_clusters,
-        "cache_age_h":      round(iset.cache_age_h, 1),
+        "approved_pct":        round(island.approved_pct, 3),
+        "unreviewed_pct":      round(island.unreviewed_pct, 3),
+        "sample_doc_ids":      island.doc_ids[:10],
+        "n_total_islands":     iset.n_clusters,
+        "cache_age_h":         round(iset.cache_age_h, 1),
+        "theory_pct":          round(theory_cnt / total, 3) if total > 0 else 0.0,
+        "impl_pct":            round(impl_cnt / total, 3) if total > 0 else 0.0,
     }
 
 

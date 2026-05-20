@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-05-19 (OpenReview venue ループ rate-limit 修正 + iptestserver スタブテスト完了)
+> 最終更新: 2026-05-21 (P-QE クエリ生成環境拡張 全5タスク完了 / iptestserver Test4・Test5 全PASS)
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_translate.md` / `plan_version_aware.md` / `plan_neat_hyp_e.md` / `plan_programming_seed.md` / `med_enhancement_seed.md` / `med_seed_papers.md`
 
 ---
@@ -1231,6 +1231,79 @@ APIの使い方・統合方針は `.claude/rules/awep-journal.md` / `forUser/rul
 - 🟢 **5-3: セマンティック検索** `GET /search/semantic`（AWEP 側未実装）→ 完了後に `topic_hook.py` を FAISS 版に切り替え（awep-journal.md §4-1）
 - 🟢 **5-5: 双方向連携パイプライン設計**: AWEP サマリー → MED エピソード FAISS 投入 / MED 検索結果 → AWEP KG（awep-journal.md §4-2/4-3 / **Q-3a** 参照）
 - **注意**: P-SYS-1（journal_hook.sh）は Stop Hook から削除済み。スクリプトファイル（`~/.claude/journal/scripts/`）は残存しているが、現在は何も呼び出していない。Stop Hook は pytest runner と awep-stop のみ。
+
+#### P-BUG-4. QueryRunner バグ修正 ✅ **完了（2026-05-20）**
+
+- ✅ **0件取得時のレートリミット消滅修正**: `_run_query()` でキャッシュ済みソースを除外した後、
+  全ソースがキャッシュ済みでも `record_query()` が呼ばれず TTL が更新されなかった問題を修正
+- ✅ **QueryRunner クエリキャッシュ追加**: `QueryRunnerConfig.cache_ttl_days`（デフォルト 7日）
+  - `_run_query()` の検索前に `is_query_cached(query, source)` でソース別にスキップ判定
+  - 検索後に `record_query(query, source, result_count)` でキャッシュ記録
+  - `seed_only.py` 側とテーブル共有（`seed_query_log`）
+
+---
+
+#### P-QE. クエリ生成環境拡張 ✅ **完了（2026-05-21）**
+
+> 参照: `plan_programming_seed.md` / 会話（2026-05-20〜21）
+>
+> `GapDetector → QueryGenerator` パイプラインに UMAP 空間的構造（島間距離・理論↔実装の偏り）の
+> 活用と 0 件クエリのフィードバックループを追加。5 タスクすべて実装・テスト完了。
+>
+> **iptestserver テスト結果（2026-05-21）**:
+> - Test 4 (INTER_ISLAND_BRIDGE 全ソース) [P-QE-1]: PASS
+> - Test 5 (0件ピボット発火)              [P-QE-4/5]: PASS（empty モード使用）
+
+##### P-QE-1. 島間距離分析 → 橋渡しクエリ生成 ✅ **完了（2026-05-21）**
+
+**背景**: 離れた島ペアを検出し、中間領域を埋める論文・実装を探すクエリを生成したい
+
+- ✅ `src/cycle/umap_islands.py` に `detect_isolated_pairs(iset, min_dist_percentile=75)` 追加
+  - 全島ペアの重心間ユークリッド距離を計算し、距離上位ペアを `(island_a, island_b, dist)` で返す
+- ✅ `src/cycle/schema.py` に `GapType.INTER_ISLAND_BRIDGE = "inter_island_bridge"` 追加
+- ✅ `src/cycle/gap_detector.py` に `_detect_inter_island_bridges()` 追加
+  - `signals` に `island_a/b`（ネスト）, `bridge_dist`, `source_dist`, `theory_pct`, `impl_pct` を含める
+- ✅ `src/cycle/query_prompts.py`（新規）の `_build_prompt()` に `INTER_ISLAND_BRIDGE` プロンプトを追加
+  - 「2トピックを橋渡しする論文・実装を探す」という明示指示
+- ✅ `src/cycle/orchestrator.py` の `_COLLECTOR_GAP_TYPES` に `INTER_ISLAND_BRIDGE` 追加
+
+##### P-QE-2. 理論↔実装橋渡しクエリ強化 ✅ **完了（2026-05-21）**
+
+**背景**: arxiv 偏りの島に対し GitHub・SO の実装・運用コンテンツを積極収集したい
+
+- ✅ `src/cycle/gap_detector.py` の `_island_signals()` に以下を追加:
+  - `theory_pct`: arxiv 占有率
+  - `impl_pct`: github + stackoverflow 占有率
+- ✅ `src/cycle/query_prompts.py` の `_build_prompt()` で `signals` の `theory_pct` を参照:
+  - `theory_pct > 0.70` かつ `impl_pct < 0.10` → `"Find GitHub repositories / implementation guides / operational notes"` ヒント追加
+
+##### P-QE-3. SMALL_CLUSTER プロンプト強化（関連研究・派生研究） ✅ **完了（2026-05-21）**
+
+**背景**: 小さい島のクエリを「多様なソース」から「後続・派生・関連研究」方向にシフトしたい
+
+- ✅ `src/cycle/query_prompts.py` の `SMALL_CLUSTER` ヒント文を更新:
+  - 変更後: `"This topic is under-represented. Find follow-up work, derivative research, or implementations related to: [sample titles]"`
+
+##### P-QE-4. QueryGenerator ピボット機能（0件フィードバック） ✅ **完了（2026-05-21）**
+
+**背景**: 0件だったクエリを検知し、視点・角度を変えた代替クエリを自動生成したい
+
+- ✅ `src/cycle/query_generator.py` に `enrich_pivot(task, zero_result_queries)` 追加
+  - `zero_result_queries`: 0件だったクエリ文字列のリスト
+  - `src/cycle/query_prompts.py` の `_build_pivot_prompt()` を使用（モジュール分割）
+  - 返り値は通常の `enrich` と同じ `CollectionTask`（`queries` フィールドを上書き）
+
+##### P-QE-5. QueryRunner への 0件リトライ制御 ✅ **完了（2026-05-21）**
+
+**背景**: P-QE-4 で生成したピボットクエリを実際に追加実行したい
+
+- ✅ `src/cycle/query_runner.py` の `run_task()` に 0件検出ループを追加:
+  - `_run_query()` の返り値を `None`（全キャッシュ済み）/ `0`（0件）/ `N`（N件）に変更
+  - `QueryRunnerConfig` に `pivot_threshold: float = 0.5`, `pivot_enabled: bool = True` 追加
+  - 0件クエリ数 / 全クエリ数 ≥ `pivot_threshold` で `_run_pivot()` を呼び出し
+  - `_run_pivot()` 内で `QueryGenerator.enrich_pivot()` を呼び、ピボットクエリを追加実行
+
+---
 
 #### P-SYS-3. 型不一致チェッカー実装 ✅ **完了（2026-05-18）**
 AWEP `src/analysis/type_check/` を MED に移植。静的（AST+CGA）+ 動的（typeguard）の2層型検出。

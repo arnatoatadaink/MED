@@ -222,3 +222,40 @@ def compute_islands(
         source_type=source_type_list,
         quality=quality,
     )
+
+
+def detect_isolated_pairs(
+    iset: IslandSet,
+    min_dist_percentile: int = 75,
+    max_pairs: int = 5,
+) -> list[tuple[Island, Island, float]]:
+    """空間的に離れた島ペアを検出する。
+
+    Args:
+        iset: compute_islands() が返す IslandSet。
+        min_dist_percentile: 重心間距離のパーセンタイルしきい値 (0-100)。
+        max_pairs: 返す最大ペア数。
+
+    Returns:
+        (island_a, island_b, distance) のリスト（距離降順）。
+    """
+    islands = iset.islands
+    if len(islands) < 2:
+        return []
+
+    pairs: list[tuple[Island, Island, float]] = []
+    for i in range(len(islands)):
+        for j in range(i + 1, len(islands)):
+            ax, ay = islands[i].centroid
+            bx, by = islands[j].centroid
+            dist = float(np.sqrt((ax - bx) ** 2 + (ay - by) ** 2))
+            pairs.append((islands[i], islands[j], dist))
+
+    if not pairs:
+        return []
+
+    dists = [p[2] for p in pairs]
+    threshold = float(np.percentile(dists, min_dist_percentile))
+    far_pairs = [(a, b, d) for a, b, d in pairs if d >= threshold]
+    far_pairs.sort(key=lambda x: -x[2])
+    return far_pairs[:max_pairs]
