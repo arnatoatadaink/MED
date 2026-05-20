@@ -61,6 +61,11 @@ class EmbeddingConfig(BaseModel):
     batch_size: int = 64
     device: str = "cpu"
     cache_dir: Path | None = None
+    # 外部埋め込みプロバイダー (OpenAI互換 /v1/embeddings エンドポイント)
+    # 環境変数 EMBEDDING_PROVIDER_URL で上書き可能。未設定またはタイムアウト時はローカルモデルを使用。
+    provider_url: str | None = None
+    # プロバイダー側のモデルID。省略時は model フィールドと同名を使用。
+    provider_model: str | None = None
 
 
 # ============================================================================
@@ -255,6 +260,24 @@ class RouterConfig(BaseModel):
 
 
 # ============================================================================
+# QueryRewriter ローカル推論モデル設定
+# ============================================================================
+
+
+class QueryRewriterConfig(BaseModel):
+    """QueryRewriter で使用するローカル推論モデルのプロバイダー設定。
+
+    環境変数 FLAN_T5_PROVIDER_URL / QWEN_PROVIDER_URL で上書き可能。
+    未設定またはプローブ失敗（タイムアウト・空レスポンス）時はローカルモデルを使用。
+    """
+
+    flan_t5_provider_url: str | None = None
+    flan_t5_provider_model: str = "gguf-flan-t5-small"
+    qwen_provider_url: str | None = None
+    qwen_provider_model: str = "qwen2.5-0.5b-instruct"
+
+
+# ============================================================================
 # Student 学習フレームワーク設定
 # ============================================================================
 
@@ -429,6 +452,7 @@ class Settings(BaseSettings):
     rag: RAGConfig = Field(default_factory=RAGConfig)
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
     router: RouterConfig = Field(default_factory=RouterConfig)
+    query_rewriter: QueryRewriterConfig = Field(default_factory=QueryRewriterConfig)
     training: TrainingConfig = Field(default_factory=TrainingConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
     conversation: ConversationConfig = Field(default_factory=ConversationConfig)

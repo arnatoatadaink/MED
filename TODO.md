@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-05-21 (P-QE クエリ生成環境拡張 全5タスク完了 / P-SYS-2 AWEP hookフォーマット修正)
+> 最終更新: 2026-05-21 (LMStudio 外部プロバイダー対応: Embedder / QueryRewriter に env var 注入 + 10秒タイムアウトフォールバック実装)
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_translate.md` / `plan_version_aware.md` / `plan_neat_hyp_e.md` / `plan_programming_seed.md` / `med_enhancement_seed.md` / `med_seed_papers.md`
 
 ---
@@ -277,6 +277,10 @@ UMAP分析でソース別クラスター分布を確認後、retriever層の3問
 ### LM Studio
 - ✅ `configs/llm_config.local.yaml` — `lmstudio` プロバイダー設定済み
   - `qwen3.5-9b`（BF16 IFBench 64.5%）推奨
+- ✅ **埋め込みサーバー対応（2026-05-21）**: `text-embedding-all-minilm-l6-v2` をロードして `EMBEDDING_PROVIDER_URL` で利用可能
+  - `Embedder`: プローブ成功時に LMStudio 経由、10秒タイムアウト時にローカルモデルへ自動切替
+  - `QueryRewriter`: Qwen2.5-0.5B-Instruct (`QWEN_PROVIDER_URL`) で正常動作確認
+  - flan-t5-small GGUF は LMStudio で空レスポンスのためローカルモデル使用
 
 ### OpenRouter モデル調査
 - ✅ `docs/openrouter_models.md` — 無料モデルベンチマーク・429問題・FastFlowLM評価を記録
@@ -319,6 +323,12 @@ UMAP分析でソース別クラスター分布を確認後、retriever層の3問
 - ✅ QueryRewriter（4戦略: rule_expand / flan_t5 / qwen / llm）
 - ✅ FLAN-T5-small / Qwen2.5-0.5B-Instruct DL済み
 - ✅ タイムアウト伝播（GUI→FastAPI→Pipeline→Gateway→全5プロバイダー）
+- ✅ **LMStudio 外部プロバイダー対応（2026-05-21）**
+  - `FLAN_T5_PROVIDER_URL` / `QWEN_PROVIDER_URL` 環境変数で外部推論サーバーを指定可能
+  - 起動時に 10 秒タイムアウト + 空レスポンス検出プローブ → 失敗時はローカルモデルへ自動フォールバック
+  - flan-t5 GGUF は LMStudio で空レスポンス（seq2seq→causal LM 構造ミスマッチ）→ 自動ローカルフォールバック済み
+  - Qwen2.5-0.5B は LMStudio `/v1/chat/completions` で正常動作確認済み
+  - `configs/default.yaml` の `query_rewriter.qwen_provider_url` でも設定可能
 - 🟡 訓練データ生成実行 + SFT 実行（Teacher API キー必要）
 - 🟡 RL fine-tune（GRPO報酬 = FAISS検索品質スコア）
 
