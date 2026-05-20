@@ -10,16 +10,16 @@
 
 使い方:
   # 全ソースをデフォルト設定でテスト（200レスポンス）
-  STUB=http://192.168.1.101:8002 poetry run python scripts/test_retriever_stub.py
+  STUB=http://localhost:8002 poetry run python scripts/test_retriever_stub.py
 
   # 特定ソースのみ
-  STUB=http://192.168.1.101:8002 poetry run python scripts/test_retriever_stub.py --source arxiv
+  STUB=http://localhost:8002 poetry run python scripts/test_retriever_stub.py --source arxiv
 
   # 429ハンドリングをテスト（コントロールAPIで429を設定してから検索）
-  STUB=http://192.168.1.101:8002 poetry run python scripts/test_retriever_stub.py --source arxiv --test-429
+  STUB=http://localhost:8002 poetry run python scripts/test_retriever_stub.py --source arxiv --test-429
 
   # 結果確認後にリクエストログを表示（User-Agent / 送信元IPの確認）
-  STUB=http://192.168.1.101:8002 poetry run python scripts/test_retriever_stub.py --inspect
+  STUB=http://localhost:8002 poetry run python scripts/test_retriever_stub.py --inspect
 
 環境変数:
   STUB          iptestserver のベース URL（必須）
@@ -283,7 +283,7 @@ async def main() -> None:
     stub_base = os.environ.get("STUB", "").rstrip("/")
     if not stub_base:
         print("ERROR: STUB 環境変数が未設定です")
-        print("  例: STUB=http://192.168.1.101:8002 poetry run python scripts/test_retriever_stub.py")
+        print("  例: STUB=http://localhost:8002 poetry run python scripts/test_retriever_stub.py")
         sys.exit(1)
 
     # ヘルスチェック
