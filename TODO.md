@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-05-21 (WebGUI サイクル実行完了 — 新規 71 件収集・FAISS 投入済み)
+> 最終更新: 2026-05-21 (arXiv バックオフインターバル統一: 全 level で multiplier*2^level 式に変更)
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_translate.md` / `plan_version_aware.md` / `plan_neat_hyp_e.md` / `plan_programming_seed.md` / `med_enhancement_seed.md` / `med_seed_papers.md`
 
 ---
@@ -156,6 +156,11 @@
   - `seed_only.py --cache-ttl-days N`（default=7, 0=無効）。0件結果でもキャッシュ記録
   - iptestserver 3シナリオ全 PASS: 初回送信2件 / 2回目0件 / ttl=0再送信2件
   - テストコマンド: `STUB=http://localhost:8002 poetry run python scripts/test_retriever_stub.py --test-cache`
+- ✅ **バックオフインターバル統一（2026-05-21）**: `wait_secs()` を全 level で `multiplier * 2^level` 式に統一
+  - arXiv level 0: 3s → **10s**（level1=20s, level2=40s, level3=80s→ban は変更なし）
+  - OpenReview level 0: 1s → 5s（level1以上は変更なし）
+  - `BACKOFF_BASE_SECS` を `arxiv.py` から削除（`persistent_backoff.wait_secs` の `base` 引数を廃止）
+  - 背景: VPN 経由（NordVPN 共有 IP）での arXiv アクセスで即 429 発生。インターバル延長で再発防止。
 - 🟡 **arXiv 解除後の動作確認手順**:
   1. `curl -o /dev/null -w "%{http_code}" "https://export.arxiv.org/api/query?search_query=all:FAISS&max_results=1"`
   2. 200 確認後に GUI Seeder タブの arXiv チェックを ON にしてサーバーポーリング再開

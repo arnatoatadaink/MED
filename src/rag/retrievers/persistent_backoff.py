@@ -40,11 +40,9 @@ class BackoffState:
 # ---------------------------------------------------------------------------
 
 
-def wait_secs(level: int, base: float = 3.0, multiplier: float = 10.0) -> float:
-    """minutes_level から待機秒数を返す。"""
-    if level <= 0:
-        return base
-    return multiplier * float(2 ** level)
+def wait_secs(level: int, multiplier: float = 10.0) -> float:
+    """minutes_level から待機秒数を返す。全 level で multiplier * 2^level を使用。"""
+    return multiplier * float(2 ** max(level, 0))
 
 
 def ban_days(days_level: int) -> int:

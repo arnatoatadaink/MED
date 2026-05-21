@@ -52,16 +52,14 @@ class ArXivRetriever(BaseRetriever):
 
     Class-level backoff parameters
     --------------------------------
-    BACKOFF_BASE_SECS        : Level 0 (正常時) の待機秒数 [arXiv ToS 最低値]
-    BACKOFF_MULTIPLIER       : Level N の待機 = MULTIPLIER * 2^N (N>=1)
+    BACKOFF_MULTIPLIER       : Level N の待機 = MULTIPLIER * 2^N (全 level 共通)
     BACKOFF_BAN_THRESHOLD_SECS : この秒数を超えたら day ban へ昇格
     BACKOFF_MAX_MINUTES_LEVEL  : minutes_level の上限 (= ban 閾値を超えるレベル)
     BACKOFF_DB_PATH          : バックオフ状態を保存する SQLite DB パス
     """
 
     # --- バックオフ静的パラメーター (クラスレベルで変更可) ---
-    BACKOFF_BASE_SECS: ClassVar[float] = 3.0
-    BACKOFF_MULTIPLIER: ClassVar[float] = 10.0
+    BACKOFF_MULTIPLIER: ClassVar[float] = 10.0        # level 0: 10s, level 1: 20s, level 2: 40s, level 3: 80s
     BACKOFF_BAN_THRESHOLD_SECS: ClassVar[float] = 60.0
     BACKOFF_MAX_MINUTES_LEVEL: ClassVar[int] = 3   # 10*2^3=80s > 60s → ban
     BACKOFF_DB_PATH: ClassVar[str] = "data/arxiv_backoff.db"
@@ -108,7 +106,7 @@ class ArXivRetriever(BaseRetriever):
 
     def _wait_secs(self, level: int) -> float:
         from src.rag.retrievers.persistent_backoff import wait_secs
-        return wait_secs(level, self.BACKOFF_BASE_SECS, self.BACKOFF_MULTIPLIER)
+        return wait_secs(level, self.BACKOFF_MULTIPLIER)
 
     # ------------------------------------------------------------------
     # search() オーバーライド — ban チェック + 永続インターバル待機

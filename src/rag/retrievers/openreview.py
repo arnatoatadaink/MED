@@ -72,8 +72,7 @@ class OpenReviewRetriever(BaseRetriever):
 
     Class-level backoff parameters
     --------------------------------
-    BACKOFF_BASE_SECS        : Level 0 (正常時) の待機秒数
-    BACKOFF_MULTIPLIER       : Level N の待機 = MULTIPLIER * 2^N (N>=1)
+    BACKOFF_MULTIPLIER       : Level N の待機 = MULTIPLIER * 2^N (全 level 共通)
     BACKOFF_BAN_THRESHOLD_SECS : この秒数を超えたら day ban へ昇格
     BACKOFF_MAX_MINUTES_LEVEL  : minutes_level の上限
     BACKOFF_DB_PATH          : バックオフ状態を保存する SQLite DB パス
@@ -126,7 +125,7 @@ class OpenReviewRetriever(BaseRetriever):
 
     def _wait_secs(self, level: int) -> float:
         from src.rag.retrievers.persistent_backoff import wait_secs
-        return wait_secs(level, self.BACKOFF_BASE_SECS, self.BACKOFF_MULTIPLIER)
+        return wait_secs(level, self.BACKOFF_MULTIPLIER)
 
     # ------------------------------------------------------------------
     # search() オーバーライド — BaseRetriever._rate_limit_wait を迂回
