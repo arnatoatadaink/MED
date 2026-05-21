@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-05-21 (LMStudio 外部プロバイダー対応: Embedder / QueryRewriter に env var 注入 + 10秒タイムアウトフォールバック実装)
+> 最終更新: 2026-05-21 (.env プロバイダー URL 読み込み修正 + FAISS 再インデックス完了)
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_translate.md` / `plan_version_aware.md` / `plan_neat_hyp_e.md` / `plan_programming_seed.md` / `med_enhancement_seed.md` / `med_seed_papers.md`
 
 ---
@@ -281,6 +281,16 @@ UMAP分析でソース別クラスター分布を確認後、retriever層の3問
   - `Embedder`: プローブ成功時に LMStudio 経由、10秒タイムアウト時にローカルモデルへ自動切替
   - `QueryRewriter`: Qwen2.5-0.5B-Instruct (`QWEN_PROVIDER_URL`) で正常動作確認
   - flan-t5-small GGUF は LMStudio で空レスポンスのためローカルモデル使用
+- ✅ **`.env` プロバイダー URL 読み込み修正（2026-05-21）**: pydantic-settings のネスト子モデル制約により `.env` の値が子モデルにマップされない問題を修正
+  - 原因: `EmbeddingConfig` / `QueryRewriterConfig` は `BaseModel`（非 `BaseSettings`）のため、フラット env var がネストフィールドに自動マップされない
+  - 修正: `Settings` にトップレベルフィールドを 6 個追加（`embedding_provider_url/model`, `flan_t5_provider_url/model`, `qwen_provider_url/model`）
+  - `Embedder._load_model()` / `_probe_provider()` / `QueryRewriter.initialize()` で `get_settings()` 経由の参照に統一
+  - `.env` 設定: `EMBEDDING_PROVIDER_URL`, `EMBEDDING_PROVIDER_MODEL`, `FLAN_T5_PROVIDER_URL`, `FLAN_T5_PROVIDER_MODEL`, `QWEN_PROVIDER_URL`, `QWEN_PROVIDER_MODEL` がすべて正常読み込み確認済み
+- ✅ **FAISS 再インデックス（2026-05-21）**: `scripts/reindex_faiss.py` 新規作成・実行完了
+  - 背景: `data/faiss_indices/code/index.faiss` が破損（39MB→10.8MB 途中書き込み）、iptestserver スタブテストの `close()` で空インデックスが上書きされた
+  - `reindex_faiss.py`: approved 文書を SQLite から全件取得 → LMStudio Embedder で再 embed → FAISS に直接追加（metadata.db は変更なし）
+  - 再構築結果: code 11,486 / academic 7 / general 17 ベクトル復元完了（約 11 分、64件/バッチ）
+  - `--dry-run` / `--limit N` / `--domain` オプション対応
 
 ### OpenRouter モデル調査
 - ✅ `docs/openrouter_models.md` — 無料モデルベンチマーク・429問題・FastFlowLM評価を記録
@@ -1264,9 +1274,14 @@ APIの使い方・統合方針は `.claude/rules/awep-journal.md` / `forUser/rul
 > `GapDetector → QueryGenerator` パイプラインに UMAP 空間的構造（島間距離・理論↔実装の偏り）の
 > 活用と 0 件クエリのフィードバックループを追加。5 タスクすべて実装・テスト完了。
 >
-> **iptestserver テスト結果（2026-05-21）**:
+> **iptestserver WebGUI 経路（QueryRunner）スタブテスト結果（2026-05-21）**:
+> - Test 1 (SMALL_CLUSTER 全ソース)              : PASS
+> - Test 2 (SOURCE_IMBALANCE dominant 除外)       : PASS
+> - Test 3 (QueryRunner キャッシュ TTL=7)         : PASS
 > - Test 4 (INTER_ISLAND_BRIDGE 全ソース) [P-QE-1]: PASS
 > - Test 5 (0件ピボット発火)              [P-QE-4/5]: PASS（empty モード使用）
+> - `scripts/test_queryrunner_stub.py` で実施（Orchestrator → QueryRunner → RetrieverRouter 経路）
+> - 前提修正: `.env` の `EMBEDDING_PROVIDER_URL` が未読み込みだったため LMStudio 使用に修正してから実施
 
 ##### P-QE-1. 島間距離分析 → 橋渡しクエリ生成 ✅ **完了（2026-05-21）**
 

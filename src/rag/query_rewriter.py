@@ -127,8 +127,17 @@ class QueryRewriter:
         cfg = get_settings().query_rewriter
 
         # ── FLAN-T5 プロバイダー確認 ─────────────────────────────────────
-        flan_t5_url = os.environ.get("FLAN_T5_PROVIDER_URL") or cfg.flan_t5_provider_url
-        flan_t5_model = os.environ.get("FLAN_T5_PROVIDER_MODEL") or cfg.flan_t5_provider_model
+        _s = get_settings()
+        flan_t5_url = (
+            os.environ.get("FLAN_T5_PROVIDER_URL")
+            or getattr(_s, "flan_t5_provider_url", None)
+            or cfg.flan_t5_provider_url
+        )
+        flan_t5_model = (
+            os.environ.get("FLAN_T5_PROVIDER_MODEL")
+            or getattr(_s, "flan_t5_provider_model", None)
+            or cfg.flan_t5_provider_model
+        )
         if flan_t5_url:
             if self._probe_llm_provider(flan_t5_url, flan_t5_model):
                 self._flan_t5_provider_url = flan_t5_url.rstrip("/")
@@ -141,8 +150,16 @@ class QueryRewriter:
                 )
 
         # ── Qwen プロバイダー確認 ─────────────────────────────────────────
-        qwen_url = os.environ.get("QWEN_PROVIDER_URL") or cfg.qwen_provider_url
-        qwen_model = os.environ.get("QWEN_PROVIDER_MODEL") or cfg.qwen_provider_model
+        qwen_url = (
+            os.environ.get("QWEN_PROVIDER_URL")
+            or getattr(_s, "qwen_provider_url", None)
+            or cfg.qwen_provider_url
+        )
+        qwen_model = (
+            os.environ.get("QWEN_PROVIDER_MODEL")
+            or getattr(_s, "qwen_provider_model", None)
+            or cfg.qwen_provider_model
+        )
         if qwen_url:
             if self._probe_llm_provider(qwen_url, qwen_model):
                 self._qwen_provider_url = qwen_url.rstrip("/")

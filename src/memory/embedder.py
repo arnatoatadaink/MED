@@ -65,8 +65,14 @@ class Embedder:
 
     def _load_model(self) -> None:
         """プロバイダー確認 → ローカルモデルの順でロードする。"""
-        # 環境変数が config より優先
-        provider_url = os.environ.get("EMBEDDING_PROVIDER_URL") or self._config.provider_url
+        # 優先順位: OS env var > .env (Settings トップレベルフィールド) > config
+        from src.common.config import get_settings
+        _s = get_settings()
+        provider_url = (
+            os.environ.get("EMBEDDING_PROVIDER_URL")
+            or getattr(_s, "embedding_provider_url", None)
+            or self._config.provider_url
+        )
         if provider_url:
             if self._probe_provider(provider_url):
                 self._provider_url = provider_url.rstrip("/")
@@ -81,7 +87,14 @@ class Embedder:
 
     def _probe_provider(self, url: str) -> bool:
         """プロバイダーに短いテキストを送って疎通・次元を確認する (10 秒タイムアウト)。"""
-        model = self._config.provider_model or self._config.model
+        from src.common.config import get_settings
+        _s = get_settings()
+        model = (
+            os.environ.get("EMBEDDING_PROVIDER_MODEL")
+            or getattr(_s, "embedding_provider_model", None)
+            or self._config.provider_model
+            or self._config.model
+        )
         payload = json.dumps({"model": model, "input": ["test"]}).encode()
         req = urllib.request.Request(
             f"{url.rstrip('/')}/v1/embeddings",

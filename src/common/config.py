@@ -443,6 +443,16 @@ class Settings(BaseSettings):
     tavily_api_key: str = ""
     stackoverflow_api_key: str = ""
 
+    # ── 外部プロバイダー URL (env var / .env から読む) ───────────────────
+    # ネスト子モデル (EmbeddingConfig / QueryRewriterConfig) は pydantic-settings が
+    # フラット env var を直接マップできないため、トップレベルで受け取り各クラス側で参照する。
+    embedding_provider_url: str | None = None    # EMBEDDING_PROVIDER_URL
+    embedding_provider_model: str | None = None  # EMBEDDING_PROVIDER_MODEL
+    flan_t5_provider_url: str | None = None      # FLAN_T5_PROVIDER_URL
+    flan_t5_provider_model: str | None = None    # FLAN_T5_PROVIDER_MODEL
+    qwen_provider_url: str | None = None         # QWEN_PROVIDER_URL
+    qwen_provider_model: str | None = None       # QWEN_PROVIDER_MODEL
+
     # ── 構造化設定 (YAML から load_settings() 経由で注入される) ─────────
     app: AppConfig = Field(default_factory=AppConfig)
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
