@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-05-21 (.env プロバイダー URL 読み込み修正 + FAISS 再インデックス完了)
+> 最終更新: 2026-05-21 (WebGUI サイクル実行完了 — 新規 71 件収集・FAISS 投入済み)
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_translate.md` / `plan_version_aware.md` / `plan_neat_hyp_e.md` / `plan_programming_seed.md` / `med_enhancement_seed.md` / `med_seed_papers.md`
 
 ---
@@ -122,19 +122,25 @@
 ## F. メモリ品質目標（シード継続）
 > 📄 `plan_programming_seed.md`
 
-**現状: approved 11,116件 / needs_update 4,583件 / unreviewed 765件（2026-05-05）**
-- ✅ approved 10,000件目標 達成済み（Apr 28確認）、現在 11,116件
-- needs_update: 4,583件（F-5クリーナー修正により削減傾向）
-- unreviewed: 765件（シーダーによる新規投入が進行中）
+**現状: approved 11,510件 / needs_update 5,090件 / unreviewed 276件（2026-05-21）**
+- ✅ approved 10,000件目標 達成済み（Apr 28確認）、現在 11,510件
+- needs_update: 5,090件（F-5クリーナー修正により削減傾向）
+- unreviewed: 276件（WebGUI サイクル実行で +71 件追加、mature 待ち）
 - mature はローカルモデル（LM Studio / FastFlowLM）が継続稼働中
 
-### F-1. 日次 seed_and_mature ジョブ ⏸️ **seeder 中断中 / mature 後回し**
+### F-1. 日次 seed_and_mature ジョブ 🟡 **WebGUI サイクル実行中**
 - ✅ Apr 9: approved +302件
 - ✅ Apr 10: approved +175件
 - ✅ **approved 10,000件 目標達成**（2026-04-28確認）
 - ⏸️ **seeder 中断 (2026-05-09)**: arXiv BAN 中。永続バックオフが `data/arxiv_backoff.db` に記録中。
-  - 🟡 **2026-05-17 以降: arXiv BAN 解除確認** → 解除後に Seeder タブの arXiv チェックを ON にする
+  - 🟡 **2026-05-17 以降: arXiv BAN 解除確認** → 解除後に GUI Plan タブの arXiv チェックを ON にする
   - BAN 確認コマンド: `poetry run python -c "import asyncio; from src.rag.retrievers.arxiv import ArXivRetriever; print(asyncio.run(ArXivRetriever.current_backoff_state()))"`
+- ✅ **WebGUI Run Cycle 初回実行（2026-05-21）**: Plan タブ → Run Cycle ボタン経由で Orchestrator サイクル完了
+  - run_id: `88769ea5-ef2b-44c9-93a8-c247ab67c01e`（20/20タスク done、error=0）
+  - 新規文書 **+71 件** 収集・FAISS 投入（code ドメイン: 11,486 → 11,557 vectors）
+  - unreviewed: 205 → 276 件（mature 待ち）
+  - OpenRouter 使用: +118 リクエスト（136/950、14%）
+  - arXiv は BAN 中のため除外、SO / GitHub / OpenReview の 3 ソースで収集
 
 #### arXiv 429 対策 TODO（2026-05-18 調査結果）
 - ✅ `arxiv.py`: `Retry-After` ヘッダー読み取り対応済み（arXiv は現状ヘッダーを返さない）
