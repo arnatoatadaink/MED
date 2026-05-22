@@ -1,15 +1,17 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-05-23 (AWEP curl フックタイムアウト設定追加 — 不通時の2分ブロック解消)
+> 最終更新: 2026-05-23 (Q-1〜Q-4 完了 — エピソード記憶ゾーニング実装)
 
 ## 次セッション推奨タスク（優先度順）
 
-> 最終更新: 2026-05-23（P-R10 完了 → 次優先 Q-1〜Q-4 または I-Step1）
+> 最終更新: 2026-05-23（Q-1〜Q-4 完了 → 次優先 I-Step1 または P-R4）
 
 | 優先 | ID | 内容 | 工数感 |
 |------|-----|------|--------|
-| 1 | **Q-1〜Q-4** | エピソード記憶ゾーニング（`Domain.EPISODIC` / episodic FAISS / `seed_from_awep.py` / Recency-weighted 検索） | 大 |
-| 2 | ~~**P-R10**~~ ✅ | `reviewer_worker.py` 分離（`reviewer_config.py` へ `ReviewTask/SlotConfig/ReviewerConfig` 移動）← 完了 | — |
+| 1 | ~~**Q-1〜Q-4**~~ ✅ | エピソード記憶ゾーニング 完了 | — |
+| 2 | ~~**P-R10**~~ ✅ | `reviewer_worker.py` 分離 完了 | — |
+| 3 | **I (Step1)** | バージョン対応知識管理：`schema.py` に `version_status` 等フィールド + `ALTER TABLE` マイグレーション | 小 |
+| 4 | **P-R4** | 文書側ペルソナ指定フィールド追加（`ALTER TABLE documents ADD COLUMN required_persona`） | 小 |
 | 3 | **I (Step1)** | バージョン対応知識管理：`schema.py` に `version_status` 等フィールド + `ALTER TABLE` マイグレーション | 小 |
 | 4 | **P-R4** | 文書側ペルソナ指定フィールド追加（`ALTER TABLE documents ADD COLUMN required_persona`） | 小 |
 | 5 | **N-5 / N-9** | KG 自動更新トリガー + `SourceTrustScore` データクラス + `geoopt` 追加 | 中 |
@@ -1410,19 +1412,19 @@ data/faiss_indices/
 
 ---
 
-### Q-1. Schema 拡張 🟡
+### Q-1. Schema 拡張 ✅ **完了（2026-05-23）**
 
-- 🟡 `src/memory/schema.py` — `Domain.EPISODIC = "episodic"` 追加
-- 🟡 `src/memory/schema.py` — `SourceType.AWEP = "awep"` 追加
-- 🟡 `src/memory/schema.py` — `Document` に `memory_zone: Literal["knowledge", "episodic"] = "knowledge"` フィールド追加
-  - `SourceType.AWEP` は自動的に `"episodic"` に設定（`__post_init__` or `model_validator`）
-  - thought_logs / 会話ターンは投入時に明示指定
+- ✅ `src/memory/schema.py` — `Domain.EPISODIC = "episodic"` 追加
+- ✅ `src/memory/schema.py` — `SourceType.AWEP = "awep"` 追加
+- ✅ `src/memory/schema.py` — `Document` に `memory_zone: Literal["knowledge", "episodic"] = "knowledge"` フィールド追加
+  - `SourceType.AWEP` → `model_validator(mode="after")` で `"episodic"` に自動設定
+  - `src/memory/metadata_store.py` — `memory_zone` 列マイグレーション追加（`_MIGRATION_ADD_MEMORY_ZONE`）
 
 ---
 
-### Q-2. FAISS エピソードインデックス追加 🟡
+### Q-2. FAISS エピソードインデックス追加 ✅ **完了（2026-05-23）**
 
-- 🟡 `configs/faiss_config.yaml` に `episodic:` セクション追加:
+- ✅ `configs/faiss_config.yaml` に `episodic:` セクション追加:
   ```yaml
   episodic:
     dim: 384
@@ -1433,34 +1435,35 @@ data/faiss_indices/
       - threshold: 100000
         migrate_to: "HNSW32"
   ```
-- 🟡 `configs/default.yaml` に `rag.episodic_decay_halflife_days: 30` 追加（チューニング対象パラメーター）
-- 🟡 `Domain` enum 追加に伴い `FAISSIndexManager` の型チェック・ロード処理が自動対応することを確認
+- ✅ `configs/default.yaml` に `rag.episodic_enabled/k/decay_halflife_days/min_score` 4パラメーター追加
+- ✅ `src/common/config.py` の `RAGConfig` に同4フィールド追加
+- ✅ `FAISSIndexManager` の `get_domain()` がフォールバック生成するため自動対応を確認
 
 ---
 
-### Q-3. エピソードデータ投入パイプライン 🟡
+### Q-3. エピソードデータ投入パイプライン
 
-#### Q-3a. AWEP 会話サマリー → episodic FAISS（P-SYS-2 / 5-5）
-- 🟡 `scripts/seed_from_awep.py` 新規作成
-  - AWEP `GET /sessions` → 未取込セッション列挙
-  - `GET /sessions/{id}/conversations` → サマリー + topics + created_at 取得
-  - チャンク化（サマリーをそのまま1文書として扱う）→ 埋め込み
+#### Q-3a. AWEP 会話サマリー → episodic FAISS ✅ **完了（2026-05-23）**
+- ✅ `scripts/seed_from_awep.py` 新規作成
+  - `/context/recent?n=20` + `--search-query` で会話サマリー収集（`/sessions` はタイムアウト回避）
   - `Document(memory_zone="episodic", source_type=SourceType.AWEP, created_at=...)` として MED FAISS + metadata DB へ投入
-  - カーソル管理: `data/awep_cursor.db` に最終取込 conversation_id を保存（差分取込）
+  - カーソル管理: `data/awep_cursor.db` に取込済み conversation_id を保存（差分取込）
+  - `--dry-run` / `--reset-cursor` / `--limit N` / `--search-query QUERY` オプション対応
+  - 初回実行: 20 件 → episodic FAISS に 20 vectors 投入済み
 
-#### Q-3b. thought_logs → episodic FAISS（N-1 連携）
+#### Q-3b. thought_logs → episodic FAISS（N-1 連携）🟡
 - 🟡 N-1 `save_thought_log()` 呼び出し後に `memory_zone="episodic"` で FAISS 投入するフック設計
   - 対象: `reward > 0` の ThoughtLog（低品質エピソードを排除）
   - 内容: `input + reasoning summary + output` を連結してチャンク化
 
-#### Q-3c. 会話ターン → episodic FAISS（A-1 連携）
+#### Q-3c. 会話ターン → episodic FAISS（A-1 連携）🟢
 - 🟢 `src/conversation/` の Turn / Session を episodic FAISS に投入するパイプライン設計
   - A-1 の `ConversationManager` から未投入ターンを取得して差分投入
   - 対象: assistant ターンのみ（user 側は個人情報リスクを考慮）
 
 ---
 
-### Q-4. Recency-Weighted Episodic Retrieval 🟡
+### Q-4. Recency-Weighted Episodic Retrieval ✅ **完了（2026-05-23）**
 
 **設計:**
 - `FAISSIndexManager.search_episodic(query, k, decay_halflife_days)` を新設
@@ -1491,7 +1494,7 @@ data/faiss_indices/
      最終ランキング（知識 + エピソード混在なし → 別セクションで提示）
 ```
 
-- 🟡 `src/memory/memory_manager.py` に `search_episodic()` 追加
+- ✅ `src/memory/memory_manager.py` に `search_episodic()` 追加（指数減衰スコアリング実装済み）
 - 🟡 `src/rag/retriever.py` の `RetrieverRouter` に `episodic_enabled` フラグ対応
 - 🟢 GUI の Chat タブに「エピソード参照」トグル追加（`episodic_enabled` を動的切替）
 

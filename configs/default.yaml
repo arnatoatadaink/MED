@@ -40,6 +40,10 @@ conversation:
 
 rag:
   faiss_k: 5          # FAISS 近傍検索数。推奨範囲: 3〜5（ICL Bayesian収束理論: k=3〜5 で指数収束）
+  episodic_enabled: false           # エピソードゾーン検索の有効フラグ
+  episodic_k: 3                     # エピソード取得件数
+  episodic_decay_halflife_days: 30  # 半減期（30日で重みが0.5倍）
+  episodic_min_score: 0.0           # 足切りスコア（0.0=無効）
 
 knowledge_graph:
   backend: "networkx"              # "networkx" (default) or "neo4j"

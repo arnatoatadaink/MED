@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 from src.common.config import FAISSConfig, MetadataConfig, get_settings
@@ -352,6 +353,73 @@ class MemoryManager:
             results.append(SearchResult(document=doc, score=score, query=query))
 
         return results
+
+    async def search_episodic(
+        self,
+        query: str,
+        k: int | None = None,
+        decay_halflife_days: int | None = None,
+        min_score: float | None = None,
+    ) -> list[SearchResult]:
+        """エピソード記憶ゾーンをRecency-weightedスコアで検索する。
+
+        エピソード記憶は Teacher maturation を経ないため review_status フィルタを
+        適用せず、memory_zone=="episodic" の文書のみを対象とする。
+
+        スコアリング式（指数減衰）:
+            age_days = (now - doc.created_at).days
+            final_score = cosine_sim * 2^(-age_days / halflife_days)
+
+        Args:
+            query: 検索クエリ文字列。
+            k: 返す件数。省略時は settings.rag.episodic_k。
+            decay_halflife_days: 半減期（日数）。省略時は settings.rag.episodic_decay_halflife_days。
+            min_score: 足切りスコア。省略時は settings.rag.episodic_min_score。
+
+        Returns:
+            recency-weighted スコア降順の SearchResult リスト。
+        """
+        self._ensure_initialized()
+        cfg = get_settings().rag
+        if k is None:
+            k = cfg.episodic_k
+        if decay_halflife_days is None:
+            decay_halflife_days = cfg.episodic_decay_halflife_days
+        if min_score is None:
+            min_score = cfg.episodic_min_score
+
+        query_vec = self.embedder.embed(query).reshape(1, -1)
+        raw: list[tuple[str, float]] = self.faiss.search("episodic", query_vec, k=k * 3)
+
+        if not raw:
+            return []
+
+        doc_ids = [doc_id for doc_id, _ in raw]
+        docs = await self.store.get_batch(doc_ids)
+        doc_map = {d.id: d for d in docs if d is not None}
+
+        now = datetime.now(timezone.utc)
+        results: list[SearchResult] = []
+        for doc_id, cosine_sim in raw:
+            doc = doc_map.get(doc_id)
+            if doc is None:
+                continue
+            # created_at がタイムゾーン非対応の場合は UTC と見なして比較する
+            doc_created = doc.created_at
+            if doc_created.tzinfo is None:
+                doc_created = doc_created.replace(tzinfo=timezone.utc)
+            age_days = max(0, (now - doc_created).days)
+            recency_weight = 2.0 ** (-age_days / decay_halflife_days)
+            final_score = cosine_sim * recency_weight
+            if final_score < min_score:
+                continue
+            results.append(SearchResult(document=doc, score=final_score, rank=0))
+
+        results.sort(key=lambda r: r.score, reverse=True)
+        for i, r in enumerate(results):
+            r.rank = i
+
+        return results[:k]
 
     async def search_hybrid(
         self,

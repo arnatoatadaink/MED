@@ -199,6 +199,10 @@ class RAGConfig(BaseModel):
     chunk_size: int = 512
     chunk_overlap: int = 50
     faiss_k: int = 5  # FAISS 近傍検索数。ICL Bayesian収束理論: k=3〜5 で指数収束 O(e^{-ck})
+    episodic_enabled: bool = False          # エピソードゾーン検索の有効フラグ
+    episodic_k: int = 3                     # エピソード取得件数
+    episodic_decay_halflife_days: int = 30  # 半減期（30日で重みが0.5倍）
+    episodic_min_score: float = 0.0         # 足切りスコア（0.0=無効）
 
 
 # ============================================================================

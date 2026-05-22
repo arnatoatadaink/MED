@@ -29,3 +29,12 @@ indices:
     scale_rules:
       - threshold: 100000
         migrate_to: "IVF1024,Flat"
+
+  episodic:
+    dim: 384
+    initial_type: "Flat"
+    metric: "inner_product"
+    nprobe: 32
+    scale_rules:
+      - threshold: 100000
+        migrate_to: "HNSW32"

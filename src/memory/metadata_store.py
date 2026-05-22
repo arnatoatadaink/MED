@@ -94,7 +94,10 @@ CREATE TABLE IF NOT EXISTS documents (
 
     -- 内部リンク — JSON 配列。chunk_markdown が [text][] / [text][ref] から抽出。
     -- FAISS には含めず DB のみに保持。FAISS → DB → internal_links の順で辿る。
-    internal_links TEXT DEFAULT '[]'
+    internal_links TEXT DEFAULT '[]',
+
+    -- 記憶ゾーン — "knowledge"（知識記憶）/ "episodic"（エピソード記憶）
+    memory_zone TEXT DEFAULT 'knowledge'
 );
 """
 
@@ -297,6 +300,9 @@ _MIGRATION_ADD_CHUNKER_TYPE = (
 _MIGRATION_ADD_INTERNAL_LINKS = (
     "ALTER TABLE documents ADD COLUMN internal_links TEXT DEFAULT '[]';"
 )
+_MIGRATION_ADD_MEMORY_ZONE = (
+    "ALTER TABLE documents ADD COLUMN memory_zone TEXT DEFAULT 'knowledge';"
+)
 
 
 def _doc_to_row(doc: Document) -> dict[str, Any]:
@@ -345,6 +351,8 @@ def _doc_to_row(doc: Document) -> dict[str, Any]:
         "chunker_type": doc.chunker_type if hasattr(doc, "chunker_type") else "text",
         # 内部リンク（JSON 配列文字列）
         "internal_links": json.dumps(doc.internal_links if hasattr(doc, "internal_links") and doc.internal_links else []),
+        # 記憶ゾーン
+        "memory_zone": doc.memory_zone,
     }
 
 
@@ -417,6 +425,7 @@ def _row_to_doc(row: aiosqlite.Row) -> Document:
         reviewed_at=(
             datetime.fromisoformat(d["reviewed_at"]) if d["reviewed_at"] else None
         ),
+        memory_zone=d.get("memory_zone") or "knowledge",
     )
 
 
@@ -494,6 +503,9 @@ class MetadataStore:
         if "internal_links" not in columns:
             await self._db.execute(_MIGRATION_ADD_INTERNAL_LINKS)
             logger.info("MetadataStore: migrated — added internal_links column")
+        if "memory_zone" not in columns:
+            await self._db.execute(_MIGRATION_ADD_MEMORY_ZONE)
+            logger.info("MetadataStore: migrated — added memory_zone column")
         # seed_blacklist エントリ数をログ出力（自動投入は無効化：hold文書は再審査対象）
         cur = await self._db.execute("SELECT COUNT(*) FROM seed_blacklist")
         count = (await cur.fetchone())[0]

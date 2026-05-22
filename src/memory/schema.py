@@ -18,11 +18,11 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # ============================================================================
 # 列挙型
@@ -43,6 +43,7 @@ class SourceType(str, Enum):
     GITHUB_DOCS = "github_docs"  # GitHub ドキュメントリポジトリ取得
     WEB_DOCS = "web_docs"  # キュレーテッド URL リスト取得
     SANDBOX = "sandbox"   # DockerSandbox 実行結果
+    AWEP = "awep"  # AWEP 会話サマリー（エピソード記憶）
 
 
 class DifficultyLevel(str, Enum):
@@ -66,6 +67,7 @@ class Domain(str, Enum):
     CODE = "code"
     ACADEMIC = "academic"
     GENERAL = "general"
+    EPISODIC = "episodic"  # 会話・作業・思考ログ（エピソード記憶ゾーン）
 
 
 class ReviewStatus(str, Enum):
@@ -278,6 +280,7 @@ class Document(BaseModel):
 
     # ── 分類 ──
     domain: Domain = Domain.GENERAL
+    memory_zone: Literal["knowledge", "episodic"] = "knowledge"
 
     # ── 埋め込みベクトル ──
     embedding: NDArray[np.float32] | None = None  # shape: (dim,)
@@ -321,6 +324,13 @@ class Document(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     reviewed_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def _auto_set_episodic_zone(self) -> "Document":
+        """AWEP ソースは自動的にエピソード記憶ゾーンに振り分ける。"""
+        if self.source.source_type == SourceType.AWEP:
+            self.memory_zone = "episodic"
+        return self
 
     @field_validator("confidence")
     @classmethod
