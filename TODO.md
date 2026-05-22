@@ -4,15 +4,17 @@
 
 ## 次セッション推奨タスク（優先度順）
 
+> 最終更新: 2026-05-23（P-R10 完了 → 次優先 Q-1〜Q-4 または I-Step1）
+
 | 優先 | ID | 内容 | 工数感 |
 |------|-----|------|--------|
-| 1 | **R-0** | MED 既存実装の独立性確認：import グラフ可視化 + 循環依存・SRP 違反・密結合箇所のリストアップ → `docs/module_dependency_report.md` | 中 |
-| 2 | **Q-1〜Q-4** | エピソード記憶ゾーニング（`Domain.EPISODIC` / episodic FAISS / `seed_from_awep.py` / Recency-weighted 検索） | 大 |
+| 1 | **Q-1〜Q-4** | エピソード記憶ゾーニング（`Domain.EPISODIC` / episodic FAISS / `seed_from_awep.py` / Recency-weighted 検索） | 大 |
+| 2 | ~~**P-R10**~~ ✅ | `reviewer_worker.py` 分離（`reviewer_config.py` へ `ReviewTask/SlotConfig/ReviewerConfig` 移動）← 完了 | — |
 | 3 | **I (Step1)** | バージョン対応知識管理：`schema.py` に `version_status` 等フィールド + `ALTER TABLE` マイグレーション | 小 |
 | 4 | **P-R4** | 文書側ペルソナ指定フィールド追加（`ALTER TABLE documents ADD COLUMN required_persona`） | 小 |
-| 5 | **P-R10** | `reviewer_worker.py` 分離（`reviewer_config.py` へ `ReviewTask/SlotConfig/ReviewerConfig` 移動） | 小 |
-| 6 | **N-5 / N-9** | KG 自動更新トリガー + `SourceTrustScore` データクラス + `geoopt` 追加 | 中 |
-| 7 | **B-1〜4** | CI/CD: `Dockerfile.test` + GitHub Actions workflows (testmon/xdist) | 中 |
+| 5 | **N-5 / N-9** | KG 自動更新トリガー + `SourceTrustScore` データクラス + `geoopt` 追加 | 中 |
+| 6 | **B-1〜4** | CI/CD: `Dockerfile.test` + GitHub Actions workflows (testmon/xdist) | 中 |
+| 7 | **R-1** | 責務マップと分離方針決定（R-0 完了により着手可能、docs/module_separation_plan.md 作成） | 中 |
 
 > arXiv/Seeder 系タスク（F-1, F-2, N-S-0）は selfban 解除後に再開。
 
@@ -1217,14 +1219,14 @@ Reviewer の分析結果を使って UMAP 上の島間ブリッジを伸ばす�
 
 **備考**: `reviewer_worker.py` が 313 行に増加（300行上限超え）。→ **P-R10** で分離予定。
 
-#### P-R10. reviewer_worker.py モジュール分離 🟡
+#### P-R10. reviewer_worker.py モジュール分離 ✅ **完了（2026-05-23）**
 
-`python-strict.md` の 300 行制限超過（現 313 行）に対応。
+`python-strict.md` の 300 行制限超過（旧 313 行）に対応。
 
-- 🟡 `src/cycle/reviewer_config.py` を新規作成し `ReviewTask` / `SlotConfig` / `ReviewerConfig` を移動
-- 🟡 `src/cycle/reviewer_worker.py` は worker 関数 + `ReviewerSession` + `get_persona_choices` のみに縮小
-- 🟡 `src/gui/tabs/reviewer.py` のインポートパスを更新
-- 🟡 既存テスト（`test_reviewer_worker.py`）のインポートを更新して全 PASS を確認
+- ✅ `src/cycle/reviewer_config.py` 新規作成 — `ReviewTask` / `SlotConfig` / `ReviewerConfig` を移動（58行）
+- ✅ `src/cycle/reviewer_worker.py` — worker 関数 + `ReviewerSession` + `get_persona_choices` のみに縮小（268行）
+- ✅ `src/gui/tabs/reviewer.py` のインポートパスを更新（`reviewer_config` から `ReviewerConfig` / `SlotConfig`）
+- ✅ `tests/unit/test_reviewer_worker.py` のインポートを更新 — 全 9 件 PASS
 
 #### P-R8. シーダータブへの自動ポーリング ✅ **完了（2026-05-04）**
 `gr.Timer(5秒)` で status_md を更新、`running→done/error` 遷移時のみ run_dd を再ロード。
@@ -1508,7 +1510,19 @@ data/faiss_indices/
 
 ---
 
-### R-0. 既存実装の独立性確認（依存関係調査）🟡
+### R-0. 既存実装の独立性確認（依存関係調査）✅ **完了（2026-05-22）**
+
+**成果物**: `docs/module_dependency_report.md` / `runtime/dep_graph.json` / `scripts/dep_graph.py`
+
+**主要な調査結果**:
+- 真の構造的循環依存: **0件**（遅延 import による擬似循環 13件はランタイム問題なし）
+- 層跨ぎ依存: **1件**（`src.orchestrator → src.sandbox`、sandbox をL3に再分類で解消可）
+- `src.llm.gateway` fan-in=33 / `src.memory.schema` fan-in=22 が集中ポイント
+- `src.memory ↔ src.llm` パッケージ循環: `llm.response_generator` が `memory.schema` 型を使用。`src.common.models` 移動で解消可能
+- **密結合**: `src.orchestrator.pipeline`（fan-out=14）、`src.memory.maturation`（llm + memory 両依存）
+- **要整理**: `src.memory.schema`（600行超）、`src.cycle.reviewer_worker`（P-R10で対応予定）
+
+**推奨アクション（R-1 以降）**: P-R10 → schema分割 → orchestrator3層化 → maturation Port化の順
 
 **目的**: どのモジュールがどのモジュールに依存しているかを可視化し、密結合・循環依存・SRP 違反箇所を特定する。
 

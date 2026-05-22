@@ -3,6 +3,9 @@
 複数モデルスロットで unreviewed / low_quality 文書を並列審査する。
 タスクリストはメモリ上のみ管理（DBには完了時のみ書き込む）。
 停止フラグ + タイムアウトによる安全な終了機構を持つ。
+
+設定データクラス（ReviewTask / SlotConfig / ReviewerConfig）は
+reviewer_config.py に定義されている。
 """
 
 from __future__ import annotations
@@ -14,61 +17,13 @@ import random
 import sqlite3
 import threading
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from src.cycle.reviewer_config import ReviewerConfig, ReviewTask, SlotConfig
 from src.memory.maturation.personas import list_personas
 
 log = logging.getLogger(__name__)
-
-
-@dataclass
-class ReviewTask:
-    doc_id: str
-    source_type: str
-    domain_flag: str
-    status: str = "pending"       # pending | in_progress | done | error
-    assigned_to: Optional[str] = None
-    started_at: Optional[float] = None
-    finished_at: Optional[float] = None
-
-
-@dataclass
-class SlotConfig:
-    provider: str
-    model: str
-    personas: list[str]           # このスロットが処理できるペルソナ
-
-
-@dataclass
-class ReviewerConfig:
-    slots: list[SlotConfig] = field(default_factory=list)
-    limit: int = 200
-    timeout_sec: int = 60
-    db_path: str = "data/metadata.db"
-    include_low_quality: bool = True
-    lock_sleep_min_ms: int = 100
-    lock_sleep_max_ms: int = 1000
-    ui_poll_interval_sec: int = 10
-
-    @classmethod
-    def TEST_PRESET(cls, **kwargs: object) -> "ReviewerConfig":
-        """テスト用プリセット: スリープ最小化・件数上限小・タイムアウト短。"""
-        defaults: dict[str, object] = {
-            "limit": 5,
-            "timeout_sec": 5,
-            "lock_sleep_min_ms": 0,
-            "lock_sleep_max_ms": 1,
-            "ui_poll_interval_sec": 1,
-        }
-        defaults.update(kwargs)
-        return cls(**defaults)  # type: ignore[arg-type]
-
-    @classmethod
-    def PROD_PRESET(cls, **kwargs: object) -> "ReviewerConfig":
-        """本番用プリセット: デフォルト値をそのまま適用。"""
-        return cls(**kwargs)  # type: ignore[arg-type]
 
 
 def build_task_list(cfg: ReviewerConfig) -> list[ReviewTask]:
@@ -176,7 +131,7 @@ def _worker_thread(
     lock: threading.Lock,
     stop_event: threading.Event,
     slot: SlotConfig,
-    cfg: "ReviewerConfig",
+    cfg: ReviewerConfig,
 ) -> None:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -193,7 +148,7 @@ async def _worker_async(
     lock: threading.Lock,
     stop_event: threading.Event,
     slot: SlotConfig,
-    cfg: "ReviewerConfig",
+    cfg: ReviewerConfig,
 ) -> None:
     from src.llm.gateway import LLMGateway
     from src.memory.maturation.reviewer import MemoryReviewer

@@ -8,12 +8,8 @@ from typing import Any
 
 import pytest
 
-from src.cycle.reviewer_worker import (
-    ReviewerConfig,
-    ReviewerSession,
-    SlotConfig,
-    build_task_list,
-)
+from src.cycle.reviewer_config import ReviewerConfig, SlotConfig
+from src.cycle.reviewer_worker import ReviewerSession, build_task_list
 from src.memory.metadata_store import MetadataStore
 from src.memory.schema import Document, SourceMeta, SourceType
 

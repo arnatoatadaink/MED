@@ -13,12 +13,8 @@ from typing import Optional
 import gradio as gr
 import pandas as pd
 
-from src.cycle.reviewer_worker import (
-    ReviewerConfig,
-    ReviewerSession,
-    SlotConfig,
-    get_persona_choices,
-)
+from src.cycle.reviewer_config import ReviewerConfig, SlotConfig
+from src.cycle.reviewer_worker import ReviewerSession, get_persona_choices
 from src.gui.utils import get_all_provider_choices
 
 _MAX_SLOTS = 4
