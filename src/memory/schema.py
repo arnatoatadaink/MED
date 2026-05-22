@@ -18,7 +18,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -44,6 +44,8 @@ class SourceType(str, Enum):
     WEB_DOCS = "web_docs"  # キュレーテッド URL リスト取得
     SANDBOX = "sandbox"   # DockerSandbox 実行結果
     AWEP = "awep"  # AWEP 会話サマリー（エピソード記憶）
+    THOUGHT_LOG = "thought_log"  # ThoughtLog（N-1 GRPO 報酬パイプライン）
+    CONVERSATION = "conversation"  # 会話ターン（A-1 ConversationManager）
 
 
 class DifficultyLevel(str, Enum):
@@ -325,10 +327,16 @@ class Document(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     reviewed_at: datetime | None = None
 
+    _EPISODIC_SOURCE_TYPES: ClassVar[frozenset[SourceType]] = frozenset({
+        SourceType.AWEP,
+        SourceType.THOUGHT_LOG,
+        SourceType.CONVERSATION,
+    })
+
     @model_validator(mode="after")
     def _auto_set_episodic_zone(self) -> "Document":
-        """AWEP ソースは自動的にエピソード記憶ゾーンに振り分ける。"""
-        if self.source.source_type == SourceType.AWEP:
+        """AWEP / ThoughtLog / Conversation ソースは自動的にエピソード記憶ゾーンに振り分ける。"""
+        if self.source.source_type in self._EPISODIC_SOURCE_TYPES:
             self.memory_zone = "episodic"
         return self
 

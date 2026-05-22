@@ -30,9 +30,12 @@ from src.memory.keyword_annotator import KeywordAnnotator
 from src.memory.metadata_store import MetadataStore
 from src.memory.schema import (
     Document,
+    Domain,
+    ReviewStatus,
     SearchResult,
     SourceMeta,
     SourceType,
+    ThoughtLog,
 )
 from src.memory.teacher_registry import TeacherRegistry
 
@@ -634,3 +637,72 @@ class MemoryManager:
         別途 add_from_text() を呼ぶこと。
         """
         return await self.store.save_reasoning_trace(trace)
+
+    # ------------------------------------------------------------------
+    # エピソード記憶フック (Q-3b / Q-3c)
+    # ------------------------------------------------------------------
+
+    async def save_thought_log(self, log: ThoughtLog) -> str:
+        """ThoughtLog を SQLite (N-1) + episodic FAISS に保存する。
+
+        SQLite 保存後、input + output を content として memory_zone="episodic" の
+        Document を生成し FAISS に追加する。
+
+        Args:
+            log: 保存する ThoughtLog オブジェクト。
+
+        Returns:
+            FAISS に追加した Document の ID。
+        """
+        self._ensure_initialized()
+        await self.store.save_thought_log(log)
+
+        content = f"[Input]\n{log.input}\n\n[Output]\n{log.output}"
+        doc = Document(
+            content=content,
+            domain=Domain.EPISODIC,
+            source=SourceMeta(source_type=SourceType.THOUGHT_LOG),
+            review_status=ReviewStatus.APPROVED,
+            created_at=log.timestamp,
+        )
+        doc_id = await self.add(doc)
+        logger.debug(
+            "save_thought_log: log_id=%s → episodic doc_id=%s", log.id[:8], doc_id[:8]
+        )
+        return doc_id
+
+    async def save_turn_to_episodic(self, turn: "Turn") -> str:
+        """会話ターン（A-1）を episodic FAISS に保存する。
+
+        両ロール（user / assistant）のターンを保存する。空または短すぎる
+        ターン（20文字未満）はスキップして空文字列を返す。
+
+        Args:
+            turn: 保存する Turn オブジェクト（src.conversation.schema.Turn）。
+
+        Returns:
+            FAISS に追加した Document の ID。スキップ時は空文字列。
+        """
+        self._ensure_initialized()
+        if len(turn.content.strip()) < 20:
+            logger.debug(
+                "save_turn_to_episodic: skipped short turn turn_id=%s", turn.turn_id[:8]
+            )
+            return ""
+
+        doc = Document(
+            content=turn.content,
+            domain=Domain.EPISODIC,
+            source=SourceMeta(
+                source_type=SourceType.CONVERSATION,
+                extra={"session_id": turn.session_id, "role": turn.role},
+            ),
+            review_status=ReviewStatus.APPROVED,
+            created_at=turn.timestamp,
+        )
+        doc_id = await self.add(doc)
+        logger.debug(
+            "save_turn_to_episodic: turn_id=%s role=%s → episodic doc_id=%s",
+            turn.turn_id[:8], turn.role, doc_id[:8],
+        )
+        return doc_id

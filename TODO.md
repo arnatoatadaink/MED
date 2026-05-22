@@ -1,17 +1,16 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-05-23 (Q-1〜Q-4 完了 — エピソード記憶ゾーニング実装)
+> 最終更新: 2026-05-23 (Q-3b/Q-3c/RetrieverRouter episodic 統合 完了)
 
 ## 次セッション推奨タスク（優先度順）
 
-> 最終更新: 2026-05-23（Q-1〜Q-4 完了 → 次優先 I-Step1 または P-R4）
+> 最終更新: 2026-05-23（Q-3b/Q-3c 完了 → 次優先 I-Step1 または P-R4）
 
 | 優先 | ID | 内容 | 工数感 |
 |------|-----|------|--------|
 | 1 | ~~**Q-1〜Q-4**~~ ✅ | エピソード記憶ゾーニング 完了 | — |
+| 1 | ~~**Q-3b/Q-3c**~~ ✅ | thought_log + 会話ターン → episodic FAISS フック 完了 | — |
 | 2 | ~~**P-R10**~~ ✅ | `reviewer_worker.py` 分離 完了 | — |
-| 3 | **I (Step1)** | バージョン対応知識管理：`schema.py` に `version_status` 等フィールド + `ALTER TABLE` マイグレーション | 小 |
-| 4 | **P-R4** | 文書側ペルソナ指定フィールド追加（`ALTER TABLE documents ADD COLUMN required_persona`） | 小 |
 | 3 | **I (Step1)** | バージョン対応知識管理：`schema.py` に `version_status` 等フィールド + `ALTER TABLE` マイグレーション | 小 |
 | 4 | **P-R4** | 文書側ペルソナ指定フィールド追加（`ALTER TABLE documents ADD COLUMN required_persona`） | 小 |
 | 5 | **N-5 / N-9** | KG 自動更新トリガー + `SourceTrustScore` データクラス + `geoopt` 追加 | 中 |
@@ -1451,15 +1450,21 @@ data/faiss_indices/
   - `--dry-run` / `--reset-cursor` / `--limit N` / `--search-query QUERY` オプション対応
   - 初回実行: 20 件 → episodic FAISS に 20 vectors 投入済み
 
-#### Q-3b. thought_logs → episodic FAISS（N-1 連携）🟡
-- 🟡 N-1 `save_thought_log()` 呼び出し後に `memory_zone="episodic"` で FAISS 投入するフック設計
-  - 対象: `reward > 0` の ThoughtLog（低品質エピソードを排除）
-  - 内容: `input + reasoning summary + output` を連結してチャンク化
+#### Q-3b. thought_logs → episodic FAISS（N-1 連携）✅ **完了（2026-05-23）**
+- ✅ `MemoryManager.save_thought_log(log: ThoughtLog) -> str` 追加
+  - `store.save_thought_log()` (DB) + `Document(memory_zone="episodic", SourceType.THOUGHT_LOG)` で FAISS 投入
+  - content = `[Input]\n{input}\n\n[Output]\n{output}`（reasoning は省略）
+  - `SourceType.THOUGHT_LOG` を `schema.py` に追加、`_auto_set_episodic_zone` に組み込み
+- ✅ `tests/unit/test_episodic_hooks.py` — TestSaveThoughtLog 2件 PASS
 
-#### Q-3c. 会話ターン → episodic FAISS（A-1 連携）🟢
-- 🟢 `src/conversation/` の Turn / Session を episodic FAISS に投入するパイプライン設計
-  - A-1 の `ConversationManager` から未投入ターンを取得して差分投入
-  - 対象: assistant ターンのみ（user 側は個人情報リスクを考慮）
+#### Q-3c. 会話ターン → episodic FAISS（A-1 連携）✅ **完了（2026-05-23）**
+- ✅ `MemoryManager.save_turn_to_episodic(turn: Turn) -> str` 追加
+  - 20文字未満はスキップ（空文字返却）
+  - `source.extra` に `{session_id, role}` 保存、`SourceType.CONVERSATION` を追加
+  - `_auto_set_episodic_zone` に `THOUGHT_LOG` / `CONVERSATION` 追加
+- ✅ `MEDPipeline.query()` Step N に `episodic_enabled` 時の非同期保存フック追加
+  - `asyncio.ensure_future(mm.save_turn_to_episodic(user_turn / assistant_turn))`（両ロール保存）
+- ✅ `tests/unit/test_episodic_hooks.py` — TestSaveTurnToEpisodic 4件 PASS
 
 ---
 
@@ -1495,7 +1500,9 @@ data/faiss_indices/
 ```
 
 - ✅ `src/memory/memory_manager.py` に `search_episodic()` 追加（指数減衰スコアリング実装済み）
-- 🟡 `src/rag/retriever.py` の `RetrieverRouter` に `episodic_enabled` フラグ対応
+- ✅ `MEDPipeline.query()` Step 1b に episodic 検索を統合（`RetrieverRouter` ではなく Pipeline 層で実装）
+  - `get_settings().rag.episodic_enabled` が true のみ動作（デフォルト false）
+  - `episodic_results` を `faiss_results` 末尾に結合して LLM コンテキストに渡す
 - 🟢 GUI の Chat タブに「エピソード参照」トグル追加（`episodic_enabled` を動的切替）
 
 ---

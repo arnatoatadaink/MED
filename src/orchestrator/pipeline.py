@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+from src.common.config import get_settings
 from src.conversation.manager import ConversationManager
 from src.llm.code_generator import CodeGenerator, CodeResult
 from src.llm.gateway import LLMGateway, LLMMessage
@@ -177,6 +178,16 @@ class MEDPipeline:
 
         logger.debug("FAISS: %d results for query=%r", len(faiss_results), query[:50])
 
+        # ── Step 1b: エピソード記憶検索（episodic_enabled=true のみ） ──
+        episodic_results: list[SearchResult] = []
+        if use_memory:
+            if get_settings().rag.episodic_enabled:
+                episodic_results = await self._mm.search_episodic(query)
+                logger.debug(
+                    "Episodic FAISS: %d results for query=%r",
+                    len(episodic_results), query[:50],
+                )
+
         # ── Step 1.5: URL 直接取得 ──────────────────
         url_results: list = []
         extracted_urls = self._expander.extract_urls(query)
@@ -203,9 +214,11 @@ class MEDPipeline:
             )
 
         # ── Step 3: LLM レスポンス生成 ──────────────
+        # episodic_results を末尾に追加（知識ゾーン結果を優先）
+        context_docs = faiss_results + episodic_results
         gen_response: GeneratedResponse = await self._response_gen.generate(
             query,
-            context_docs=faiss_results,
+            context_docs=context_docs,
             provider=provider,
             model=model,
             conversation_history=conv_messages if conv_messages else None,
@@ -422,6 +435,10 @@ class MEDPipeline:
                     assistant_turn, user_id, lambda uid: self._mm
                 )
             )
+            # Q-3c: episodic_enabled 時に両ターンをエピソード FAISS に非同期保存
+            if get_settings().rag.episodic_enabled:
+                asyncio.ensure_future(self._mm.save_turn_to_episodic(user_turn))
+                asyncio.ensure_future(self._mm.save_turn_to_episodic(assistant_turn))
             logger.debug(
                 "Saved conversation turns for session=%s user=%s", session_id, user_id
             )
@@ -429,7 +446,7 @@ class MEDPipeline:
         return QueryResponse(
             answer=gen_response.answer,
             query=query,
-            faiss_results=faiss_results,
+            faiss_results=context_docs,
             provider=gen_response.provider,
             model=gen_response.model,
             code_result=code_result,
