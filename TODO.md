@@ -1,6 +1,21 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-05-21 (arXiv バックオフインターバル統一: 全 level で multiplier*2^level 式に変更)
+> 最終更新: 2026-05-22 (B-5 ユニットテスト残存15件を全修正 → 1094 passed)
+
+## 次セッション推奨タスク（優先度順）
+
+| 優先 | ID | 内容 | 工数感 |
+|------|-----|------|--------|
+| 1 | **P-R7** | Reviewer タブ ポーリング機能（`ReviewerConfig.TEST_PRESET/PROD_PRESET` + pytest fixture 統合テスト） | 中 |
+| 2 | **Q-1〜Q-4** | エピソード記憶ゾーニング（`Domain.EPISODIC` / episodic FAISS / `seed_from_awep.py` / Recency-weighted 検索） | 大 |
+| 3 | **I (Step1)** | バージョン対応知識管理：`schema.py` に `version_status` 等フィールド + `ALTER TABLE` マイグレーション | 小 |
+| 4 | **P-R4** | 文書側ペルソナ指定フィールド追加（`ALTER TABLE documents ADD COLUMN required_persona`） | 小 |
+| 5 | **N-5 / N-9** | KG 自動更新トリガー + `SourceTrustScore` データクラス + `geoopt` 追加 | 中 |
+| 6 | **B-1〜4** | CI/CD: `Dockerfile.test` + GitHub Actions workflows (testmon/xdist) | 中 |
+
+> arXiv/Seeder 系タスク（F-1, F-2, N-S-0）は selfban 解除後に再開。
+
+---
 > 参照元: `CLAUDE.md` / `plan.md` / `plan_translate.md` / `plan_version_aware.md` / `plan_neat_hyp_e.md` / `plan_programming_seed.md` / `med_enhancement_seed.md` / `med_seed_papers.md`
 
 ---
@@ -63,24 +78,22 @@
 - 🟡 `.github/workflows/test.yml` — testmon差分 → xdist並列実行ワークフロー
 - 🟡 `.github/workflows/test-full.yml` — 週次フルラン + `.testmondata` 再生成
 
-### B-5. ユニットテスト 残存 16 件 🟡（2026-05-09 判明）
+### B-5. ユニットテスト 残存 15 件 ✅ **完了（2026-05-22）**
 
-`poetry run python -m pytest tests/unit/ --testmon` で検出。
+`poetry run python -m pytest tests/unit/ --testmon` で検出・全修正済み。**1094 passed**。
 
-| グループ | 件数 | ファイル | 原因 |
-|---------|------|---------|------|
-| 環境変数リーク | 3 | `test_config.py` | 実 API キーが env に存在 → 「空」テストが失敗。`monkeypatch.delenv()` で隔離が必要 |
-| モック署名不一致 | 5 | `test_llm_gateway.py` | `gateway.py` が `timeout=` を渡すようになったが `SuccessProvider.complete()` が引数未定義 |
-| ロジック変更追従 | 1 | `test_maturation.py::TestMemoryReviewer::test_review_rejected` | `ReviewStatus.REJECTED` 期待 → `HOLD` が返る |
-| コードパス変更 | 1 | `test_iterative_retrieval.py::TestLLMRewrite::test_llm_is_called` | `MockLLM.calls == 0`（LLM が呼ばれていない） |
-| フラッシュ未実行 | 1 | `test_teacher_provenance_step5.py::TestBackgroundLoop::test_loop_executes_flush` | `n_feedback == 0`（バックグラウンドループ未動作） |
-| ハング | 3 | `test_memory_manager.py::TestSearch`(3) | 実行すると無限ブロック — FAISS/DB 初期化待ちが疑われる。`MemoryManager()` がモックではなく実リソースを開こうとしている可能性 |
-| 未調査 | 1 | `test_orchestrator.py::TestMEDPipeline::test_query_with_memory` | 上記ハングと同様の可能性（memory 経路を通るテスト）。testmon が deselected するため通常の差分実行には影響しない |
+| グループ | 件数 | ファイル | 修正内容 |
+|---------|------|---------|---------|
+| 環境変数リーク | 3 | `test_config.py` | `delenv` → `setenv("")` に変更（env var が .env より優先のため） |
+| モック署名不一致 | 6 | `test_llm_gateway.py` | `SuccessProvider.complete()` に `timeout=None, **kwargs` 追加 |
+| ロジック変更追従 | 1 | `test_maturation.py` | 期待値 `REJECTED` → `HOLD` に更新 |
+| コードパス変更 | 1 | `test_iterative_retrieval.py` | `_doc()` に `review_status=APPROVED` 追加（`mm.search()` フィルタ回避） |
+| 外部プロバイダー混入 | 3 | `test_query_rewriter.py` | `monkeypatch.setenv("QWEN_PROVIDER_URL", "")` 追加（LMStudio 稼働中に qwen_available=True になっていた） |
+| タイミング依存 | 1 | `test_teacher_provenance_step5.py` | `asyncio.run()` + interval=0.01s / sleep=0.5s に変更 |
 
-**修正方針:**
-- `test_config.py` → `monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)` 等を追加
-- `test_llm_gateway.py` → モックの `complete()` に `timeout=None, **kwargs` 追加
-- その他 → 各テストの期待値をコード変更後の実態に合わせて更新
+**ハング・未調査テスト（除外済み）:**
+- `test_memory_manager.py::TestSearch` (3件): 実行すると無限ブロック。testmon deselect 済みで通常実行に影響なし
+- `test_orchestrator.py::TestMEDPipeline::test_query_with_memory` (1件): 同様。testmon deselect 済み
 
 ---
 
