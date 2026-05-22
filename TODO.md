@@ -1,6 +1,6 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-05-22 (P-R7 ReviewerConfig プリセット + 統合テスト 9件追加 → 全 PASS)
+> 最終更新: 2026-05-23 (AWEP curl フックタイムアウト設定追加 — 不通時の2分ブロック解消)
 
 ## 次セッション推奨タスク（優先度順）
 
@@ -75,6 +75,11 @@
 ### B-1〜4. testmon + xdist 移行
 - ✅ `pytest-testmon>=2.2` 導入・ローカル動作確認済み
 - ✅ Stop hook に `--testmon` 追加 (`.claude/settings.json`)（2026-05-09）
+- ✅ **AWEP curl フックタイムアウト設定（2026-05-23）**: 不通時に最大2分ブロックしていた問題を修正
+  - PreToolUse / PostToolUse: `--max-time 2 --connect-timeout 1` 追加
+  - Stop: `--max-time 5 --connect-timeout 2` 追加
+  - `localhost` → `127.0.0.1` に変更（IPv6先引き問題回避）
+  - 正常時レスポンス ~55ms に対して2s/5sのフェイルセーフを設定
 - ✅ `poetry install --extras dev` で `pytest-asyncio 1.3.0` インストール済み
   - `[project.optional-dependencies].dev` に定義されているため `--extras dev` が必須
 - 🟡 `Dockerfile.test` — testmon/xdist 入り軽量イメージ
