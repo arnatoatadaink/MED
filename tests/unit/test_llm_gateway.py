@@ -32,7 +32,7 @@ class SuccessProvider(BaseLLMProvider):
         return self._available
 
     async def complete(
-        self, messages, *, model=None, max_tokens=2048, temperature=0.7
+        self, messages, *, model=None, max_tokens=2048, temperature=0.7, timeout=None, **kwargs
     ) -> LLMResponse:
         self.calls.append(messages)
         return LLMResponse(

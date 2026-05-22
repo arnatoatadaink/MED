@@ -10,7 +10,7 @@ from src.memory.faiss_index import FAISSIndexManager
 from src.memory.iterative_retrieval import IterativeRetriever
 from src.memory.memory_manager import MemoryManager
 from src.memory.metadata_store import MetadataStore
-from src.memory.schema import Document, SourceMeta, SourceType
+from src.memory.schema import Document, ReviewStatus, SourceMeta, SourceType
 
 # ──────────────────────────────────────────────
 # モック LLM
@@ -58,6 +58,7 @@ def _doc(content: str, domain: str = "code") -> Document:
         content=content,
         domain=domain,
         source=SourceMeta(source_type=SourceType.MANUAL),
+        review_status=ReviewStatus.APPROVED,
     )
 
 

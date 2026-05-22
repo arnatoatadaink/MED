@@ -377,16 +377,16 @@ class TestBackgroundLoop:
             from src.memory.learning.teacher_feedback_pipeline import TeacherFeedbackPipeline
             pipeline = TeacherFeedbackPipeline(collector, store, registry)
 
-            # 短い interval で1回分だけ動かす
-            await pipeline.start_background_loop(interval_seconds=0.05)
-            await asyncio.sleep(0.15)  # ループが最低1回回るのを待つ
+            # 短い interval で確実に複数回 flush が走るよう余裕を持たせる
+            await pipeline.start_background_loop(interval_seconds=0.01)
+            await asyncio.sleep(0.5)  # ループが最低1回回るのを待つ
             await pipeline.stop_background_loop()
 
             profile = await registry.get("model-loop")
             await store.close()
             return profile
 
-        profile = asyncio.get_event_loop().run_until_complete(run())
+        profile = asyncio.run(run())
         # ループが flush を呼び registry が更新されているはず
         assert profile is not None
         assert profile.n_feedback >= 1

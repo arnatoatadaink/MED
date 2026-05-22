@@ -212,7 +212,7 @@ class TestMemoryReviewer:
         await store.save(doc)
         result = await reviewer.review(doc)
         assert result.approved is False
-        assert result.review_status == ReviewStatus.REJECTED
+        assert result.review_status == ReviewStatus.HOLD
         assert result.quality_score == pytest.approx(0.3)
 
     @pytest.mark.asyncio

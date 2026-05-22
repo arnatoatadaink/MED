@@ -459,8 +459,8 @@ class TestLoadSettings:
 
     def test_api_key_defaults_to_empty(self, tmp_configs: Path, monkeypatch: pytest.MonkeyPatch):
         """API キーが未設定のときに空文字列になることを確認。"""
-        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+        monkeypatch.setenv("OPENAI_API_KEY", "")
         settings = load_settings(tmp_configs)
         assert settings.anthropic_api_key == ""
         assert settings.openai_api_key == ""
@@ -503,7 +503,8 @@ class TestGetSettings:
 
 
 class TestSettingsHelpers:
-    def test_has_anthropic_key_false_when_empty(self):
+    def test_has_anthropic_key_false_when_empty(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "")
         s = Settings()
         assert s.has_anthropic_key() is False
 
@@ -518,7 +519,7 @@ class TestSettingsHelpers:
         assert s.has_openai_key() is False
 
     def test_has_github_token_false_when_empty(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+        monkeypatch.setenv("GITHUB_TOKEN", "")
         s = Settings()
         assert s.has_github_token() is False
 

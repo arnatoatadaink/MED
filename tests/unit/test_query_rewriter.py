@@ -78,7 +78,9 @@ class TestRewriteResult:
 
 
 class TestInitialization:
-    def test_available_strategies_no_models(self, tmp_model_dir: Path):
+    def test_available_strategies_no_models(self, tmp_model_dir: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("QWEN_PROVIDER_URL", "")
+        monkeypatch.setenv("FLAN_T5_PROVIDER_URL", "")
         qr = QueryRewriter(model_dir=tmp_model_dir)
         _run(qr.initialize())
         avail = qr.available_strategies()
@@ -148,7 +150,8 @@ class TestModelNotFound:
         assert results[0].error is not None
         assert "not found" in results[0].error
 
-    def test_qwen_not_available(self, tmp_model_dir: Path):
+    def test_qwen_not_available(self, tmp_model_dir: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("QWEN_PROVIDER_URL", "")
         qr = QueryRewriter(model_dir=tmp_model_dir)
         _run(qr.initialize())
         results = _run(qr.rewrite("test", strategies=["qwen_rewrite"]))
@@ -280,7 +283,9 @@ class TestParallelMode:
         assert results[0].strategy == "rule_expand"
         assert results[1].strategy == "flan_t5_rewrite"
 
-    def test_parallel_collects_errors(self, tmp_model_dir: Path):
+    def test_parallel_collects_errors(self, tmp_model_dir: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("QWEN_PROVIDER_URL", "")
+        monkeypatch.setenv("FLAN_T5_PROVIDER_URL", "")
         qr = QueryRewriter(model_dir=tmp_model_dir)
         _run(qr.initialize())
         results = _run(qr.rewrite(
