@@ -48,6 +48,27 @@ class ReviewerConfig:
     timeout_sec: int = 60
     db_path: str = "data/metadata.db"
     include_low_quality: bool = True
+    lock_sleep_min_ms: int = 100
+    lock_sleep_max_ms: int = 1000
+    ui_poll_interval_sec: int = 10
+
+    @classmethod
+    def TEST_PRESET(cls, **kwargs: object) -> "ReviewerConfig":
+        """テスト用プリセット: スリープ最小化・件数上限小・タイムアウト短。"""
+        defaults: dict[str, object] = {
+            "limit": 5,
+            "timeout_sec": 5,
+            "lock_sleep_min_ms": 0,
+            "lock_sleep_max_ms": 1,
+            "ui_poll_interval_sec": 1,
+        }
+        defaults.update(kwargs)
+        return cls(**defaults)  # type: ignore[arg-type]
+
+    @classmethod
+    def PROD_PRESET(cls, **kwargs: object) -> "ReviewerConfig":
+        """本番用プリセット: デフォルト値をそのまま適用。"""
+        return cls(**kwargs)  # type: ignore[arg-type]
 
 
 def build_task_list(cfg: ReviewerConfig) -> list[ReviewTask]:
@@ -116,9 +137,12 @@ def _get_next_task(
     lock: threading.Lock,
     supported: list[str],
     thread_name: str,
+    lock_sleep_min_ms: int = 100,
+    lock_sleep_max_ms: int = 1000,
 ) -> Optional[ReviewTask]:
     """タスクリストをロックして次の処理可能タスクを取得する（ランダムスリープ後）。"""
-    time.sleep(random.randint(100, 1000) / 1000.0)
+    if lock_sleep_max_ms > 0:
+        time.sleep(random.randint(lock_sleep_min_ms, lock_sleep_max_ms) / 1000.0)
     with lock:
         for task in tasks:
             if task.status != "pending":
@@ -132,8 +156,16 @@ def _get_next_task(
     return None
 
 
-def _finish_task(tasks: list[ReviewTask], lock: threading.Lock, task: ReviewTask, status: str) -> None:
-    time.sleep(random.randint(100, 1000) / 1000.0)
+def _finish_task(
+    tasks: list[ReviewTask],
+    lock: threading.Lock,
+    task: ReviewTask,
+    status: str,
+    lock_sleep_min_ms: int = 100,
+    lock_sleep_max_ms: int = 1000,
+) -> None:
+    if lock_sleep_max_ms > 0:
+        time.sleep(random.randint(lock_sleep_min_ms, lock_sleep_max_ms) / 1000.0)
     with lock:
         task.status = status
         task.finished_at = time.time()
@@ -144,12 +176,12 @@ def _worker_thread(
     lock: threading.Lock,
     stop_event: threading.Event,
     slot: SlotConfig,
-    db_path: str,
+    cfg: "ReviewerConfig",
 ) -> None:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        loop.run_until_complete(_worker_async(tasks, lock, stop_event, slot, db_path))
+        loop.run_until_complete(_worker_async(tasks, lock, stop_event, slot, cfg))
     except Exception:
         log.exception("Worker thread error: %s/%s", slot.provider, slot.model)
     finally:
@@ -161,19 +193,21 @@ async def _worker_async(
     lock: threading.Lock,
     stop_event: threading.Event,
     slot: SlotConfig,
-    db_path: str,
+    cfg: "ReviewerConfig",
 ) -> None:
     from src.llm.gateway import LLMGateway
     from src.memory.maturation.reviewer import MemoryReviewer
     from src.memory.metadata_store import MetadataStore
 
     thread_name = threading.current_thread().name
-    store = MetadataStore(db_path=db_path)
+    min_ms = cfg.lock_sleep_min_ms
+    max_ms = cfg.lock_sleep_max_ms
+    store = MetadataStore(db_path=cfg.db_path)
     await store.initialize()
     gateway = LLMGateway()
     try:
         while not stop_event.is_set():
-            task = _get_next_task(tasks, lock, slot.personas, thread_name)
+            task = _get_next_task(tasks, lock, slot.personas, thread_name, min_ms, max_ms)
             if task is None:
                 break
             persona = _resolve_persona(task.domain_flag, slot.personas) or "auto"
@@ -185,14 +219,14 @@ async def _worker_async(
             try:
                 doc = await store.get(task.doc_id)
                 if doc is None:
-                    _finish_task(tasks, lock, task, "error")
+                    _finish_task(tasks, lock, task, "error", min_ms, max_ms)
                     continue
                 await reviewer.review(doc)
-                _finish_task(tasks, lock, task, "done")
+                _finish_task(tasks, lock, task, "done", min_ms, max_ms)
                 log.info("[%s] Reviewed %s (persona=%s)", thread_name, task.doc_id[:12], persona)
             except Exception:
                 log.exception("[%s] Review failed: %s", thread_name, task.doc_id[:12])
-                _finish_task(tasks, lock, task, "error")
+                _finish_task(tasks, lock, task, "error", min_ms, max_ms)
     finally:
         await store.close()
 
@@ -220,7 +254,7 @@ class ReviewerSession:
         for slot in self._cfg.slots:
             t = threading.Thread(
                 target=_worker_thread,
-                args=(self._tasks, self._lock, self._stop_event, slot, self._cfg.db_path),
+                args=(self._tasks, self._lock, self._stop_event, slot, self._cfg),
                 daemon=True,
                 name=f"reviewer-{slot.provider}-{slot.model or 'default'}",
             )

@@ -234,9 +234,10 @@ def build_tab() -> tuple:
         label="タスク一覧（最大 200 件）",
     )
 
-    # Gradio 5+ の Timer で 10 秒ごと自動更新
+    # Gradio 5+ の Timer で自動更新（interval は PROD_PRESET から取得）
     try:
-        timer = gr.Timer(value=10)
+        _poll_sec = ReviewerConfig.PROD_PRESET().ui_poll_interval_sec
+        timer = gr.Timer(value=_poll_sec)
         timer.tick(fn=_refresh_all, outputs=[status_md, task_df])
     except AttributeError:
         pass  # 旧バージョンは手動更新のみ

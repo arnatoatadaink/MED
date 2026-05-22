@@ -1,17 +1,18 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-05-22 (B-5 ユニットテスト残存15件を全修正 → 1094 passed)
+> 最終更新: 2026-05-22 (P-R7 ReviewerConfig プリセット + 統合テスト 9件追加 → 全 PASS)
 
 ## 次セッション推奨タスク（優先度順）
 
 | 優先 | ID | 内容 | 工数感 |
 |------|-----|------|--------|
-| 1 | **P-R7** | Reviewer タブ ポーリング機能（`ReviewerConfig.TEST_PRESET/PROD_PRESET` + pytest fixture 統合テスト） | 中 |
+| 1 | **R-0** | MED 既存実装の独立性確認：import グラフ可視化 + 循環依存・SRP 違反・密結合箇所のリストアップ → `docs/module_dependency_report.md` | 中 |
 | 2 | **Q-1〜Q-4** | エピソード記憶ゾーニング（`Domain.EPISODIC` / episodic FAISS / `seed_from_awep.py` / Recency-weighted 検索） | 大 |
 | 3 | **I (Step1)** | バージョン対応知識管理：`schema.py` に `version_status` 等フィールド + `ALTER TABLE` マイグレーション | 小 |
 | 4 | **P-R4** | 文書側ペルソナ指定フィールド追加（`ALTER TABLE documents ADD COLUMN required_persona`） | 小 |
-| 5 | **N-5 / N-9** | KG 自動更新トリガー + `SourceTrustScore` データクラス + `geoopt` 追加 | 中 |
-| 6 | **B-1〜4** | CI/CD: `Dockerfile.test` + GitHub Actions workflows (testmon/xdist) | 中 |
+| 5 | **P-R10** | `reviewer_worker.py` 分離（`reviewer_config.py` へ `ReviewTask/SlotConfig/ReviewerConfig` 移動） | 小 |
+| 6 | **N-5 / N-9** | KG 自動更新トリガー + `SourceTrustScore` データクラス + `geoopt` 追加 | 中 |
+| 7 | **B-1〜4** | CI/CD: `Dockerfile.test` + GitHub Actions workflows (testmon/xdist) | 中 |
 
 > arXiv/Seeder 系タスク（F-1, F-2, N-S-0）は selfban 解除後に再開。
 
@@ -1204,34 +1205,26 @@ Reviewer の分析結果を使って UMAP 上の島間ブリッジを伸ばす�
 - 生成→審査→FAISS 追加 の各ステップの品質テスト
 - 生成元が「レビュー結果」であることの provenance 記録（N-5 SourceTrustScore と連携）
 
-#### P-R7. Reviewer タブ ポーリング機能 🟡
+#### P-R7. Reviewer タブ ポーリング機能 ✅ **完了（2026-05-22）**
 
-現状: `gr.Timer(10秒)` で表示更新のみ。ReviewerSession 自体のポーリング間隔と、
-テスト/本番の設定差分を整備する。
+- ✅ `ReviewerConfig` に `lock_sleep_min_ms` / `lock_sleep_max_ms` / `ui_poll_interval_sec` フィールドを追加
+- ✅ `ReviewerConfig.TEST_PRESET()` — limit=5, timeout=5s, sleep=0〜1ms, ui_poll=1s
+- ✅ `ReviewerConfig.PROD_PRESET()` — デフォルト値（200件、60s、100〜1000ms、10s）
+- ✅ `_worker_thread/_worker_async` を `cfg: ReviewerConfig` 受け取りに変更（db_path を cfg から取得）
+- ✅ `_get_next_task` / `_finish_task` が `lock_sleep_min_ms/max_ms` を参照
+- ✅ `reviewer.py` Timer interval を `ReviewerConfig.PROD_PRESET().ui_poll_interval_sec` から取得
+- ✅ `tests/unit/test_reviewer_worker.py` — TEST_PRESET fixture 統合テスト 9件追加（全 PASS）
 
-**テストシナリオ**（単体テスト・CI で長時間待機を回避）:
-| パラメータ | テスト値 | 説明 |
-|---|---|---|
-| `ReviewerConfig.limit` | 3〜5 件 | 少数タスクで完了を即確認 |
-| `ReviewerConfig.timeout_sec` | 5 秒 | スレッド終了タイムアウト |
-| ロックスリープ（`_LOCK_SLEEP_*` 定数） | 10〜50 ms | ランダム待機を極小化 |
-| `QueryRunnerConfig.top_k` | 1 | 外部検索を最小化 |
-| `gr.Timer` interval（UI 自動更新） | 1 秒 | 進捗を素早く確認 |
+**備考**: `reviewer_worker.py` が 313 行に増加（300行上限超え）。→ **P-R10** で分離予定。
 
-**本番シナリオ**:
-| パラメータ | 本番値 | 説明 |
-|---|---|---|
-| `ReviewerConfig.limit` | 200 件（デフォルト） | 一度のセッションで処理する上限 |
-| `ReviewerConfig.timeout_sec` | 60 秒（デフォルト） | スレッド終了タイムアウト |
-| ロックスリープ | 100〜1000 ms（ランダム） | 競合防止のランダムバックオフ |
-| `QueryRunnerConfig.top_k` | 5（デフォルト） | ソースあたり最大取得件数 |
-| `gr.Timer` interval（UI 自動更新） | 10 秒（デフォルト） | 過剰ポーリング防止 |
+#### P-R10. reviewer_worker.py モジュール分離 🟡
 
-**実装 TODO**:
-- 🟡 `ReviewerConfig` に `lock_sleep_min_ms` / `lock_sleep_max_ms` フィールドを追加（テスト用に外出し）
-- 🟡 `ReviewerConfig.TEST_PRESET` / `ReviewerConfig.PROD_PRESET` クラスメソッドを追加
-- 🟡 Reviewer タブの `gr.Timer` interval を設定から取得できるようにする
-- 🟡 pytest fixture で `TEST_PRESET` を使う ReviewerSession の統合テスト追加
+`python-strict.md` の 300 行制限超過（現 313 行）に対応。
+
+- 🟡 `src/cycle/reviewer_config.py` を新規作成し `ReviewTask` / `SlotConfig` / `ReviewerConfig` を移動
+- 🟡 `src/cycle/reviewer_worker.py` は worker 関数 + `ReviewerSession` + `get_persona_choices` のみに縮小
+- 🟡 `src/gui/tabs/reviewer.py` のインポートパスを更新
+- 🟡 既存テスト（`test_reviewer_worker.py`）のインポートを更新して全 PASS を確認
 
 #### P-R8. シーダータブへの自動ポーリング ✅ **完了（2026-05-04）**
 `gr.Timer(5秒)` で status_md を更新、`running→done/error` 遷移時のみ run_dd を再ロード。
@@ -1504,6 +1497,93 @@ data/faiss_indices/
 - 🟢 条件: エピソードが閾値以上の頻度で参照された場合 → knowledge ゾーンに昇格
   - `episodic_access_count >= consolidation_threshold`（例: 5回参照）かつ `reward_avg > 0.8`
 - 🟢 `scripts/consolidate_episodic.py` — 対象エピソードを knowledge ゾーン（domain=general）に再投入、episodic から削除
+
+---
+
+## R. MED モジュール分離・責務分離 🟡
+
+> **背景**: MED は現在、Memory / RAG / LLM / Cycle / GUI / KG / Training など多数の責務を単一リポジトリで担っている。
+> TVKB 構想への発展と AWEP との疎結合連携を見据え、各責務の境界を明確にして段階的に分離可能な構造へ移行する。
+> **進め方**: まず R-0 で既存の結合状態を調査・記録し、その結果を踏まえて R-1 で分離方針を決定する。
+
+---
+
+### R-0. 既存実装の独立性確認（依存関係調査）🟡
+
+**目的**: どのモジュールがどのモジュールに依存しているかを可視化し、密結合・循環依存・SRP 違反箇所を特定する。
+
+#### R-0-1. import グラフ可視化
+
+```bash
+# pydeps でグラフ出力（未導入の場合は poetry add --group dev pydeps）
+poetry run pydeps src --max-bacon=3 --cluster --noshow -o runtime/dep_graph.svg
+
+# 循環依存チェック（stdlib のみ使用）
+poetry run python -c "
+import ast, pathlib, sys
+src = pathlib.Path('src')
+imports = {}
+for f in src.rglob('*.py'):
+    mod = str(f.with_suffix('')).replace('/', '.')
+    tree = ast.parse(f.read_text())
+    imports[mod] = [
+        n.names[0].name if isinstance(n, ast.Import) else n.module
+        for n in ast.walk(tree) if isinstance(n, (ast.Import, ast.ImportFrom))
+        if getattr(n, 'module', None) and 'src.' in (getattr(n, 'module', '') or '')
+    ]
+for mod, deps in imports.items():
+    for dep in deps:
+        if mod in imports.get(dep, []):
+            print(f'循環依存: {mod} ↔ {dep}')
+"
+```
+
+#### R-0-2. 責務別モジュール評価表
+
+調査対象と評価観点：
+
+| モジュール | 推定責務 | 主な調査観点 |
+|-----------|---------|------------|
+| `src/memory/` | FAISS + SQLite 永続化 | RAG / maturation に直接依存していないか |
+| `src/rag/` | 外部検索（arXiv / SO / GitHub / Tavily） | memory / llm を import していないか |
+| `src/llm/` | LLM ゲートウェイ | 上位レイヤーから独立しているか |
+| `src/memory/maturation/` | Teacher レビューパイプライン | llm + memory 両方に依存（密結合候補） |
+| `src/cycle/` | 自律サイクル制御 | 依存先の広さ（Orchestrator が何を import するか） |
+| `src/knowledge_graph/` | KG（NetworkX + Neo4j） | memory との結合度 |
+| `src/training/` | GRPO + TinyLoRA 骨格 | 他から独立しているか（現状未接続想定） |
+| `src/auth/` | JWT 認証 | 他モジュールへの依存なしか |
+| `src/conversation/` | セッション・ターン管理 | memory / auth との結合度 |
+| `src/gui/` | Gradio 9 タブ | 全モジュールを直接 import していないか（Facade 不在の確認） |
+| `src/analysis/` | 型不一致チェッカー | 独立（外部 src 依存なし・確認済み想定） |
+
+#### R-0-3. 評価基準
+
+| 評価項目 | 良い状態 | 問題のある状態 |
+|---------|---------|-------------|
+| 循環依存 | なし | A→B→A のサイクル |
+| 層跨ぎ依存 | 上位→下位のみ | 下位モジュールが上位を import |
+| SRP 遵守 | 1モジュール1責務 | 複数の「主語」が存在する |
+| インターフェース境界 | ABC / Protocol で定義 | 具象クラスを直接 import |
+| テスト独立性 | モックなしで単体テスト可 | 複数モジュールのモックが必要 |
+
+#### 成果物
+
+- 🟡 調査実施 → 結果を `docs/module_dependency_report.md` に出力
+  - 循環依存リスト
+  - 密結合・SRP 違反箇所（優先度付き）
+  - 「切り離しやすい順」ランキング
+- 🟡 R-1（分離方針決定）への入力として整理
+
+---
+
+### R-1. 責務マップと分離方針決定 🟢（R-0 後）
+
+R-0 の調査結果を踏まえ、分離の優先順位と手法を決定する。
+
+- 🟢 「切り離しやすいモジュール」から順に独立化計画を作成
+- 🟢 インターフェース（Protocol / ABC）導入が必要な境界を特定
+- 🟢 TVKB の Journal / Knowledge Base / Retriever 層への対応付け確認
+- 🟢 分離後の `src/` ディレクトリ構造案を `docs/module_separation_plan.md` に記述
 
 ---
 
