@@ -100,9 +100,30 @@
 | 外部プロバイダー混入 | 3 | `test_query_rewriter.py` | `monkeypatch.setenv("QWEN_PROVIDER_URL", "")` 追加（LMStudio 稼働中に qwen_available=True になっていた） |
 | タイミング依存 | 1 | `test_teacher_provenance_step5.py` | `asyncio.run()` + interval=0.01s / sleep=0.5s に変更 |
 
-**ハング・未調査テスト（除外済み）:**
-- `test_memory_manager.py::TestSearch` (3件): 実行すると無限ブロック。testmon deselect 済みで通常実行に影響なし
-- `test_orchestrator.py::TestMEDPipeline::test_query_with_memory` (1件): 同様。testmon deselect 済み
+**既知の除外テスト:**
+- `test_memory_manager.py::TestSearch` (3件): `MemoryManager.search()` が `review_status="approved"` のみ返すが、テストは未レビュードキュメントを挿入→0件になる設計上の問題。testmon deselect 済み
+- `test_orchestrator.py::TestMEDPipeline::test_query_with_memory` (1件): ブロック。testmon deselect 済み
+
+---
+
+### B-6. ユニットテスト DB 初期化パフォーマンス改善 ✅ **完了（2026-05-23）**
+
+**問題:** `test_teacher_provenance_step5.py` スイート全体が 146 秒かかっていた。
+原因: テストごとに MetadataStore.initialize() と TeacherRegistry の SQLite 書き込みが走り、
+WSL2 の fsync オーバーヘッド（ファイルシステム境界越え）で1テストあたり 5〜6 秒かかっていた。
+
+**修正内容:**
+
+| ファイル | 変更 | 効果 |
+|--------|------|------|
+| `src/memory/metadata_store.py` | 全DDL（9テーブル+22インデックス+3トリガー）を `executescript()` 1回で実行。pytest 時に `PRAGMA synchronous=OFF` 追加 | initialize(): 4.17s → 0.11s |
+| `src/memory/teacher_registry.py` | `_open()` ヘルパーを追加し、pytest 時に `PRAGMA synchronous=OFF` 適用。互換性のための `close()` no-op 追加 | 書き込み操作: 2.5s → ~0.01s |
+
+**結果:** `test_teacher_provenance_step5.py` スイート: 146.47s → 5.79s（**25倍高速化**）
+
+**未解決（環境起因）:**
+- コレクション時間 (~47s): `import torch` が WSL2 で 25 秒かかる — `test_training.py` のモジュールレベルimport問題
+- `test_run_returns_result` (30s): PyTorch 初回 backward() 初期化 — `--testmon` で変更なしはスキップ可
 
 ---
 

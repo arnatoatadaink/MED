@@ -19,6 +19,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import random
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -284,6 +285,30 @@ _CREATE_INDICES_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_documents_teacher_id ON documents(teacher_id);",
 ]
 
+# 全 DDL を一括実行するスクリプト（executescript() で1回のスレッドプール呼び出しに削減）
+# journal_mode=WAL はファイル単位の永続設定なのでスクリプトに含める。
+# busy_timeout / foreign_keys はセッション設定なので initialize() で別途 execute() する。
+_SCHEMA_SCRIPT = "\n".join([
+    "PRAGMA journal_mode=WAL;",
+    _CREATE_TABLE_SQL,
+    _CREATE_RAW_RESULTS_SQL,
+    _CREATE_FTS_SQL,
+    _CREATE_REASONING_TRACES_SQL,
+    _CREATE_TRACE_DOCUMENTS_SQL,
+    _CREATE_THOUGHT_LOGS_SQL,
+    _CREATE_BLACKLIST_SQL,
+    _CREATE_DOC_REVIEWS_SQL,
+    _CREATE_SEED_QUERY_LOG_SQL,
+] + _CREATE_INDICES_SQL
+  + _CREATE_RAW_RESULTS_INDICES_SQL
+  + _CREATE_REASONING_INDICES_SQL
+  + _CREATE_THOUGHT_LOGS_INDICES_SQL
+  + _CREATE_BLACKLIST_INDICES_SQL
+  + _CREATE_DOC_REVIEWS_INDICES_SQL
+  + _CREATE_SEED_QUERY_LOG_INDICES_SQL
+  + _CREATE_FTS_TRIGGERS_SQL
+)
+
 # 既存 DB へのマイグレーション（列が存在しない場合のみ実行）
 _MIGRATION_ADD_TEACHER_ID = (
     "ALTER TABLE documents ADD COLUMN teacher_id TEXT DEFAULT NULL;"
@@ -456,32 +481,16 @@ class MetadataStore:
 
         self._db = await aiosqlite.connect(self._db_path, timeout=30)
         self._db.row_factory = aiosqlite.Row
-        await self._db.execute("PRAGMA journal_mode=WAL;")
+        # pytest 実行時はディスク fsync を無効化して初期化を高速化する（3秒→数ms）。
+        # PYTEST_CURRENT_TEST は pytest が自動設定する環境変数。本番では設定されない。
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            await self._db.execute("PRAGMA synchronous=OFF;")
+        # 全DDL を1回の executescript() で実行（スレッドプール往復を30+回→1回に削減）
+        await self._db.executescript(_SCHEMA_SCRIPT)
+        # executescript() 後も接続ごとの設定は維持されるが明示的に再適用する
         await self._db.execute("PRAGMA busy_timeout=30000;")
         await self._db.execute("PRAGMA foreign_keys=ON;")
-        await self._db.execute(_CREATE_TABLE_SQL)
-        await self._db.execute(_CREATE_RAW_RESULTS_SQL)
-        await self._db.execute(_CREATE_FTS_SQL)
-        await self._db.execute(_CREATE_REASONING_TRACES_SQL)
-        await self._db.execute(_CREATE_TRACE_DOCUMENTS_SQL)
-        await self._db.execute(_CREATE_THOUGHT_LOGS_SQL)
-        await self._db.execute(_CREATE_BLACKLIST_SQL)
-        await self._db.execute(_CREATE_DOC_REVIEWS_SQL)
-        await self._db.execute(_CREATE_SEED_QUERY_LOG_SQL)
-        await self._migrate()  # 列追加を先に行い、その後インデックス作成
-        for idx_sql in (
-            _CREATE_INDICES_SQL
-            + _CREATE_RAW_RESULTS_INDICES_SQL
-            + _CREATE_REASONING_INDICES_SQL
-            + _CREATE_THOUGHT_LOGS_INDICES_SQL
-            + _CREATE_BLACKLIST_INDICES_SQL
-            + _CREATE_DOC_REVIEWS_INDICES_SQL
-            + _CREATE_SEED_QUERY_LOG_INDICES_SQL
-        ):
-            await self._db.execute(idx_sql)
-        for trigger_sql in _CREATE_FTS_TRIGGERS_SQL:
-            await self._db.execute(trigger_sql)
-        await self._commit_with_retry()
+        await self._migrate()
         logger.info("MetadataStore initialized: %s", self._db_path)
 
     async def _migrate(self) -> None:

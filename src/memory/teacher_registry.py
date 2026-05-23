@@ -36,13 +36,25 @@ EWMA（指数加重移動平均）で trust_score を更新する。
 from __future__ import annotations
 
 import logging
+import os
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import AsyncIterator
 
 import aiosqlite
 
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def _open(db_path: Path) -> AsyncIterator[aiosqlite.Connection]:
+    """aiosqlite 接続を開くヘルパー。pytest 実行中は synchronous=OFF を設定する。"""
+    async with aiosqlite.connect(str(db_path)) as db:
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            await db.execute("PRAGMA synchronous=OFF;")
+        yield db
 
 # EWMA パラメータ
 _EWMA_ALPHA = 0.05       # WARMUP 後の固定学習率
@@ -143,11 +155,14 @@ class TeacherRegistry:
 
     async def initialize(self) -> None:
         """テーブルとインデックスを作成する。"""
-        async with aiosqlite.connect(self._db_path) as db:
+        async with _open(self._db_path) as db:
             await db.execute(_CREATE_TABLE_SQL)
             await db.execute(_CREATE_INDEX_SQL)
             await db.commit()
         logger.info("TeacherRegistry initialized at %s", self._db_path)
+
+    async def close(self) -> None:
+        """互換性のための no-op（接続はメソッドごとに開閉するため不要）。"""
 
     # ------------------------------------------------------------------
     # 登録 / 取得
@@ -171,7 +186,7 @@ class TeacherRegistry:
         resolved = provider or _infer_provider(teacher_id)
         now = _now_iso()
 
-        async with aiosqlite.connect(self._db_path) as db:
+        async with _open(self._db_path) as db:
             db.row_factory = aiosqlite.Row
             await db.execute(
                 """
@@ -192,7 +207,7 @@ class TeacherRegistry:
 
     async def get(self, teacher_id: str) -> TeacherProfile | None:
         """teacher_id のプロファイルを返す。未登録なら None。"""
-        async with aiosqlite.connect(self._db_path) as db:
+        async with _open(self._db_path) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(
                 "SELECT * FROM teacher_profiles WHERE teacher_id = ?",
@@ -205,7 +220,7 @@ class TeacherRegistry:
 
     async def list_all(self) -> list[TeacherProfile]:
         """全プロファイルを trust_score 降順で返す。"""
-        async with aiosqlite.connect(self._db_path) as db:
+        async with _open(self._db_path) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(
                 "SELECT * FROM teacher_profiles ORDER BY trust_score DESC"
@@ -215,7 +230,7 @@ class TeacherRegistry:
 
     async def get_low_trust(self, threshold: float = 0.3) -> list[TeacherProfile]:
         """trust_score が threshold 未満のプロファイルを返す。"""
-        async with aiosqlite.connect(self._db_path) as db:
+        async with _open(self._db_path) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(
                 "SELECT * FROM teacher_profiles WHERE trust_score < ? ORDER BY trust_score ASC",
@@ -234,7 +249,7 @@ class TeacherRegistry:
         teacher_id が未登録の場合は自動的に ensure() を呼ぶ。
         """
         await self.ensure(teacher_id)
-        async with aiosqlite.connect(self._db_path) as db:
+        async with _open(self._db_path) as db:
             await db.execute(
                 """
                 UPDATE teacher_profiles
@@ -274,7 +289,7 @@ class TeacherRegistry:
         new_avg = _ewma_update(profile.avg_reward, reward, new_n)
         new_trust = max(_MIN_TRUST, new_avg)
 
-        async with aiosqlite.connect(self._db_path) as db:
+        async with _open(self._db_path) as db:
             await db.execute(
                 """
                 UPDATE teacher_profiles
@@ -312,7 +327,7 @@ class TeacherRegistry:
         """
         trust_score = max(0.0, min(1.0, trust_score))
         await self.ensure(teacher_id)
-        async with aiosqlite.connect(self._db_path) as db:
+        async with _open(self._db_path) as db:
             await db.execute(
                 """
                 UPDATE teacher_profiles
