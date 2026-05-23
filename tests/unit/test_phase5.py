@@ -193,7 +193,7 @@ class TestRetryHandlerSuccess:
         from src.sandbox.retry_handler import RetryHandler
         executor = _FakeExecutor([_FakeExecResult(success=True, stdout="ok")])
         handler = RetryHandler(executor, max_retries=2, retry_delay=0.0)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             handler.run_with_retry("print('ok')")
         )
         assert result.success
@@ -207,7 +207,7 @@ class TestRetryHandlerSuccess:
             _FakeExecResult(success=True, stdout="42"),
         ])
         handler = RetryHandler(executor, max_retries=2, retry_delay=0.0, use_error_analyzer=False)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             handler.run_with_retry("x = undefined")
         )
         assert result.success
@@ -217,7 +217,7 @@ class TestRetryHandlerSuccess:
         from src.sandbox.retry_handler import RetryHandler
         executor = _FakeExecutor([_FakeExecResult(success=False, stderr="Error")])
         handler = RetryHandler(executor, max_retries=1, retry_delay=0.0, use_error_analyzer=False)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             handler.run_with_retry("bad code")
         )
         assert not result.success
@@ -232,7 +232,7 @@ class TestRetryHandlerSuccess:
 
         handler = RetryHandler(ExplodingExecutor(), max_retries=0, retry_delay=0.0,
                                use_error_analyzer=False)
-        result = asyncio.get_event_loop().run_until_complete(handler.run_with_retry("code"))
+        result = asyncio.run(handler.run_with_retry("code"))
         assert not result.success
         assert "Docker down" in result.final_error
 
@@ -243,7 +243,7 @@ class TestRetryHandlerSuccess:
             _FakeExecResult(success=False, stderr="NameError"),
         ])
         handler = RetryHandler(executor, max_retries=1, retry_delay=0.0, use_error_analyzer=False)
-        result = asyncio.get_event_loop().run_until_complete(handler.run_with_retry("bad"))
+        result = asyncio.run(handler.run_with_retry("bad"))
         assert len(result.error_history) >= 1
 
 
@@ -445,7 +445,7 @@ class TestFeedbackCollector:
 
     def test_record_text_no_analyzer(self):
         c = self._collector()
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             c.record_text("d1", text="great answer", query="q")
         )
         events = c.peek()

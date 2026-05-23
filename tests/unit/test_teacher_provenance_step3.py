@@ -52,7 +52,7 @@ class TestMigration:
             await store.close()
             return cols
 
-        cols = asyncio.get_event_loop().run_until_complete(run())
+        cols = asyncio.run(run())
         assert "teacher_id" in cols
 
     def test_migration_idempotent(self, tmp_path: Path):
@@ -68,7 +68,7 @@ class TestMigration:
             await store2.initialize()
             await store2.close()
 
-        asyncio.get_event_loop().run_until_complete(run())  # no error
+        asyncio.run(run())  # no error
 
 
 # ===========================================================================
@@ -85,7 +85,7 @@ class TestTeacherIdRoundtrip:
             await store.close()
             return retrieved
 
-        doc = asyncio.get_event_loop().run_until_complete(run())
+        doc = asyncio.run(run())
         assert doc is not None
         assert doc.source.teacher_id == "claude-opus-4-6"
         assert doc.source.is_teacher_generated is True
@@ -99,7 +99,7 @@ class TestTeacherIdRoundtrip:
             await store.close()
             return retrieved
 
-        doc = asyncio.get_event_loop().run_until_complete(run())
+        doc = asyncio.run(run())
         assert doc is not None
         assert doc.source.teacher_id is None
 
@@ -121,7 +121,7 @@ class TestTeacherIdRoundtrip:
             await store2.close()
             return retrieved
 
-        doc = asyncio.get_event_loop().run_until_complete(run())
+        doc = asyncio.run(run())
         assert doc.source.teacher_id == "gpt-4o"
 
 
@@ -140,7 +140,7 @@ class TestListByTeacher:
             await store.close()
             return result
 
-        docs = asyncio.get_event_loop().run_until_complete(run())
+        docs = asyncio.run(run())
         assert len(docs) == 3
         assert all(d.source.teacher_id == "claude-opus-4-6" for d in docs)
 
@@ -151,7 +151,7 @@ class TestListByTeacher:
             await store.close()
             return result
 
-        docs = asyncio.get_event_loop().run_until_complete(run())
+        docs = asyncio.run(run())
         assert docs == []
 
     def test_list_by_teacher_with_domain(self, tmp_path: Path):
@@ -163,7 +163,7 @@ class TestListByTeacher:
             await store.close()
             return result
 
-        docs = asyncio.get_event_loop().run_until_complete(run())
+        docs = asyncio.run(run())
         assert len(docs) == 1
         assert docs[0].domain.value == "code"
 
@@ -177,7 +177,7 @@ class TestListByTeacher:
             await store.close()
             return page1, page2
 
-        page1, page2 = asyncio.get_event_loop().run_until_complete(run())
+        page1, page2 = asyncio.run(run())
         assert len(page1) == 3
         assert len(page2) == 2
         # 重複なし
@@ -200,7 +200,7 @@ class TestCountByTeacher:
             await store.close()
             return count
 
-        assert asyncio.get_event_loop().run_until_complete(run()) == 4
+        assert asyncio.run(run()) == 4
 
     def test_count_zero(self, tmp_path: Path):
         async def run():
@@ -209,7 +209,7 @@ class TestCountByTeacher:
             await store.close()
             return count
 
-        assert asyncio.get_event_loop().run_until_complete(run()) == 0
+        assert asyncio.run(run()) == 0
 
     def test_count_with_domain(self, tmp_path: Path):
         async def run():
@@ -221,7 +221,7 @@ class TestCountByTeacher:
             await store.close()
             return count
 
-        assert asyncio.get_event_loop().run_until_complete(run()) == 2
+        assert asyncio.run(run()) == 2
 
 
 # ===========================================================================
@@ -239,7 +239,7 @@ class TestExcludeTeacher:
             await store.close()
             return result
 
-        docs = asyncio.get_event_loop().run_until_complete(run())
+        docs = asyncio.run(run())
         teacher_ids = [d.source.teacher_id for d in docs]
         assert "bad-model" not in teacher_ids
         assert len(docs) == 2  # trusted + no-teacher
@@ -254,7 +254,7 @@ class TestExcludeTeacher:
             await store.close()
             return result
 
-        docs = asyncio.get_event_loop().run_until_complete(run())
+        docs = asyncio.run(run())
         assert len(docs) == 1
         assert docs[0].source.teacher_id == "model-c"
 
@@ -268,7 +268,7 @@ class TestExcludeTeacher:
             await store.close()
             return result
 
-        docs = asyncio.get_event_loop().run_until_complete(run())
+        docs = asyncio.run(run())
         assert len(docs) == 1
         assert docs[0].source.teacher_id is None
 
@@ -282,7 +282,7 @@ class TestExcludeTeacher:
             await store.close()
             return result
 
-        docs = asyncio.get_event_loop().run_until_complete(run())
+        docs = asyncio.run(run())
         assert len(docs) == 3
 
     def test_exclude_with_domain_filter(self, tmp_path: Path):
@@ -295,7 +295,7 @@ class TestExcludeTeacher:
             await store.close()
             return result
 
-        docs = asyncio.get_event_loop().run_until_complete(run())
+        docs = asyncio.run(run())
         assert len(docs) == 1
         assert docs[0].source.teacher_id == "trusted"
 
@@ -316,7 +316,7 @@ class TestDeleteByTeacher:
             await store.close()
             return deleted, remaining
 
-        deleted, remaining = asyncio.get_event_loop().run_until_complete(run())
+        deleted, remaining = asyncio.run(run())
         assert deleted == 3
         assert remaining == []
 
@@ -330,7 +330,7 @@ class TestDeleteByTeacher:
             await store.close()
             return good
 
-        docs = asyncio.get_event_loop().run_until_complete(run())
+        docs = asyncio.run(run())
         assert len(docs) == 1
 
     def test_delete_nonexistent_returns_zero(self, tmp_path: Path):
@@ -340,7 +340,7 @@ class TestDeleteByTeacher:
             await store.close()
             return count
 
-        assert asyncio.get_event_loop().run_until_complete(run()) == 0
+        assert asyncio.run(run()) == 0
 
     def test_delete_with_domain(self, tmp_path: Path):
         async def run():
@@ -352,6 +352,6 @@ class TestDeleteByTeacher:
             await store.close()
             return deleted, remaining_general
 
-        deleted, remaining = asyncio.get_event_loop().run_until_complete(run())
+        deleted, remaining = asyncio.run(run())
         assert deleted == 1
         assert len(remaining) == 1

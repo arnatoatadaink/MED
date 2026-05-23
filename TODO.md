@@ -1,10 +1,10 @@
 # TODO.md — MED フレームワーク 残作業一覧
 
-> 最終更新: 2026-05-23 (Q-3b/Q-3c/RetrieverRouter episodic 統合 完了)
+> 最終更新: 2026-05-23 (pytest teardown ハング修正 + テストスイート安定化 完了)
 
 ## 次セッション推奨タスク（優先度順）
 
-> 最終更新: 2026-05-23（Q-3b/Q-3c 完了 → 次優先 I-Step1 または P-R4）
+> 最終更新: 2026-05-23（pytest teardown ハング修正完了 → 次優先 I-Step1 または P-R4）
 
 | 優先 | ID | 内容 | 工数感 |
 |------|-----|------|--------|
@@ -103,6 +103,29 @@
 **既知の除外テスト:**
 - `test_memory_manager.py::TestSearch` (3件): `MemoryManager.search()` が `review_status="approved"` のみ返すが、テストは未レビュードキュメントを挿入→0件になる設計上の問題。testmon deselect 済み
 - `test_orchestrator.py::TestMEDPipeline::test_query_with_memory` (1件): ブロック。testmon deselect 済み
+
+---
+
+### B-7. pytest teardown ハング修正 ✅ **完了（2026-05-23）**
+
+**問題:** pytest がテスト完了後に 14 分以上ハングしてプロセスが終了しなかった。
+原因: 複数のテストファイルが `asyncio.get_event_loop().run_until_complete()` を使用し、
+aiosqlite コネクションが閉じられたイベントループに紐づいたまま残留していた。
+
+**修正内容:**
+
+| ファイル | 変更 | 理由 |
+|--------|------|------|
+| 9テスト ファイル（`test_phase4/5`, `test_interview_evaluators`, `test_teacher_provenance_step1/3/4/5`, `test_query_rewriter`） | `asyncio.get_event_loop().run_until_complete()` → `asyncio.run()` （計 121 箇所） | `run_until_complete` がイベントループを開いたまま残す |
+| `test_teacher_provenance_step2.py` | `registry` フィクスチャを sync→async に全面書き直し、全テストメソッドを `async def` 化 | sync フィクスチャが aiosqlite コネクションを `asyncio.run()` の外で保持 |
+| `test_orchestrator.py` `TestServer` | `_make_client()` を `@contextmanager` に変更し `asyncio.new_event_loop()` + `finally: pipeline.close(); loop.close()` で確実にクリーンアップ | pipeline の aiosqlite が閉じられずハング |
+| `test_query_rewriter.py` | `autouse` フィクスチャ `_clear_settings_cache()` を追加 | `get_settings()` の `lru_cache` が `.env` の URL をキャッシュし、`monkeypatch.setenv("", ...)` が無効化されていた |
+
+**結果:**
+- フルスイート（`test_training.py` 除く）: ハングなし、**166s でクリーン終了**
+- 失敗: 4件（すべて環境依存の既知問題）
+  - `test_memory_manager.py::TestSearch` 3件: `review_status="approved"` フィルタで未レビュー doc が 0 件になる設計上の問題
+  - `test_orchestrator.py::TestMEDPipeline::test_query_with_memory` 1件: LMStudio FLAN-T5 空レスポンス
 
 ---
 

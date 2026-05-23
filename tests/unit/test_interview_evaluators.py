@@ -149,7 +149,7 @@ class TestInterviewEvaluator:
 
     def test_run_returns_report(self):
         ev = self._make_evaluator(max_turns=1)
-        report = asyncio.get_event_loop().run_until_complete(
+        report = asyncio.run(
             ev.run(None, "What is FAISS?")
         )
         assert report.num_turns == 2  # 初回 + 1追加
@@ -157,7 +157,7 @@ class TestInterviewEvaluator:
 
     def test_report_scores_in_range(self):
         ev = self._make_evaluator(max_turns=2)
-        report = asyncio.get_event_loop().run_until_complete(
+        report = asyncio.run(
             ev.run(None, "Explain TinyLoRA.")
         )
         assert 0.0 <= report.initial_quality <= 1.0
@@ -173,7 +173,7 @@ class TestInterviewEvaluator:
         def student(prompt):
             call_count["n"] += 1
             return "Some answer"
-        report = asyncio.get_event_loop().run_until_complete(
+        report = asyncio.run(
             ev.run(student, "What is GRPO?")
         )
         assert call_count["n"] >= 1
@@ -227,19 +227,19 @@ class TestMultiChallengeEvaluator:
 
     def test_run_returns_report(self):
         ev = self._make_evaluator()
-        report = asyncio.get_event_loop().run_until_complete(ev.run(None))
+        report = asyncio.run(ev.run(None))
         assert len(report.results) == 2
         assert 0.0 <= report.overall <= 1.0
 
     def test_category_scores_present(self):
         ev = self._make_evaluator()
-        report = asyncio.get_event_loop().run_until_complete(ev.run(None))
+        report = asyncio.run(ev.run(None))
         assert "instruction_retention" in report.category_scores
         assert "self_coherence" in report.category_scores
 
     def test_all_pass_when_judge_returns_1(self):
         ev = self._make_evaluator()
-        report = asyncio.get_event_loop().run_until_complete(ev.run(None))
+        report = asyncio.run(ev.run(None))
         assert all(r.passed for r in report.results)
         assert report.overall == pytest.approx(1.0)
 
@@ -254,13 +254,13 @@ class TestMultiChallengeEvaluator:
             test_question="q", condition="c",
         )]
         ev = MultiChallengeEvaluator(gw, cases=cases)
-        report = asyncio.get_event_loop().run_until_complete(ev.run(None))
+        report = asyncio.run(ev.run(None))
         assert not any(r.passed for r in report.results)
         assert report.overall == pytest.approx(0.0)
 
     def test_to_dict(self):
         ev = self._make_evaluator()
-        report = asyncio.get_event_loop().run_until_complete(ev.run(None))
+        report = asyncio.run(ev.run(None))
         d = report.to_dict()
         assert "overall" in d
         assert "category_scores" in d
@@ -303,14 +303,14 @@ class TestAssumptionCorrectionEvaluator:
 
     def test_full_marks_when_both_correct(self):
         ev = self._make_evaluator(self._GOOD_JUDGE)
-        report = asyncio.get_event_loop().run_until_complete(ev.run(None))
+        report = asyncio.run(ev.run(None))
         assert report.correction_rate == pytest.approx(1.0)
         assert report.correct_answer_rate == pytest.approx(1.0)
         assert report.full_marks_rate == pytest.approx(1.0)
 
     def test_zero_score_when_both_wrong(self):
         ev = self._make_evaluator(self._BAD_JUDGE)
-        report = asyncio.get_event_loop().run_until_complete(ev.run(None))
+        report = asyncio.run(ev.run(None))
         assert report.correction_rate == pytest.approx(0.0)
         assert report.full_marks_rate == pytest.approx(0.0)
 
@@ -333,14 +333,14 @@ class TestAssumptionCorrectionEvaluator:
             question="q", wrong_assumption="w", correct_fact="c", category="test"
         )]
         ev = AssumptionCorrectionEvaluator(gw, cases=cases, include_metacognition=True)
-        asyncio.get_event_loop().run_until_complete(ev.run(None))
+        asyncio.run(ev.run(None))
         AssumptionCorrectionEvaluator._get_answer = original_get_answer
 
         assert "メタ認知" in called_with.get("prompt", "") or "システム" in called_with.get("prompt", "")
 
     def test_to_dict(self):
         ev = self._make_evaluator(self._GOOD_JUDGE)
-        report = asyncio.get_event_loop().run_until_complete(ev.run(None))
+        report = asyncio.run(ev.run(None))
         d = report.to_dict()
         assert "correction_rate" in d
         assert "full_marks_rate" in d

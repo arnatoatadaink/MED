@@ -247,7 +247,7 @@ class TestAddFromText:
 
     def test_add_from_text_no_teacher(self):
         mgr, store = self._manager()
-        doc_id = asyncio.get_event_loop().run_until_complete(
+        doc_id = asyncio.run(
             mgr.add_from_text("hello world", domain="general")
         )
         assert doc_id
@@ -257,7 +257,7 @@ class TestAddFromText:
 
     def test_add_from_text_with_teacher_id(self):
         mgr, store = self._manager()
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             mgr.add_from_text(
                 "hello world",
                 domain="code",
@@ -271,7 +271,7 @@ class TestAddFromText:
 
     def test_add_from_text_teacher_provider_explicit(self):
         mgr, store = self._manager()
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             mgr.add_from_text(
                 "content",
                 teacher_id="my-model",
@@ -284,7 +284,7 @@ class TestAddFromText:
 
     def test_add_from_text_source_url(self):
         mgr, store = self._manager()
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             mgr.add_from_text("content", source_url="https://example.com")
         )
         saved = store.saved[0]
@@ -293,7 +293,7 @@ class TestAddFromText:
     def test_add_from_text_domain_stored(self):
         from src.memory.schema import Domain
         mgr, store = self._manager()
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             mgr.add_from_text("code content", domain="code")
         )
         saved = store.saved[0]
@@ -355,7 +355,7 @@ class TestSeedBuilderTeacherId:
             from src.memory.schema import DifficultyLevel
             await builder._generate_doc("FAISS", "code", DifficultyLevel.BEGINNER, "document")
 
-        asyncio.get_event_loop().run_until_complete(run())
+        asyncio.run(run())
         assert len(saved_docs) == 1
         doc = saved_docs[0]
         assert doc.source.teacher_id == "gpt-4o"
@@ -368,7 +368,7 @@ class TestSeedBuilderTeacherId:
             from src.memory.schema import DifficultyLevel
             await builder._generate_doc("FAISS", "code", DifficultyLevel.BEGINNER, "document")
 
-        asyncio.get_event_loop().run_until_complete(run())
+        asyncio.run(run())
         assert len(saved_docs) == 1
         doc = saved_docs[0]
         assert doc.source.teacher_id == "unknown"

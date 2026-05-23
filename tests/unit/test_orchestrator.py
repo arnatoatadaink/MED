@@ -162,81 +162,83 @@ class TestMEDPipeline:
 
 
 class TestServer:
-    def _make_client(self, gateway_response: str = "Server answer.") -> TestClient:
-        """パイプラインをモックした TestClient を生成する。"""
+    from contextlib import contextmanager
+
+    @contextmanager
+    def _make_client(self, gateway_response: str = "Server answer."):
+        """パイプラインをモックした TestClient を生成する（コンテキストマネージャー）。"""
         import asyncio
+        from contextlib import asynccontextmanager
 
         from src.orchestrator import server as server_module
 
+        loop = asyncio.new_event_loop()
         pipeline = _make_pipeline(gateway_response)
-        asyncio.get_event_loop().run_until_complete(pipeline.initialize())
+        loop.run_until_complete(pipeline.initialize())
 
-        # lifespan の代わりにモジュールレベル変数を直接上書き
-        # （TestClient が lifespan を呼ぶ前にセットしておく）
         original = server_module._pipeline
         server_module._pipeline = pipeline
-
-        # lifespan をパッチして何もしないコンテキストマネージャーに差し替える
-        from contextlib import asynccontextmanager
         original_lifespan = server_module.app.router.lifespan_context
 
         @asynccontextmanager
         async def _noop_lifespan(app):
-            yield  # 何もせず yield だけ
+            yield
 
         server_module.app.router.lifespan_context = _noop_lifespan
         client = TestClient(server_module.app)
-
-        # 元の lifespan を戻す（テスト後のクリーンアップ）
-        server_module.app.router.lifespan_context = original_lifespan
-        return client
+        try:
+            yield client
+        finally:
+            loop.run_until_complete(pipeline.close())
+            loop.close()
+            server_module._pipeline = original
+            server_module.app.router.lifespan_context = original_lifespan
 
     def test_health_check(self) -> None:
-        client = self._make_client()
-        resp = client.get("/health")
+        with self._make_client() as client:
+            resp = client.get("/health")
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "ok"
 
     def test_query_endpoint(self) -> None:
-        client = self._make_client("Test response from API.")
-        resp = client.post("/query", json={"query": "test question"})
+        with self._make_client("Test response from API.") as client:
+            resp = client.post("/query", json={"query": "test question"})
         assert resp.status_code == 200
         data = resp.json()
         assert "answer" in data
         assert data["answer"] == "Test response from API."
 
     def test_add_document_endpoint(self) -> None:
-        client = self._make_client()
-        resp = client.post("/add", json={"content": "new document", "domain": "general"})
+        with self._make_client() as client:
+            resp = client.post("/add", json={"content": "new document", "domain": "general"})
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
         assert "doc_id" in data
 
     def test_stats_endpoint(self) -> None:
-        client = self._make_client()
-        resp = client.get("/stats")
+        with self._make_client() as client:
+            resp = client.get("/stats")
         assert resp.status_code == 200
         data = resp.json()
         assert "total_docs" in data
         assert "faiss_stats" in data
 
     def test_delete_nonexistent_doc(self) -> None:
-        client = self._make_client()
-        resp = client.delete("/doc/nonexistent_id")
+        with self._make_client() as client:
+            resp = client.delete("/doc/nonexistent_id")
         assert resp.status_code == 404
 
     def test_query_empty_string_rejected(self) -> None:
-        client = self._make_client()
-        resp = client.post("/query", json={"query": ""})
+        with self._make_client() as client:
+            resp = client.post("/query", json={"query": ""})
         assert resp.status_code == 422  # Validation error
 
     def test_add_then_delete(self) -> None:
-        client = self._make_client()
-        add_resp = client.post("/add", json={"content": "to delete", "domain": "general"})
-        assert add_resp.status_code == 200
-        doc_id = add_resp.json()["doc_id"]
-
-        del_resp = client.delete(f"/doc/{doc_id}")
+        with self._make_client() as client:
+            add_resp = client.post("/add", json={"content": "to delete", "domain": "general"})
+            assert add_resp.status_code == 200
+            doc_id = add_resp.json()["doc_id"]
+            del_resp = client.delete(f"/doc/{doc_id}")
         assert del_resp.status_code == 200

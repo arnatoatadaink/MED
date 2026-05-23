@@ -122,7 +122,7 @@ class TestQueryParser:
     def test_parse_json_success(self):
         content = '{"intent":"code","domain":"code","complexity":"simple","entities":[],"requires_execution":true,"requires_retrieval":false}'
         parser = self._parser(content)
-        result = asyncio.get_event_loop().run_until_complete(parser.parse("write code"))
+        result = asyncio.run(parser.parse("write code"))
         assert result.intent == "code"
         assert result.requires_execution is True
 
@@ -130,7 +130,7 @@ class TestQueryParser:
         from src.orchestrator.query_parser import QueryParser
         gw = _MockGateway("INVALID JSON {{")
         parser = QueryParser(gw, use_fallback=True)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             parser.parse("implement binary search")
         )
         assert result.raw == "implement binary search"
@@ -215,7 +215,7 @@ class TestModelRouter:
     def test_route_no_kg(self):
         router = self._router()
         parsed = self._parsed(complexity="simple")
-        decision = asyncio.get_event_loop().run_until_complete(router.route(parsed))
+        decision = asyncio.run(router.route(parsed))
         assert decision.target == "student"
         assert decision.use_faiss is True
         assert decision.use_kg is False
@@ -223,13 +223,13 @@ class TestModelRouter:
     def test_route_external_rag_for_moderate(self):
         router = self._router()
         parsed = self._parsed(complexity="moderate")
-        decision = asyncio.get_event_loop().run_until_complete(router.route(parsed))
+        decision = asyncio.run(router.route(parsed))
         assert decision.use_external_rag is True
 
     def test_route_sandbox_for_execution(self):
         router = self._router()
         parsed = self._parsed(requires_execution=True)
-        decision = asyncio.get_event_loop().run_until_complete(router.route(parsed))
+        decision = asyncio.run(router.route(parsed))
         assert decision.use_sandbox is True
 
 
@@ -421,7 +421,7 @@ class TestErrorAnalyzer:
 
     def test_analyze_llm_success(self):
         analyzer = self._analyzer()
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             analyzer.analyze("x = undefined_var", "NameError: name 'undefined_var' is not defined")
         )
         assert result.error_type == "NameError"
@@ -430,7 +430,7 @@ class TestErrorAnalyzer:
     def test_analyze_returns_error_analysis(self):
         from src.llm.error_analyzer import ErrorAnalysis
         analyzer = self._analyzer()
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             analyzer.analyze("code", "error")
         )
         assert isinstance(result, ErrorAnalysis)
@@ -452,7 +452,7 @@ class TestErrorAnalyzer:
         from src.llm.error_analyzer import ErrorAnalyzer
         gw = _MockGateway("NOT JSON")
         analyzer = ErrorAnalyzer(gw)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             analyzer.analyze("code", "TypeError: x")
         )
         assert result.error_type == "TypeError"
@@ -504,46 +504,46 @@ class TestFeedbackAnalyzer:
     def test_keyword_positive(self):
         from src.llm.feedback_analyzer import FeedbackAnalyzer
         a = FeedbackAnalyzer(use_llm=False)
-        result = asyncio.get_event_loop().run_until_complete(a.analyze("great answer, very helpful!"))
+        result = asyncio.run(a.analyze("great answer, very helpful!"))
         assert result.sentiment == "positive"
         assert result.reward >= 0.7
 
     def test_keyword_negative(self):
         from src.llm.feedback_analyzer import FeedbackAnalyzer
         a = FeedbackAnalyzer(use_llm=False)
-        result = asyncio.get_event_loop().run_until_complete(a.analyze("wrong and incorrect"))
+        result = asyncio.run(a.analyze("wrong and incorrect"))
         assert result.sentiment == "negative"
         assert result.reward <= 0.3
 
     def test_keyword_mixed_neutral(self):
         from src.llm.feedback_analyzer import FeedbackAnalyzer
         a = FeedbackAnalyzer(use_llm=False)
-        result = asyncio.get_event_loop().run_until_complete(a.analyze("good but wrong"))
+        result = asyncio.run(a.analyze("good but wrong"))
         assert result.sentiment == "neutral"
 
     def test_keyword_no_match_neutral(self):
         from src.llm.feedback_analyzer import FeedbackAnalyzer
         a = FeedbackAnalyzer(use_llm=False)
-        result = asyncio.get_event_loop().run_until_complete(a.analyze("ok"))
+        result = asyncio.run(a.analyze("ok"))
         assert result.sentiment == "neutral"
 
     def test_empty_feedback(self):
         from src.llm.feedback_analyzer import FeedbackAnalyzer
         a = FeedbackAnalyzer(use_llm=False)
-        result = asyncio.get_event_loop().run_until_complete(a.analyze("   "))
+        result = asyncio.run(a.analyze("   "))
         assert result.sentiment == "neutral"
         assert result.reward == 0.5
 
     def test_llm_analyze_success(self):
         analyzer = self._analyzer()
-        result = asyncio.get_event_loop().run_until_complete(analyzer.analyze("This was very helpful!"))
+        result = asyncio.run(analyzer.analyze("This was very helpful!"))
         assert result.sentiment == "positive"
         assert result.reward == pytest.approx(0.85)
 
     def test_analyze_batch(self):
         from src.llm.feedback_analyzer import FeedbackAnalyzer
         a = FeedbackAnalyzer(use_llm=False)
-        results = asyncio.get_event_loop().run_until_complete(
+        results = asyncio.run(
             a.analyze_batch(["great!", "wrong!", "ok"])
         )
         assert len(results) == 3
@@ -787,7 +787,7 @@ class TestQualityMetricsCompute:
                 }
 
         metrics = QualityMetrics(MockStore())
-        report = asyncio.get_event_loop().run_until_complete(metrics.compute())
+        report = asyncio.run(metrics.compute())
         assert report.total_docs == 500
         assert report.avg_confidence == pytest.approx(0.72)
         assert report.meets_confidence_target
@@ -800,7 +800,7 @@ class TestQualityMetricsCompute:
                 raise RuntimeError("DB error")
 
         metrics = QualityMetrics(FailStore())
-        report = asyncio.get_event_loop().run_until_complete(metrics.compute())
+        report = asyncio.run(metrics.compute())
         assert report.total_docs == 0  # empty report on failure
 
     def test_check_phase2_readiness_not_met(self):
@@ -811,7 +811,7 @@ class TestQualityMetricsCompute:
                 return {"total_docs": 100, "avg_confidence": 0.5, "exec_success_rate": 0.6}
 
         metrics = QualityMetrics(MockStore())
-        ready, missing = asyncio.get_event_loop().run_until_complete(
+        ready, missing = asyncio.run(
             metrics.check_phase2_readiness()
         )
         assert not ready
@@ -844,14 +844,14 @@ class TestStudentEvaluator:
 
     def test_evaluate_empty(self):
         evaluator = self._evaluator()
-        metrics = asyncio.get_event_loop().run_until_complete(evaluator.evaluate([]))
+        metrics = asyncio.run(evaluator.evaluate([]))
         assert metrics.n_samples == 0
 
     def test_evaluate_samples(self):
         from src.training.evaluation.student_evaluator import EvalSample
         evaluator = self._evaluator()
         samples = [EvalSample(query="What is FAISS?", expected_answer="A vector library")]
-        metrics = asyncio.get_event_loop().run_until_complete(evaluator.evaluate(samples))
+        metrics = asyncio.run(evaluator.evaluate(samples))
         assert metrics.n_samples == 1
         assert 0.0 <= metrics.avg_reward <= 1.0
 
@@ -870,7 +870,7 @@ class TestTeacherComparison:
     def test_compare_returns_result(self):
         from src.training.evaluation.teacher_comparison import ComparisonResult
         comp = self._comparison()
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             comp.compare("What is FAISS?", "A library", "FAISS is a vector search library by Meta")
         )
         assert isinstance(result, ComparisonResult)
@@ -913,7 +913,7 @@ class TestBenchmarkSuite:
     def test_run_single_benchmark(self):
         from src.training.evaluation.benchmark_suite import BenchmarkReport
         suite = self._suite()
-        report = asyncio.get_event_loop().run_until_complete(
+        report = asyncio.run(
             suite.run(benchmark_names=["qa_retrieval"])
         )
         assert isinstance(report, BenchmarkReport)
@@ -923,12 +923,12 @@ class TestBenchmarkSuite:
     def test_run_all_benchmarks(self):
         from src.training.evaluation.benchmark_suite import BenchmarkReport
         suite = self._suite()
-        report = asyncio.get_event_loop().run_until_complete(suite.run())
+        report = asyncio.run(suite.run())
         assert isinstance(report, BenchmarkReport)
 
     def test_overall_score(self):
         suite = self._suite()
-        report = asyncio.get_event_loop().run_until_complete(
+        report = asyncio.run(
             suite.run(benchmark_names=["qa_retrieval"])
         )
         assert 0.0 <= report.overall_score <= 1.0
@@ -937,7 +937,7 @@ class TestBenchmarkSuite:
         # Unknown benchmark names are skipped with a warning (no raise)
         from src.training.evaluation.benchmark_suite import BenchmarkReport
         suite = self._suite()
-        report = asyncio.get_event_loop().run_until_complete(
+        report = asyncio.run(
             suite.run(benchmark_names=["nonexistent"])
         )
         assert isinstance(report, BenchmarkReport)

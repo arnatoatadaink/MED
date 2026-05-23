@@ -200,7 +200,7 @@ class TestUpdateStoreTrustMap:
             await store.close()
             return count, result
 
-        count, doc = asyncio.get_event_loop().run_until_complete(run())
+        count, doc = asyncio.run(run())
         assert count == 1
         assert 0.0 <= doc.usefulness.composite <= 1.0
 
@@ -226,7 +226,7 @@ class TestUpdateStoreTrustMap:
             await store.close()
             return good.usefulness.composite, bad.usefulness.composite
 
-        good_score, bad_score = asyncio.get_event_loop().run_until_complete(run())
+        good_score, bad_score = asyncio.run(run())
         assert good_score > bad_score
 
     def test_unknown_teacher_gets_full_trust(self, tmp_path: Path):
@@ -251,7 +251,7 @@ class TestUpdateStoreTrustMap:
             await store.close()
             return known.usefulness.composite, unknown.usefulness.composite
 
-        known_score, unknown_score = asyncio.get_event_loop().run_until_complete(run())
+        known_score, unknown_score = asyncio.run(run())
         # 同じ条件なので同じスコアになるはず
         assert known_score == pytest.approx(unknown_score, abs=1e-6)
 
@@ -277,7 +277,7 @@ class TestUpdateStoreTrustMap:
             await store.close()
             return result.usefulness.composite, expected
 
-        actual, expected = asyncio.get_event_loop().run_until_complete(run())
+        actual, expected = asyncio.run(run())
         assert actual == pytest.approx(expected, abs=1e-4)
 
     def test_update_store_specific_doc_ids(self, tmp_path: Path):
@@ -298,7 +298,7 @@ class TestUpdateStoreTrustMap:
             await store.close()
             return count
 
-        assert asyncio.get_event_loop().run_until_complete(run()) == 1
+        assert asyncio.run(run()) == 1
 
 
 # ===========================================================================

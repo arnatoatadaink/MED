@@ -76,7 +76,7 @@ class TestFlushBasic:
             await store.close()
             return result
 
-        result = asyncio.get_event_loop().run_until_complete(run())
+        result = asyncio.run(run())
         assert result.total_events == 0
         assert result.teachers_updated == 0
 
@@ -100,7 +100,7 @@ class TestFlushBasic:
             await store.close()
             return result, profile
 
-        result, profile = asyncio.get_event_loop().run_until_complete(run())
+        result, profile = asyncio.run(run())
         assert result.total_events == 15
         assert result.teachers_updated == 1
         assert "claude-opus-4-6" in result.trust_updates
@@ -126,7 +126,7 @@ class TestFlushBasic:
             await store.close()
             return profile
 
-        profile = asyncio.get_event_loop().run_until_complete(run())
+        profile = asyncio.run(run())
         assert profile.trust_score >= 0.7
 
     def test_flush_multiple_teachers(self, tmp_path: Path):
@@ -147,7 +147,7 @@ class TestFlushBasic:
             await store.close()
             return result
 
-        result = asyncio.get_event_loop().run_until_complete(run())
+        result = asyncio.run(run())
         assert result.teachers_updated == 2
         assert "model-a" in result.trust_updates
         assert "model-b" in result.trust_updates
@@ -167,7 +167,7 @@ class TestFlushBasic:
             await store.close()
             return result
 
-        result = asyncio.get_event_loop().run_until_complete(run())
+        result = asyncio.run(run())
         assert result.docs_without_teacher == 1
         assert result.teachers_updated == 0
 
@@ -185,7 +185,7 @@ class TestFlushBasic:
             await store.close()
             return result
 
-        result = asyncio.get_event_loop().run_until_complete(run())
+        result = asyncio.run(run())
         assert result.docs_not_found == 1
         assert result.teachers_updated == 0
 
@@ -205,7 +205,7 @@ class TestFlushBasic:
             await store.close()
             return len(collector)
 
-        assert asyncio.get_event_loop().run_until_complete(run()) == 0
+        assert asyncio.run(run()) == 0
 
     def test_flush_multiple_events_same_teacher(self, tmp_path: Path):
         """同一 Teacher への複数イベントがすべて registry に転送される。"""
@@ -226,7 +226,7 @@ class TestFlushBasic:
             await store.close()
             return result, profile
 
-        result, profile = asyncio.get_event_loop().run_until_complete(run())
+        result, profile = asyncio.run(run())
         assert result.total_events == 5
         assert profile.n_feedback == 5
 
@@ -263,7 +263,7 @@ class TestFlushWithScorer:
             await store.close()
             return initial, updated, result
 
-        initial, updated, result = asyncio.get_event_loop().run_until_complete(run())
+        initial, updated, result = asyncio.run(run())
         assert result.composite_updated > 0
         assert updated < initial  # 低信頼 Teacher のスコアが下がった
 
@@ -289,7 +289,7 @@ class TestFlushWithScorer:
             await store.close()
             return result
 
-        result = asyncio.get_event_loop().run_until_complete(run())
+        result = asyncio.run(run())
         # update_all_docs=True → 2件（doc_a + doc_b）が更新される
         assert result.composite_updated == 2
 
@@ -308,7 +308,7 @@ class TestFlushWithScorer:
             await store.close()
             return result
 
-        result = asyncio.get_event_loop().run_until_complete(run())
+        result = asyncio.run(run())
         assert result.composite_updated == 0
 
 
@@ -328,7 +328,7 @@ class TestBackgroundLoop:
             await store.close()
             return result
 
-        assert asyncio.get_event_loop().run_until_complete(run()) is False
+        assert asyncio.run(run()) is False
 
     def test_start_and_stop_loop(self, tmp_path: Path):
         async def run():
@@ -345,7 +345,7 @@ class TestBackgroundLoop:
             await store.close()
             return running, stopped
 
-        running, stopped = asyncio.get_event_loop().run_until_complete(run())
+        running, stopped = asyncio.run(run())
         assert running is True
         assert stopped is False
 
@@ -363,7 +363,7 @@ class TestBackgroundLoop:
             await pipeline.stop_background_loop()
             await store.close()
 
-        asyncio.get_event_loop().run_until_complete(run())  # no error
+        asyncio.run(run())  # no error
 
     def test_loop_executes_flush(self, tmp_path: Path):
         """バックグラウンドループが実際に flush() を呼ぶこと。"""

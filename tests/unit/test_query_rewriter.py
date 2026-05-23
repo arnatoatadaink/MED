@@ -27,7 +27,20 @@ from src.rag.query_rewriter import QueryRewriter, RewriteResult
 
 def _run(coro):
     """asyncio.run のショートカット。"""
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
+
+
+@pytest.fixture(autouse=True)
+def _clear_settings_cache():
+    """get_settings() lru_cache を各テスト前後にクリアする。
+
+    .env の QWEN_PROVIDER_URL / FLAN_T5_PROVIDER_URL が lru_cache に残ると
+    monkeypatch.setenv("...", "") が無効化されるため、フルスイート実行時に失敗する。
+    """
+    from src.common.config import get_settings
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 @pytest.fixture
